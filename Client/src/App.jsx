@@ -4,7 +4,7 @@ import viteLogo from '/vite.svg'
 import { io } from "socket.io-client";
 import './App.css'
 
-let socket = io.connect("http://localhost:3001");
+
 function App() {
   const [count, setCount] = useState(0)
 

@@ -1,10 +1,13 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
-import App from './App.jsx'
+import HomeScreen from './Components/HomeScreen.jsx'
+import { GameProvider } from './Components/Context.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <App />
+    <GameProvider>
+      <HomeScreen />
+    </GameProvider>
   </StrictMode>,
 )

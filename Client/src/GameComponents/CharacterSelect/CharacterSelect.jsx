@@ -1,0 +1,184 @@
+import React, { useState } from 'react';
+import { useGameContext } from '../../Components/Context';
+import charactersData from '../../Components/Characters.json';
+import './CharacterSelect.css';
+
+function CharacterSelect() {
+    const { players, playerName, playerCharacters, setPlayerCharacters, socket, room } = useGameContext();
+    const [selectedFaction, setSelectedFaction] = useState('');
+    const [selectedCharacter, setSelectedCharacter] = useState(null);
+    const [displayClassInfo, setDisplayClassInfo] = useState(false);
+
+    const handleCharacterClick = (character) => {
+        setSelectedCharacter(character);
+    };
+
+    const handleAddToTeam = (character) => {
+        // Emit to server to update character selection
+        socket.emit("character_selected", { room, playerName, character });
+    };
+
+    const handleRemoveFromTeam = () => {
+        // Emit to server to remove character selection
+        socket.emit("character_removed", { room, playerName });
+    };
+
+    return (
+        <div className='character-select-container'>
+            <div className='header'>
+                <h1>Character Select</h1>
+                <h2>Choose your team</h2>
+            </div>
+
+            <div className='main-content'>
+                <div className='left-section'>
+                    {/* <div className='player-list'>
+                        <h3>Players in game:</h3>
+                        <ul>
+                            {players.map((player, index) => (
+                                <li key={index}>{player}</li>
+                            ))}
+                        </ul>
+                    </div> */}
+
+                    {/* <div className='faction-select'>
+                        <h3>Select Faction:</h3>
+                        <button 
+                            className={selectedFaction === 'Criminal' ? 'active' : ''}
+                            onClick={() => setSelectedFaction('Criminal')}
+                        >
+                            Criminal
+                        </button>
+                        <button 
+                            className={selectedFaction === 'Justice' ? 'active' : ''}
+                            onClick={() => setSelectedFaction('Justice')}
+                        >
+                            Justice
+                        </button>
+                        <button 
+                            className={selectedFaction === 'Neutral' ? 'active' : ''}
+                            onClick={() => setSelectedFaction('Neutral')}
+                        >
+                            Neutral
+                        </button>
+                    </div> */}
+
+                    <div className='selected-team'>
+                        <h3>Team Selection ({Object.keys(playerCharacters).length}/{players.length})</h3>
+                        <div className='team-slots'>
+                            {players.map((player, index) => (
+                                <div key={index} className='team-slot'>
+                                    {playerCharacters[player] ? (
+                                        <div className='team-character'>
+                                            <span>{playerCharacters[player].name}</span>
+                                        </div>
+                                    ) : (
+                                        <div className='empty-slot'>{player} - Not Selected</div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                        <div className='team-controls'>
+                            <button disabled={!playerCharacters[playerName]}>Confirm Character</button>
+                            <button onClick={handleRemoveFromTeam} disabled={!playerCharacters[playerName]}>Clear My Selection</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div className='middle-section'>
+                    <div className='characters-grid'>
+                        <h3>Available Characters:</h3>
+                        <div className='character-cards'>
+                            {charactersData.characters.map((character) => (
+                                <div 
+                                    key={character.id} 
+                                    className={`character-card ${selectedCharacter?.id === character.id ? 'selected' : ''}`}
+                                    onClick={() => {
+                                        handleCharacterClick(character)
+                                        setDisplayClassInfo("");
+                                    }}
+                                    onDoubleClick={() => handleAddToTeam(character)}
+                                >
+                                    <h4>{character.name}</h4>
+                                    <p className='role'>{character.role}</p>
+                                    <p className='non-combat'>{character.nonCombatRole}</p>
+                                    <div className='stats'>
+                                        <span>HP: {character.stats.health}</span>
+                                        <span>SPD: {character.stats.speed}</span>
+                                        <span>RES: {character.stats.resistance}</span>
+                                        <span>STR: {character.stats.strength}</span>
+                                        <span>TA: {character.stats.ta}</span>
+                                    </div>
+                                    {/* <button onClick={(e) => { e.stopPropagation(); handleAddToTeam(character); }}>
+                                        Add to Team
+                                    </button> */}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <button className='class-info' onClick={() => setDisplayClassInfo(selectedCharacter)}>Class Info</button>
+                {selectedCharacter !== "" && displayClassInfo && (
+                    <>
+                    <div className='right-section'>
+                        <div className='character-info'>
+                            {selectedCharacter ? (
+                                <div className='character-details'>
+                                    <h4>{selectedCharacter.name}</h4>
+                                    <p><strong>Role:</strong> {selectedCharacter.role}</p>
+                                    <p><strong>Non-Combat Role:</strong> {selectedCharacter.nonCombatRole}</p>
+                                    
+                                    <div className='stats-detail'>
+                                        <h5>Stats:</h5>
+                                        <p>Health: {selectedCharacter.stats.health}</p>
+                                        <p>Speed: {selectedCharacter.stats.speed}</p>
+                                        <p>Resistance: {selectedCharacter.stats.resistance}</p>
+                                        <p>Strength: {selectedCharacter.stats.strength}</p>
+                                        <p>TA: {selectedCharacter.stats.ta}</p>
+                                    </div>
+
+                                    <div className='weapon-detail'>
+                                        <h5>Weapon:</h5>
+                                        <p>{selectedCharacter.weapon.name}</p>
+                                        {selectedCharacter.weapon.damage && (
+                                            <p>Damage: {selectedCharacter.weapon.damage}</p>
+                                        )}
+                                    </div>
+
+                                    <div className='abilities-detail'>
+                                        <h5>Abilities:</h5>
+                                        {selectedCharacter.abilities.map((ability, index) => (
+                                            <div key={index} className='ability'>
+                                                <strong>{ability.name}</strong>
+                                                {ability.cooldown && <span> (Cooldown: {ability.cooldown})</span>}
+                                                <p>{ability.description}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <div className='ultimate-detail'>
+                                        <h5>Ultimate:</h5>
+                                        <strong>{selectedCharacter.ultimate.name}</strong>
+                                        <p>{selectedCharacter.ultimate.description}</p>
+                                    </div>
+                                </div>
+                            ) : (
+                                <p>Select a character to view details</p>
+                            )}
+                        </div>
+                        </div>
+                    </>
+                )}
+            </div>
+
+            <div className='footer-controls'>
+                <button className='ready-button'>Ready</button>
+            </div>
+        </div>
+    );
+};
+
+export default CharacterSelect;

@@ -20,8 +20,25 @@ let playerRooms = {};
 io.on('connection', (socket) => {
   console.log('A user connected');
 
-  socket.on("startGame", () => {
-    io.emit("gameStarted");
+  socket.on("startGame", (room) => {
+    io.to(room).emit("gameStarted", { room, players: rooms[room]?.players || [] });
+  });
+
+  socket.on("character_selected", ({ room, playerName, character }) => {
+    if (rooms[room]) {
+      if (!rooms[room].characterSelections) {
+        rooms[room].characterSelections = {};
+      }
+      rooms[room].characterSelections[playerName] = character;
+      io.to(room).emit("update_character_selections", rooms[room].characterSelections);
+    }
+  });
+
+  socket.on("character_removed", ({ room, playerName }) => {
+    if (rooms[room] && rooms[room].characterSelections) {
+      delete rooms[room].characterSelections[playerName];
+      io.to(room).emit("update_character_selections", rooms[room].characterSelections);
+    }
   });
 
   socket.on("join_room", (room, name) => {
@@ -32,7 +49,7 @@ io.on('connection', (socket) => {
     }
 
     const isAdmin = rooms[room].players.length === 0;
-    io.to(room).emit("setAdmin", isAdmin);
+    socket.emit("setAdmin", isAdmin);
   
     if (!rooms[room].players.includes(name)) {
       rooms[room].players.push(name);
@@ -41,6 +58,11 @@ io.on('connection', (socket) => {
     }
   
     io.to(room).emit("updatePlayerList", rooms[room].players);
+    
+    // Send existing character selections to the newly joined player
+    if (rooms[room].characterSelections) {
+      socket.emit("update_character_selections", rooms[room].characterSelections);
+    }
   });
 
   socket.on("disconnect", () => {

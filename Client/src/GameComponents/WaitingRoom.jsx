@@ -1,9 +1,13 @@
 import React from "react";
 import { useEffect, useState } from "react";
-import { useGameContext } from "./Context.jsx";
+import { useGameContext } from "../Components/Context.jsx";
 
 function WaitingRoom() {
-    const { players, isAdmin, room } = useGameContext();
+    const { players, isAdmin, room, socket } = useGameContext();
+
+    const handleStartGame = () => {
+        socket.emit("startGame", room);
+    };
 
   return (
     <div className="waiting_room">
@@ -18,7 +22,7 @@ function WaitingRoom() {
         ))}
       </ul>
       {isAdmin && (
-        <button className="start-button">
+        <button className="start-button" onClick={handleStartGame}>
           Start Game
         </button>
       )}

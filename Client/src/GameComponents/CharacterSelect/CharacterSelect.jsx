@@ -4,7 +4,7 @@ import charactersData from '../../Components/Characters.json';
 import './CharacterSelect.css';
 
 function CharacterSelect() {
-    const { players, playerName, playerCharacters, setPlayerCharacters, socket, room } = useGameContext();
+    const { players, playerName, playerCharacters, setPlayerCharacters, socket, room, readyPlayers } = useGameContext();
     const [selectedFaction, setSelectedFaction] = useState('');
     const [selectedCharacter, setSelectedCharacter] = useState(null);
     const [displayClassInfo, setDisplayClassInfo] = useState(false);
@@ -22,6 +22,19 @@ function CharacterSelect() {
         // Emit to server to remove character selection
         socket.emit("character_removed", { room, playerName });
     };
+
+    const handleReady = () => {
+        // Check if current player has selected a character
+        if (!playerCharacters[playerName]) {
+            alert("Please select a character before readying up!");
+            return;
+        }
+        // Emit ready status to server
+        socket.emit("player_ready", { room, playerName });
+    };
+
+    const allPlayersSelected = players.every(player => playerCharacters[player]);
+    const isPlayerReady = readyPlayers.includes(playerName);
 
     return (
         <div className='character-select-container'>
@@ -175,7 +188,14 @@ function CharacterSelect() {
             </div>
 
             <div className='footer-controls'>
-                <button className='ready-button'>Ready</button>
+                <button 
+                    className='ready-button' 
+                    onClick={handleReady}
+                    disabled={!playerCharacters[playerName] || isPlayerReady}
+                >
+                    {isPlayerReady ? "Ready! Waiting for others..." : "Ready"}
+                </button>
+                <p className='ready-status'>{readyPlayers.length}/{players.length} players ready</p>
             </div>
         </div>
     );

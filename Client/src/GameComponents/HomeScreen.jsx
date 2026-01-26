@@ -4,6 +4,7 @@ import App from "../App";
 import { useState, useEffect } from "react";
 import WaitingRoom from "./WaitingRoom";
 import CharacterSelect from "./CharacterSelect/CharacterSelect";
+import Main from "./Main/Main";
 import Events from "../Components/Events";
 import { useGameContext } from "../Components/Context";
 function HomeScreen() {     
@@ -99,7 +100,8 @@ function HomeScreen() {
         <div>
           {screen === "waiting" && <WaitingRoom />}
           {screen === "characterSelect" && <CharacterSelect />}
-          <button onClick={logout}>Leave Game</button>
+          {screen === "main" && <Main />}
+          {screen !== "main" && <button onClick={logout}>Leave Game</button>}
         </div>
       )}
     </div>

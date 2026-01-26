@@ -41,6 +41,30 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on("player_ready", ({ room, playerName }) => {
+    if (rooms[room]) {
+      if (!rooms[room].readyPlayers) {
+        rooms[room].readyPlayers = [];
+      }
+      if (!rooms[room].readyPlayers.includes(playerName)) {
+        rooms[room].readyPlayers.push(playerName);
+      }
+      io.to(room).emit("update_ready_status", rooms[room].readyPlayers);
+      
+      // Check if all players are ready and have selected characters
+      const allReady = rooms[room].players.length > 0 && 
+                       rooms[room].players.every(player => 
+                         rooms[room].readyPlayers.includes(player) && 
+                         rooms[room].characterSelections && 
+                         rooms[room].characterSelections[player]
+                       );
+      
+      if (allReady) {
+        io.to(room).emit("start_main_game");
+      }
+    }
+  });
+
   socket.on("join_room", (room, name) => {
     socket.join(room);
   

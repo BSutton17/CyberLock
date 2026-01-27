@@ -1,0 +1,360 @@
+.character-select-container {
+    display: flex;
+    flex-direction: column;
+    /* height: 100vh; */
+    min-width: 100vw;
+    padding: 16px;
+    box-sizing: border-box;
+    font-family: system-ui, sans-serif;
+}
+
+.header {
+    text-align: center;
+    padding: 12px 0;
+    border-bottom: 2px solid;
+}
+
+.header h1 {
+    margin: 0;
+    font-size: 2rem;
+    letter-spacing: 2px;
+}
+
+.header h2 {
+    margin: 4px 0 0;
+    font-size: 1rem;
+    text-transform: uppercase;
+}
+
+.main-content {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 16px;
+    flex: 1;
+    margin-top: 16px;
+    overflow: hidden;
+}
+
+.left-section {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow-y: auto;
+}
+
+.player-list {
+    border: 2px solid;
+    padding: 12px;
+}
+
+.player-list ul {
+    list-style: none;
+    padding: 0;
+    margin: 8px 0 0;
+}
+
+.player-list li {
+    padding: 4px 0;
+    font-size: 0.9rem;
+}
+
+.faction-select {
+    border: 2px solid;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.faction-select button {
+    padding: 8px;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.faction-select button.active {
+    font-weight: bold;
+    outline: 2px solid;
+}
+
+.selected-team {
+    border: 2px solid;
+    padding: 12px;
+}
+
+.team-slots {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.team-slot {
+    border: 2px dashed;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.team-character {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    padding: 4px 8px;
+}
+
+.team-character button {
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+.empty-slot {
+    font-size: 0.8rem;
+    opacity: 0.7;
+}
+
+.team-controls {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.team-controls button {
+    flex: 1;
+    padding: 8px;
+    cursor: pointer;
+}
+
+.middle-section {
+    border: 2px solid;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.characters-grid h3 {
+    margin-top: 0;
+}
+
+.character-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.character-card {
+    border: 2px solid;
+    padding: 10px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: transform 0.1s ease;
+}
+
+.character-card:hover {
+    transform: translateY(-2px);
+}
+
+.character-card.selected {
+    outline: 3px solid;
+}
+
+.character-card h4 {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.character-card .role,
+.character-card .non-combat {
+    font-size: 0.8rem;
+}
+
+.stats {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    font-size: 0.75rem;
+    gap: 2px;
+}
+
+.right-section {
+    position: relative;
+    left: 0vw;
+    overflow-y: auto;
+    width: 21vw;
+    max-height: 45vh;
+    bottom: 45vh;
+    border: 2px solid;
+    border-radius: 6px;
+    padding: 8px;
+}
+
+.right-section::-webkit-scrollbar {
+    width: 5px;
+}
+
+.right-section::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 3px;
+}
+
+.right-section::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 3px;
+}
+
+.character-info h3 {
+    margin: 0 0 6px 0;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid;
+}
+
+.character-details h4 {
+    margin: 0 0 6px 0;
+    font-size: 0.95rem;
+    text-align: center;
+    padding: 4px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 3px;
+}
+
+.character-details p {
+    margin: 2px 0;
+    font-size: 0.75rem;
+    line-height: 1.2;
+}
+
+.character-details strong {
+    font-size: 0.73rem;
+    font-weight: 600;
+}
+
+.stats-detail,
+.weapon-detail,
+.abilities-detail,
+.ultimate-detail {
+    margin-top: 6px;
+    padding: 6px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 4px;
+    border-left: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+.stats-detail h5,
+.weapon-detail h5,
+.abilities-detail h5,
+.ultimate-detail h5 {
+    margin: 0 0 4px 0;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.stats-detail p {
+    margin: 2px 0;
+    padding-left: 4px;
+    font-size: 0.72rem;
+    line-height: 1.3;
+}
+
+.weapon-detail p {
+    margin: 2px 0;
+    font-size: 0.72rem;
+}
+
+.ability {
+    margin: 4px 0;
+    padding: 4px 6px;
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 3px;
+    border-left: 2px solid rgba(255, 255, 255, 0.4);
+}
+
+.ability:first-of-type {
+    margin-top: 0;
+}
+
+.ability strong {
+    display: block;
+    margin-bottom: 2px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.ability span {
+    font-size: 0.68rem;
+    opacity: 0.75;
+    font-style: italic;
+}
+
+.ability p {
+    margin: 3px 0 0 0;
+    font-size: 0.7rem;
+    line-height: 1.25;
+}
+
+.ultimate-detail {
+    border-left-color: rgba(255, 200, 100, 0.6);
+    background: rgba(255, 200, 100, 0.03);
+}
+
+.ultimate-detail strong {
+    display: block;
+    margin-bottom: 3px;
+    font-size: 0.8rem;
+    color: rgba(255, 200, 100, 1);
+}
+
+.ultimate-detail p {
+    font-size: 0.72rem;
+    line-height: 1.3;
+}
+
+.class-info {
+    position: relative;
+    left: 90%;
+    top: 5vh;
+    
+    
+}
+
+.footer-controls {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.ready-button {
+    padding: 6px 16px;
+    font-size: 1rem;
+    cursor: pointer;
+    border: 2px solid;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    transition: all 0.2s ease;
+}
+
+.ready-button:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.15);
+    transform: translateY(-2px);
+}
+
+.ready-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.ready-status {
+    margin: 0;
+    font-size: 0.9rem;
+    opacity: 0.8;
+}

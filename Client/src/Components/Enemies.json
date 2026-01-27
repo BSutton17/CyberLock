@@ -2,7 +2,7 @@
   "enemies": [
     {
       "id": "goblin_scout",
-      "name": "Goblin Scout",
+      "name": "Goblin",
       "tier": "generic",
       "stats": {
         "health": 30,
@@ -14,7 +14,7 @@
     },
     {
       "id": "kobold_warrior",
-      "name": "Kobold Warrior",
+      "name": "Bad Guy",
       "tier": "generic",
       "stats": {
         "health": 40,

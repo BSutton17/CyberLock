@@ -1,46 +1,47 @@
-import "../App.css";
-import io from "socket.io-client";
-import App from "../App";
-import { useState, useEffect } from "react";
-import WaitingRoom from "./WaitingRoom";
-import Events from "./Events";
-import { useGameContext } from "./Context";
-function HomeScreen() {     
-  const [name, setName] = useState("");       
-  const [isJoining, setIsJoining] = useState(false); 
+import '../App.css';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from './AuthContext';
+import { useGameContext } from './Context';
+import WaitingRoom from './WaitingRoom';
+import Events from './Events';
+
+function HomeScreen() {
+  const [name, setName] = useState('');
+  const [isJoining, setIsJoining] = useState(false);
+  const { user, logout: logoutAuth } = useAuth();
   const { players, socket, room, setRoom } = useGameContext();
+  const navigate = useNavigate();
 
   // Load saved name and room from localStorage on first load
   useEffect(() => {
-    const savedName = localStorage.getItem("name");
-    const savedRoom = localStorage.getItem("room");
+    const savedName = localStorage.getItem('name');
+    const savedRoom = localStorage.getItem('room');
 
     if (savedName && savedRoom) {
       setName(savedName);
       setRoom(savedRoom);
       setIsJoining(true);
 
-      socket.emit("join_room", savedRoom, savedName); 
+      socket.emit('join_room', savedRoom, savedName);
     }
   }, []);
 
-
   const joinRoom = () => {
-    if (room !== "" && name !== "") {
+    if (room !== '' && name !== '') {
+      localStorage.setItem('name', name);
+      localStorage.setItem('room', room);
 
-      localStorage.setItem("name", name);
-      localStorage.setItem("room", room);
-
-      socket.emit("join_room", room, name); 
+      socket.emit('join_room', room, name);
       setIsJoining(true);
     } else {
-      alert("Please enter a valid room and name.");
+      alert('Please enter a valid room and name.');
     }
   };
 
   const startRoom = () => {
-    if (name === "") {
-      alert("Please enter a valid name.");
+    if (name === '') {
+      alert('Please enter a valid name.');
       return;
     }
 
@@ -49,29 +50,57 @@ function HomeScreen() {
     const strRoom = String(newRoom);
 
     // Simulate typing room ID character by character
-    setRoom("");
+    setRoom('');
     setTimeout(() => setRoom(strRoom.substring(0, 3)), 30);
     setTimeout(() => setRoom(strRoom), 60);
 
     setTimeout(() => {
-      localStorage.setItem("name", name);
-      localStorage.setItem("room", strRoom);
+      localStorage.setItem('name', name);
+      localStorage.setItem('room', strRoom);
 
-      socket.emit("join_room", strRoom, name); 
+      socket.emit('join_room', strRoom, name);
       setIsJoining(true);
     }, 20);
   };
 
-  // Get rid of the saved data
-  const logout = () => {
-    localStorage.removeItem("name");
-    localStorage.removeItem("room");
-    window.location.reload(); 
-    socket.emit("disconnect");
+  // Leave game
+  const leaveGame = () => {
+    localStorage.removeItem('name');
+    localStorage.removeItem('room');
+    socket.emit('disconnect');
+    setIsJoining(false);
+    setName('');
+    setRoom('');
+  };
+
+  // Logout from app
+  const handleLogout = async () => {
+    localStorage.removeItem('name');
+    localStorage.removeItem('room');
+    //socket.emit('disconnect');
+    await logoutAuth();
+    navigate('/login');
   };
 
   return (
     <div>
+      <div style={{ position: 'absolute', top: 20, right: 20 }}>
+        <span style={{ marginRight: '15px' }}>Welcome, {user?.username}!</span>
+        <button
+          onClick={handleLogout}
+          style={{
+            padding: '8px 16px',
+            backgroundColor: '#dc3545',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+          }}
+        >
+          Logout
+        </button>
+      </div>
+
       <Events />
       {!isJoining ? (
         <div className="case">
@@ -94,7 +123,7 @@ function HomeScreen() {
       ) : (
         <div>
           <WaitingRoom />
-          <button onClick={logout}>Leave Game</button>
+          <button onClick={leaveGame}>Leave Game</button>
         </div>
       )}
     </div>

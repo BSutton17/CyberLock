@@ -17,6 +17,34 @@ const io = new Server(server, {
 let rooms = {};
 let playerNames = {};
 let playerRooms = {};
+let combatSessions = {};
+
+function calculateTurnOrder(room) {
+  const players = rooms[room]?.players || [];
+  const enemies = combatSessions[room]?.enemies || [];
+
+  let characters = [];
+
+  players.forEach(player => {
+    const character = rooms[room]?.characterSelections[player];
+    characters.push({ 
+      type: 'ally',
+      id: player, 
+      speed: character?.stats.speed || 0 
+    });
+  });
+
+  enemies.forEach(enemy => {
+    characters.push({ 
+      type: 'enemy',
+      id: enemy.id, 
+      speed: enemy.stats.speed || 0 
+    });
+  });
+
+  return characters.sort((a, b) => b.speed - a.speed);
+}
+
 io.on('connection', (socket) => {
   console.log('A user connected');
 
@@ -65,6 +93,43 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on("start_combat", ({ room, generatedEnemies }) => {
+    console.log('Starting combat for room:', room, 'with enemies:', generatedEnemies);
+    if(!combatSessions[room]) {
+      combatSessions[room] = {};
+    }
+
+    combatSessions[room].enemies = generatedEnemies;
+
+    const turnOrder = calculateTurnOrder(room);
+    combatSessions[room].turnOrder = turnOrder;
+    combatSessions[room].currentTurnIndex = 0;
+
+    io.to(room).emit("phase_changed_combat", { 
+      enemies: combatSessions[room].enemies, 
+      turnOrder: turnOrder,
+      currentTurn: turnOrder[0]
+     });
+  });
+
+  socket.on("end_turn", ({ room, playerName }) => {
+    const combat = combatSessions[room];
+
+    const currentTurn = combat?.turnOrder[combat.currentTurnIndex];
+    if (currentTurn.id !== playerName) return;
+
+    combat.currentTurnIndex++;
+    if(combat.currentTurnIndex >= combat.turnOrder.length) {
+      combat.currentTurnIndex = 0;
+    }
+
+    const nextTurn = combat.turnOrder[combat.currentTurnIndex];
+    io.to(room).emit("turn_changed", { currentTurn: nextTurn });
+
+  });
+
+
+
   socket.on("join_room", (room, name) => {
     socket.join(room);
   
@@ -96,7 +161,6 @@ io.on('connection', (socket) => {
     const room = playerRooms[socket.id];
     
     if (room && rooms[room]) {
-      //remove a player from a room when they disconnect
       rooms[room].players = rooms[room].players.filter(name => name !== playerName);
       
       io.to(room).emit("updatePlayerList", rooms[room].players);

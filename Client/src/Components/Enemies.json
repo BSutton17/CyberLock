@@ -1,0 +1,64 @@
+{
+  "enemies": [
+    {
+      "id": "goblin_scout",
+      "name": "Goblin Scout",
+      "tier": "generic",
+      "stats": {
+        "health": 30,
+        "speed": 30,
+        "resistance": 10,
+        "strength": 15,
+        "ta": 5
+      }
+    },
+    {
+      "id": "kobold_warrior",
+      "name": "Kobold Warrior",
+      "tier": "generic",
+      "stats": {
+        "health": 40,
+        "speed": 25,
+        "resistance": 15,
+        "strength": 20,
+        "ta": 10
+      }
+    },
+    {
+      "id": "orc_soldier",
+      "name": "Orc Soldier",
+      "tier": "mid-tier",
+      "stats": {
+        "health": 80,
+        "speed": 20,
+        "resistance": 25,
+        "strength": 35,
+        "ta": 15
+      }
+    },
+    {
+      "id": "dark_mage",
+      "name": "Dark Mage",
+      "tier": "mid-tier",
+      "stats": {
+        "health": 60,
+        "speed": 25,
+        "resistance": 20,
+        "strength": 10,
+        "ta": 5
+      }
+    },
+    {
+      "id": "golem_guardian",
+      "name": "Golem Guardian",
+      "tier": "boss",
+      "stats": {
+        "health": 300,
+        "speed": 10,
+        "resistance": 50,
+        "strength": 40,
+        "ta": 20
+      }
+    }
+  ]
+}

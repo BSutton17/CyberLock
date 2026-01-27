@@ -4,7 +4,12 @@ import { useGameContext } from './Context.jsx';
 
 function Events(){
 
-    const { socket, setPlayers, setDisplayGame, setAdmin, setScreen, setPlayerCharacters, setReadyPlayers, room} = useGameContext();
+    const { socket, setPlayers, setDisplayGame, 
+      setAdmin, setScreen, setPlayerCharacters, 
+      setReadyPlayers, setGamePhase, setStoryText, 
+      setCombatRewards, room, setEnemies, 
+      setTurnOrder, setCurrentTurn, 
+      setIsMyTurn, playerName } = useGameContext();
     useEffect(() => {
     
         socket.on("updatePlayerList", (playerList) => {
@@ -18,7 +23,6 @@ function Events(){
         
         socket.on("setAdmin", (admin) => {
           setAdmin(admin);
-          console.log("Admin status set to:", admin);
         });
 
         socket.on("update_character_selections", (selections) => {
@@ -32,6 +36,21 @@ function Events(){
         socket.on("start_main_game", () => {
           setScreen("main");
         });
+
+        // Game phase transitions
+        socket.on("phase_changed_combat", ({ enemies, turnOrder, currentTurn }) => {
+          console.log('Combat Phase Started - Turn Order:', turnOrder);
+          console.log('Received enemies:', enemies);
+          setEnemies(enemies);
+          setTurnOrder(turnOrder);
+          setCurrentTurn(currentTurn);
+          setIsMyTurn(currentTurn.id === playerName && currentTurn.type === 'ally');
+        });
+
+        socket.on("turn_changed", ({ currentTurn }) => {
+          setCurrentTurn(currentTurn);
+          setIsMyTurn(currentTurn.id === playerName && currentTurn.type === 'ally');
+        });
     
         return () => {
           socket.off("updatePlayerList");
@@ -40,7 +59,8 @@ function Events(){
           socket.off("update_character_selections");
           socket.off("update_ready_status");
           socket.off("start_main_game");
-          socket.off("reset_game");
+          socket.off("phase_changed_combat");
+          socket.off("turn_changed");
         };
     }, [room]);
     

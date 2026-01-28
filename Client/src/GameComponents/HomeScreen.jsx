@@ -1,10 +1,10 @@
 import '../App.css';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from './AuthContext';
-import { useGameContext } from './Context';
+import { useAuth } from '../Components/AuthContext';
+import { useGameContext } from '../Components/Context';
 import WaitingRoom from './WaitingRoom';
-import Events from './Events';
+import Events from '../Components/Events';
 import './HomeScreen.css';
 
 function HomeScreen() {

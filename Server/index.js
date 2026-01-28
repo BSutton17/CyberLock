@@ -20,6 +20,20 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const server = http.createServer(app);
+
+// Middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' 
+    ? process.env.CLIENT_URL 
+    : 'http://localhost:5173',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
+// Socket.io setup
 const io = new Server(server, {
   cors: {
     origin: process.env.CLIENT_URL || 'http://localhost:5173',
@@ -162,7 +176,7 @@ io.on('connection', (socket) => {
 
   socket.on("join_room", (room, name) => {
     socket.join(room);
-  
+
     if (!rooms[room]) {
       rooms[room] = { players: [] };
     }
@@ -184,17 +198,16 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on("disconnect", () => {
-    console.log("A user disconnected");
-    
+  socket.on('disconnect', () => {
+    console.log('A user disconnected:', socket.id);
+
     const playerName = playerNames[socket.id];
     const room = playerRooms[socket.id];
-    
+
     if (room && rooms[room]) {
       rooms[room].players = rooms[room].players.filter(name => name !== playerName);
-      
-      io.to(room).emit("updatePlayerList", rooms[room].players);
-      
+      io.to(room).emit('updatePlayerList', rooms[room].players);
+
       if (rooms[room].players.length === 0) {
         delete rooms[room];
       }

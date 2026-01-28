@@ -2,15 +2,21 @@ import "../App.css";
 import io from "socket.io-client";
 import App from "../App";
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import WaitingRoom from "./WaitingRoom";
 import CharacterSelect from "./CharacterSelect/CharacterSelect";
 import Main from "./Main/Main";
 import Events from "../Components/Events";
 import { useGameContext } from "../Components/Context";
+import { useAuth } from "../Components/AuthContext";
+import "./HomeScreen.css";
+
 function HomeScreen() {     
   const [name, setName] = useState("");       
   const [isJoining, setIsJoining] = useState(false); 
   const { players, socket, room, setRoom, screen, setPlayerName } = useGameContext();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
   // Load saved name and room from localStorage on first load
   useEffect(() => {
@@ -68,15 +74,31 @@ function HomeScreen() {
   };
 
   // Get rid of the saved data
-  const logout = () => {
+  const leaveGame = () => {
     localStorage.removeItem("name");
     localStorage.removeItem("room");
     window.location.reload(); 
     socket.emit("disconnect");
   };
 
+  // Logout from authentication
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
+  };
+
   return (
     <div>
+      {/* User Header */}
+      <div className="user-header">
+        <div className="user-info">
+          <span className="welcome-text">Welcome, <strong>{user?.username}</strong></span>
+        </div>
+        <button className="logout-btn" onClick={handleLogout}>
+          Logout
+        </button>
+      </div>
+
       <Events />
       {!isJoining ? (
         <div className="case">
@@ -101,7 +123,7 @@ function HomeScreen() {
           {screen === "waiting" && <WaitingRoom />}
           {screen === "characterSelect" && <CharacterSelect />}
           {screen === "main" && <Main />}
-          {screen !== "main" && <button onClick={logout}>Leave Game</button>}
+          {screen !== "main" && <button onClick={leaveGame}>Leave Game</button>}
         </div>
       )}
     </div>

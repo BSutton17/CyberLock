@@ -1,17 +1,47 @@
-const express = require("express");
-const app = express();
-const http = require("http");
-const cors = require("cors");
-const { Server } = require("socket.io");
+import express from 'express';
+import http from 'http';
+import cors from 'cors';
+import { Server } from 'socket.io';
+import dotenv from 'dotenv';
+import { initializeDatabase } from './config/database.js';
+import authRoutes from './routes/auth.js';
 
-app.use(cors());
+dotenv.config();
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+// Middleware
+app.use(cors({
+  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  credentials: true,
+}));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:5173",
-    methods: ["GET", "POST"],
+    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    methods: ['GET', 'POST'],
+    credentials: true,
   },
+});
+
+// Initialize Database
+try {
+  await initializeDatabase();
+} catch (error) {
+  console.error('Failed to initialize database:', error);
+  process.exit(1);
+}
+
+// Authentication Routes
+app.use('/api/auth', authRoutes);
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'Server is running' });
 });
 
 let rooms = {};
@@ -174,6 +204,7 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(process.env.PORT || 3001, () => {
-  console.log("SERVER RUNNING");
+// Start Server
+server.listen(PORT, () => {
+  console.log(`✓ Server is running on http://localhost:${PORT}`);
 });

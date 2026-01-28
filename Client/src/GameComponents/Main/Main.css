@@ -229,7 +229,6 @@ li{
     display: grid;
     grid-template-columns: auto auto 1fr auto;
     gap: 1rem;
-    overflow-x: auto;
     border: 1px solid rgba(74, 106, 138, 0.2);
     max-height: 12rem;
 }

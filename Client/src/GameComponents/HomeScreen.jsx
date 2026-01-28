@@ -125,7 +125,7 @@ function HomeScreen() {
           {screen === "characterSelect" && <CharacterSelect />}
           {screen === "characterBuilder" && <CharacterBuilder />}
           {screen === "main" && <Main />}
-          {screen !== "main" && <button onClick={leaveGame}>Leave Game</button>}
+          {screen !== "main" && <button className="leave" onClick={leaveGame}>Leave Game</button>}
         </div>
       )}
     </div>

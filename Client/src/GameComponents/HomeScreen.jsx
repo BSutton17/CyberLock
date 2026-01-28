@@ -12,40 +12,39 @@ function HomeScreen() {
   const [name, setName] = useState("");       
   const [isJoining, setIsJoining] = useState(false); 
   const { players, socket, room, setRoom, screen, setPlayerName } = useGameContext();
+  const navigate = useNavigate();
 
   // Load saved name and room from localStorage on first load
   useEffect(() => {
-    const savedName = localStorage.getItem("name");
-    const savedRoom = localStorage.getItem("room");
+    const savedName = localStorage.getItem('name');
+    const savedRoom = localStorage.getItem('room');
 
     if (savedName && savedRoom) {
       setName(savedName);
-      setPlayerName(savedName);
+      if (setPlayerName) setPlayerName(savedName);
       setRoom(savedRoom);
       setIsJoining(true);
 
-      socket.emit("join_room", savedRoom, savedName); 
+      socket.emit('join_room', savedRoom, savedName);
     }
   }, []);
 
-
   const joinRoom = () => {
-    if (room !== "" && name !== "") {
+    if (room !== '' && name !== '') {
+      localStorage.setItem('name', name);
+      localStorage.setItem('room', room);
+      if (setPlayerName) setPlayerName(name);
 
-      localStorage.setItem("name", name);
-      localStorage.setItem("room", room);
-      setPlayerName(name);
-
-      socket.emit("join_room", room, name); 
+      socket.emit('join_room', room, name);
       setIsJoining(true);
     } else {
-      alert("Please enter a valid room and name.");
+      alert('Please enter a valid room and name.');
     }
   };
 
   const startRoom = () => {
-    if (name === "") {
-      alert("Please enter a valid name.");
+    if (name === '') {
+      alert('Please enter a valid name.');
       return;
     }
 
@@ -54,30 +53,46 @@ function HomeScreen() {
     const strRoom = String(newRoom);
 
     // Simulate typing room ID character by character
-    setRoom("");
+    setRoom('');
     setTimeout(() => setRoom(strRoom.substring(0, 3)), 30);
     setTimeout(() => setRoom(strRoom), 60);
 
     setTimeout(() => {
-      localStorage.setItem("name", name);
-      localStorage.setItem("room", strRoom);
-      setPlayerName(name);
+      localStorage.setItem('name', name);
+      localStorage.setItem('room', strRoom);
+      if (setPlayerName) setPlayerName(name);
 
-      socket.emit("join_room", strRoom, name); 
+      socket.emit('join_room', strRoom, name);
       setIsJoining(true);
     }, 20);
   };
 
   // Get rid of the saved data
-  const logout = () => {
+  const leaveGame = () => {
     localStorage.removeItem("name");
     localStorage.removeItem("room");
     window.location.reload(); 
     socket.emit("disconnect");
   };
 
+  // Logout from authentication
+  const handleLogout = async () => {
+    await logoutAuth();
+    navigate('/login');
+  };
+
   return (
     <div>
+      {/* User Header */}
+      <div className="user-header">
+        <div className="user-info">
+          <span className="welcome-text">Welcome, <strong>{user?.username}</strong></span>
+        </div>
+        <button className="logout-btn" onClick={handleLogout}>
+          Logout
+        </button>
+      </div>
+
       <Events />
       {!isJoining ? (
         <div className="case">

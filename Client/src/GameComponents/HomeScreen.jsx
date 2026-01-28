@@ -3,12 +3,14 @@ import io from "socket.io-client";
 import App from "../App";
 import { useState, useEffect } from "react";
 import WaitingRoom from "./WaitingRoom";
-import Events from "./Events";
-import { useGameContext } from "./Context";
+import CharacterSelect from "./CharacterSelect/CharacterSelect";
+import Main from "./Main/Main";
+import Events from "../Components/Events";
+import { useGameContext } from "../Components/Context";
 function HomeScreen() {     
   const [name, setName] = useState("");       
   const [isJoining, setIsJoining] = useState(false); 
-  const { players, socket, room, setRoom } = useGameContext();
+  const { players, socket, room, setRoom, screen, setPlayerName } = useGameContext();
 
   // Load saved name and room from localStorage on first load
   useEffect(() => {
@@ -17,6 +19,7 @@ function HomeScreen() {
 
     if (savedName && savedRoom) {
       setName(savedName);
+      setPlayerName(savedName);
       setRoom(savedRoom);
       setIsJoining(true);
 
@@ -30,6 +33,7 @@ function HomeScreen() {
 
       localStorage.setItem("name", name);
       localStorage.setItem("room", room);
+      setPlayerName(name);
 
       socket.emit("join_room", room, name); 
       setIsJoining(true);
@@ -56,6 +60,7 @@ function HomeScreen() {
     setTimeout(() => {
       localStorage.setItem("name", name);
       localStorage.setItem("room", strRoom);
+      setPlayerName(name);
 
       socket.emit("join_room", strRoom, name); 
       setIsJoining(true);
@@ -93,8 +98,10 @@ function HomeScreen() {
         </div>
       ) : (
         <div>
-          <WaitingRoom />
-          <button onClick={logout}>Leave Game</button>
+          {screen === "waiting" && <WaitingRoom />}
+          {screen === "characterSelect" && <CharacterSelect />}
+          {screen === "main" && <Main />}
+          {screen !== "main" && <button onClick={logout}>Leave Game</button>}
         </div>
       )}
     </div>

@@ -1,0 +1,334 @@
+{
+  "characters": [
+    {
+      "id": "offensive_tank_1",
+      "name": "Offensive Tank #1",
+      "role": "Tank",
+      "stats": {
+        "health": 95,
+        "speed": 20,
+        "resistance": 30,
+        "strength": 30,
+        "ta": 15
+      },
+      "weapon": {
+        "name": "Hammer",
+        "damage": 10
+      },
+      "abilities": [
+        {
+          "name": "Battle Surge",
+          "description": "Grants yourself +5 Speed and +5 bonus health for 2 turns.",
+          "cooldown": 3
+        },
+        {
+          "name": "Immobilizing Item",
+          "description": "Use an item to temporarily immobilize 2 enemies for 1 turn.",
+          "cooldown": 2
+        },
+        {
+          "name": "Single Target Strike",
+          "description": "Deals damage to a single enemy.",
+          "cooldown": 1
+        }
+      ],
+      "ultimate": {
+        "name": "Crushing Judgment",
+        "description": "Enemies with equal or lower max health have their health cut in half. Enemies with higher max health lose 20% health."
+      },
+      "nonCombatRole": "Politician"
+    },
+    {
+      "id": "defensive_tank_2",
+      "name": "Defensive Tank #2",
+      "role": "Tank",
+      "stats": {
+        "health": 110,
+        "speed": 10,
+        "resistance": 40,
+        "strength": 35,
+        "ta": 5
+      },
+      "weapon": {
+        "name": "Taser Shield"
+      },
+      "abilities": [
+        {
+          "name": "Defensive Barrier",
+          "description": "Place a shield; all supports gain +10 resistance this turn.",
+          "cooldown": 2
+        },
+        {
+          "name": "Shield Shockwave",
+          "description": "Deals area-of-effect damage.",
+          "cooldown": 1
+        },
+        {
+          "name": "Overpower",
+          "description": "Instantly defeats an enemy with lower strength.",
+          "cooldown": 3
+        }
+      ],
+      "ultimate": {
+        "name": "Fortification",
+        "description": "All party members gain +15 health and +10 resistance for 2 turns."
+      },
+      "nonCombatRole": "Intimidation"
+    },
+    {
+      "id": "spellcaster_dps_1",
+      "name": "Spell Caster DPS #1",
+      "role": "DPS",
+      "stats": {
+        "health": 75,
+        "speed": 25,
+        "resistance": 35,
+        "strength": 10,
+        "ta": 55
+      },
+      "weapon": {
+        "name": "Ray Gun",
+        "damage": "variable"
+      },
+      "abilities": [
+        {
+          "name": "Arcane Blast",
+          "description": "Deals area-of-effect damage.",
+          "cooldown": 1
+        },
+        {
+          "name": "Cryo Lock",
+          "description": "Freezes an enemy, halves their speed for 2 turns, and deals damage.",
+          "cooldown": 2
+        },
+        {
+          "name": "Heal Suppression",
+          "description": "Prevents enemies from healing for 1 turn.",
+          "cooldown": 2
+        }
+      ],
+      "ultimate": {
+        "name": "Spell Overload",
+        "description": "All three abilities trigger simultaneously: AoE damage, speed reduction, and heal block."
+      },
+      "nonCombatRole": "Scholar"
+    },
+    {
+      "id": "aggressive_dps_2",
+      "name": "Aggressive DPS #2",
+      "role": "DPS",
+      "stats": {
+        "health": 80,
+        "speed": 40,
+        "resistance": 25,
+        "strength": 45,
+        "ta": 10
+      },
+      "weapon": {
+        "name": "Energy Sword"
+      },
+      "abilities": [
+        {
+          "name": "MP Conversion",
+          "description": "Lose 10 TA to gain +5 speed and +5 strength for 2 turns.",
+          "cooldown": 4
+        },
+        {
+          "name": "Flash Strike",
+          "description": "Priority attack that always goes first and deals damage to one enemy.",
+          "cooldown": 1,
+          "priority": true
+        }
+      ],
+      "ultimate": {
+        "name": "Bladestorm",
+        "description": "Hit up to six enemies four times in quick succession."
+      },
+      "nonCombatRole": "Spy"
+    },
+    {
+      "id": "traditional_warrior_dps_3",
+      "name": "Traditional Warrior DPS #3",
+      "role": "DPS",
+      "stats": {
+        "health": 80,
+        "speed": 35,
+        "resistance": 30,
+        "strength": 50,
+        "ta": 5
+      },
+      "weapon": {
+        "name": "Rail Cannon"
+      },
+      "abilities": [
+        {
+          "name": "Focused Shot",
+          "description": "Deals high damage to a single enemy.",
+          "cooldown": 1
+        },
+        {
+          "name": "Explosive Barrage",
+          "description": "Deals area-of-effect damage.",
+          "cooldown": 1
+        },
+        {
+          "name": "Second Wind",
+          "description": "Heals yourself."
+        }
+      ],
+      "ultimate": {
+        "name": "Power Surge",
+        "description": "Gain +20 strength for one attack."
+      },
+      "nonCombatRole": "Detective"
+    },
+    {
+      "id": "healing_support_1",
+      "name": "Healing Support #1",
+      "role": "Support",
+      "stats": {
+        "health": 60,
+        "speed": 20,
+        "resistance": 35,
+        "strength": 10,
+        "ta": 50
+      },
+      "weapon": {
+        "name": "Drone"
+      },
+      "abilities": [
+        {
+          "name": "Priority Protocol",
+          "description": "All allies gain priority for 1 turn.",
+          "cooldown": 2
+        },
+        {
+          "name": "Energy Recharge",
+          "description": "Restore 10 MP to yourself.",
+          "cooldown": 1
+        },
+        {
+          "name": "Life Link",
+          "description": "Allies heal for 15% of damage dealt for 1 turn.",
+          "cooldown": 2
+        }
+      ],
+      "ultimate": {
+        "name": "Mass Restoration",
+        "description": "All allies restore 50% health."
+      },
+      "nonCombatRole": "Medic"
+    },
+    {
+      "id": "offensive_support_2",
+      "name": "Offensive Support #2",
+      "role": "Support",
+      "stats": {
+        "health": 70,
+        "speed": 25,
+        "resistance": 20,
+        "strength": 20,
+        "ta": 40
+      },
+      "weapon": {
+        "name": "Electric Guitar"
+      },
+      "abilities": [
+        {
+          "name": "Speed Boost",
+          "description": "Grant one ally +10 speed.",
+          "cooldown": 2
+        },
+        {
+          "name": "Lucky Roll",
+          "description": "Grant one ally +2 on their next dice roll.",
+          "cooldown": 3
+        },
+        {
+          "name": "Healing Field",
+          "description": "Create a field that heals allies for 5 health for 2 turns.",
+          "cooldown": 2
+        }
+      ],
+      "ultimate": {
+        "name": "Encore",
+        "description": "Reset all allies' ability cooldowns to 0."
+      },
+      "nonCombatRole": "Gambler"
+    },
+    {
+      "id": "jack_of_all_trades_support_3",
+      "name": "Jack of All Trades Support #3",
+      "role": "Support",
+      "stats": {
+        "health": 65,
+        "speed": 25,
+        "resistance": 25,
+        "strength": 15,
+        "ta": 45
+      },
+      "weapon": {
+        "name": "Energy Staff"
+      },
+      "abilities": [
+        {
+          "name": "Tank Reinforcement",
+          "description": "Tanks gain +5 resistance for 1 turn.",
+          "cooldown": 1
+        },
+        {
+          "name": "DPS Empowerment",
+          "description": "DPS gain +5 strength for 1 turn.",
+          "cooldown": 1
+        },
+        {
+          "name": "Support Recharge",
+          "description": "All supports gain +10 MP.",
+          "cooldown": 2
+        }
+      ],
+      "ultimate": {
+        "name": "Universal Boost",
+        "description": "One ally gains +10 to all stats for 1 turn."
+      },
+      "nonCombatRole": "Banker"
+    },
+    {
+      "id": "hacker_support_4",
+      "name": "Hacker Support #3",
+      "role": "Support",
+      "stats": {
+        "health": 65,
+        "speed": 25,
+        "resistance": 25,
+        "strength": 15,
+        "ta": 45
+      },
+      "weapon": {
+        "name": "Laptop"
+      },
+      "abilities": [
+        {
+          "name": "System Lag",
+          "description": "Add one turn of cooldown to enemy abilities.",
+          "cooldown": 2
+        },
+        {
+          "name": "Battery Drain",
+          "description": "Drain energy from enemies to heal allies.",
+          "cooldown": 1
+        },
+        {
+          "name": "Cooldown Override",
+          "description": "Remove cooldown from one ally ability.",
+          "cooldown": 4
+        }
+      ],
+      "ultimate": {
+        "name": "Total Shutdown",
+        "description": "Enemies cannot use abilities for 1 turn."
+      },
+      "nonCombatRole": "Disable Electronic Devices"
+    }
+  ]
+}

@@ -1,0 +1,553 @@
+.main-game-container {
+    display: grid;
+    grid-template-columns: minmax(180px, 220px) 1fr minmax(200px, 260px);
+    grid-template-rows: auto 1fr auto;
+    grid-template-areas:
+        "scene scene scene"
+        "party main main"
+        "ai ai ai" 
+        "inventory inventory inventory";
+    height: 100vh;
+    background: #0e0e12;
+    color: #eaeaf0;
+    font-family: 'Inter', sans-serif;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    box-sizing: border-box;
+}
+
+li{
+    text-decoration: none;
+    list-style: none;
+}
+
+.scene-name {
+    grid-area: scene;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    background: #16161d;
+    padding: 0 1.25rem;
+    border-radius: 0.75rem;
+    min-height: 4rem;
+    position: relative;
+}
+
+.turn {
+    position: absolute;
+    right: 3.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1.75rem;
+    font-weight: 600;
+    color: #eaeaf0;
+}
+
+.party {
+    grid-area: party;
+    background: #16161d;
+    border-radius: 0.75rem;
+    padding: 0.875rem;
+    overflow-y: auto;
+}
+
+.party h3 {
+    margin: 0 0 0.625rem 0;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    opacity: 0.7;
+}
+
+.party-member {
+    background: #222231;
+    padding: 0.625rem;
+    border-radius: 0.5rem;
+    margin-top: 0.5rem;
+    display: flex;
+    gap: 0.625rem;
+    align-items: center;
+}
+
+.character-icon {
+    width: 3rem;
+    height: 3rem;
+    background: #1a1a24;
+    border: 2px solid #3a3a4a;
+    border-radius: 0.375rem;
+    flex-shrink: 0;
+}
+
+.character-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+}
+
+.character-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #eaeaf0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.character-stats {
+    display: flex;
+    gap: 0.75rem;
+    font-size: 0.75rem;
+}
+
+.stat-speed,
+.stat-hp {
+    color: #9a9aaa;
+}
+
+.stat-hp {
+    font-weight: 500;
+}
+
+.main-game {
+    grid-area: main;
+    background: #1b1b26;
+    border-radius: 1rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 0;
+}
+
+.game-area {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 1rem;
+    box-sizing: border-box;
+}
+
+.battle-grid {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    grid-template-rows: repeat(7, 1fr);
+    width: 100%;
+    height: 100%;
+    background: transparent;
+}
+
+.grid-cell {
+    background: transparent;
+    border: 1px solid rgba(74, 106, 138, 0.2);
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.grid-cell:hover {
+    background: rgba(42, 42, 58, 0.3);
+    border-color: rgba(74, 106, 138, 0.4);
+}
+
+.grid-cell.occupied {
+    background: rgba(58, 74, 90, 0.2);
+}
+
+.grid-cell.player-controlled {
+    border-color: rgba(74, 122, 170, 0.6);
+    box-shadow: 0 0 0.75rem rgba(106, 138, 170, 0.4);
+    animation: player-pulse 2s ease-in-out infinite;
+}
+
+
+.grid-cell.enemy-cell {
+    border-color: rgba(138, 74, 74, 0.5);
+}
+
+.grid-cell.enemy-cell .grid-character {
+    background: linear-gradient(135deg, #8a4a4a 0%, #4a2a2a 100%);
+    border-color: #ca6a6a;
+    box-shadow: 0 0 0.5rem rgba(202, 106, 106, 0.4);
+}
+
+.party-member.party-selected {
+    background: #3a4a6a;
+    border: 2px solid #5a7aaa;
+    box-shadow: 0 0 0.5rem rgba(90, 122, 170, 0.4);
+}
+
+.party-member.player-char {
+    border-left: 3px solid #4a7aaa;
+}
+
+.continue-btn {
+    background: linear-gradient(135deg, #4a7aaa 0%, #2a5a8a 100%);
+    border: 2px solid #5a9aca;
+    color: #eaeaf0;
+    padding: 1rem 2rem;
+    border-radius: 0.75rem;
+    font-size: 1.125rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.continue-btn:hover {
+    background: linear-gradient(135deg, #5a9aca 0%, #3a7aaa 100%);
+    transform: scale(1.05);
+    box-shadow: 0 0.5rem 1.5rem rgba(90, 154, 202, 0.4);
+}
+
+.AI-script {
+    grid-area: ai;
+    background: #16161d33;
+    border-radius: 0.75rem;
+    padding: 0.875rem;
+    font-size: 0.875rem;
+    max-height: 20vh;
+    overflow-y: auto;
+}
+
+.inventory {
+    grid-area: inventory;
+    background: linear-gradient(135deg, #1a1a24 0%, #16161d 100%);
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+    display: grid;
+    grid-template-columns: auto auto 1fr auto;
+    gap: 1rem;
+    overflow-x: auto;
+    border: 1px solid rgba(74, 106, 138, 0.2);
+    max-height: 12rem;
+}
+
+.character-sheet-header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.character-portrait {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+}
+
+.portrait-icon {
+    width: 3rem;
+    height: 3rem;
+    background: linear-gradient(135deg, #2a2a3a 0%, #1a1a24 100%);
+    border: 2px solid #4a6a8a;
+    border-radius: 0.375rem;
+    flex-shrink: 0;
+}
+
+.character-title {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+}
+
+.char-name {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #eaeaf0;
+    letter-spacing: 0.02em;
+}
+
+.char-role {
+    font-size: 0.7rem;
+    color: #7a9aba;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.stats-section,
+.weapon-section,
+.abilities-section,
+.ultimate-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.stats-section h4,
+.weapon-section h4,
+.abilities-section h4,
+.ultimate-section h4 {
+    margin: 0;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #7a9aba;
+    font-weight: 600;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.375rem;
+}
+
+.stat-item {
+    background: #222231;
+    padding: 0.375rem 0.5rem;
+    border-radius: 0.375rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border: 1px solid rgba(74, 106, 138, 0.15);
+}
+
+.stat-label {
+    font-size: 0.65rem;
+    color: #9a9aaa;
+    font-weight: 500;
+}
+
+.stat-value {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #eaeaf0;
+}
+
+.weapon-card {
+    background: linear-gradient(135deg, #2a3a4a 0%, #1a2a3a 100%);
+    padding: 0.5rem 0.625rem;
+    border-radius: 0.375rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border: 2px solid #4a6a8a;
+    transition: all 0.2s ease;
+}
+
+.weapon-card:hover {
+    border-color: #6a8aaa;
+    box-shadow: 0 0.25rem 1rem rgba(74, 106, 138, 0.3);
+}
+
+.weapon-icon {
+    font-size: 1.25rem;
+    filter: drop-shadow(0 0 0.5rem rgba(74, 138, 138, 0.4));
+}
+
+.weapon-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+}
+
+.weapon-name {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #eaeaf0;
+}
+
+.weapon-damage {
+    font-size: 0.65rem;
+    color: #ff6b6b;
+    font-weight: 600;
+}
+
+.abilities-grid {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.ability-card {
+    background: linear-gradient(135deg, #2a2a4a 0%, #1a1a3a 100%);
+    border: 2px solid #4a5a8a;
+    border-radius: 0.375rem;
+    padding: 0.5rem 0.625rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex: 1;
+    min-width: 8rem;
+}
+
+.ability-card:hover {
+    transform: translateY(-0.125rem);
+    border-color: #6a7aaa;
+    box-shadow: 0 0.5rem 1.5rem rgba(74, 90, 138, 0.4);
+}
+
+.ability-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.375rem;
+}
+
+.ability-card .ability-name {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #eaeaf0;
+}
+
+.ability-cd {
+    font-size: 0.625rem;
+    color: #7a9aba;
+    background: rgba(122, 154, 186, 0.15);
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.25rem;
+}
+
+.ability-desc {
+    font-size: 0.625rem;
+    color: #9a9aaa;
+    line-height: 1.3;
+    text-align: left;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.ultimate-card {
+    background: linear-gradient(135deg, #4a1a4a 0%, #2a0a3a 100%);
+    border: 2px solid #8a4a9a;
+    border-radius: 0.375rem;
+    padding: 0.5rem 0.625rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    width: 100%;
+}
+
+.ultimate-card:hover {
+    transform: translateY(-0.125rem);
+    border-color: #aa6aba;
+    box-shadow: 0 0.5rem 2rem rgba(170, 106, 186, 0.5);
+}
+
+.ultimate-header {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    margin-bottom: 0.375rem;
+}
+
+.ultimate-icon {
+    font-size: 1rem;
+    filter: drop-shadow(0 0 0.5rem rgba(255, 215, 0, 0.6));
+}
+
+.ultimate-card .ultimate-name {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #f0d0ff;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.ultimate-desc {
+    font-size: 0.625rem;
+    color: #d0b0e0;
+    line-height: 1.3;
+    text-align: left;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.no-character {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #7a9aba;
+    font-size: 1rem;
+    opacity: 0.6;
+}
+
+.end-turn {
+    position: absolute;
+    bottom: 2rem;
+    right: 2rem;
+    background: #ff4d6d;
+    color: white;
+    border: none;
+    padding: 0.875rem 1.375rem;
+    border-radius: 0.75rem;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.end-turn:hover {
+    background: #ff6b86;
+}
+
+@media (max-width: 1024px) {
+    .main-game-container {
+        grid-template-columns: 1fr;
+        grid-template-areas:
+            "scene"
+            "main"
+            "party"
+            "ai"
+            "inventory";
+        gap: 0.5rem;
+        padding: 0.5rem;
+    }
+    
+    .party {
+        max-height: 30vh;
+    }
+    
+    .end-turn {
+        bottom: 1rem;
+        right: 1rem;
+        padding: 0.75rem 1.25rem;
+        font-size: 0.9rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .scene-name {
+        min-height: 3rem;
+        padding: 0 0.75rem;
+    }
+    
+    .character-icon {
+        width: 2.5rem;
+        height: 2.5rem;
+    }
+    
+    .character-name {
+        font-size: 0.8rem;
+    }
+    
+    .character-stats {
+        font-size: 0.7rem;
+        gap: 0.5rem;
+    }
+    
+    .inventory-slot {
+        width: 3.5rem;
+        height: 3.5rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .main-game-container {
+        gap: 0.375rem;
+        padding: 0.375rem;
+    }
+    
+    .party h3,
+    .AI-script {
+        font-size: 0.8rem;
+    }
+    
+    .inventory-slot {
+        width: 3rem;
+        height: 3rem;
+    }
+}

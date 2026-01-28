@@ -9,7 +9,7 @@ function Events(){
       setReadyPlayers, setGamePhase, setStoryText, 
       setCombatRewards, room, setEnemies, 
       setTurnOrder, setCurrentTurn, 
-      setIsMyTurn, playerName } = useGameContext();
+      setIsMyTurn, playerName, setAttributeAllocations } = useGameContext();
     useEffect(() => {
     
         socket.on("updatePlayerList", (playerList) => {
@@ -33,6 +33,10 @@ function Events(){
           setReadyPlayers(readyList);
         });
 
+        socket.on("character_customization", () => {
+          setScreen("characterBuilder");
+        });
+
         socket.on("start_main_game", () => {
           setScreen("main");
         });
@@ -51,6 +55,10 @@ function Events(){
           setCurrentTurn(currentTurn);
           setIsMyTurn(currentTurn.id === playerName && currentTurn.type === 'ally');
         });
+
+        socket.on("attribute_allocations_updated", (allocations) => {
+          setAttributeAllocations(allocations);
+        });
     
         return () => {
           socket.off("updatePlayerList");
@@ -61,6 +69,7 @@ function Events(){
           socket.off("start_main_game");
           socket.off("phase_changed_combat");
           socket.off("turn_changed");
+          socket.off("attribute_allocations_updated");
         };
     }, [room]);
     

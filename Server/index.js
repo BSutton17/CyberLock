@@ -79,7 +79,6 @@ io.on('connection', (socket) => {
       }
       io.to(room).emit("update_ready_status", rooms[room].readyPlayers);
       
-      // Check if all players are ready and have selected characters
       const allReady = rooms[room].players.length > 0 && 
                        rooms[room].players.every(player => 
                          rooms[room].readyPlayers.includes(player) && 
@@ -87,7 +86,80 @@ io.on('connection', (socket) => {
                          rooms[room].characterSelections[player]
                        );
       
-      if (allReady) {
+      // if (allReady) {
+      //   io.to(room).emit("start_main_game");
+      // }
+       if (allReady) {
+        io.to(room).emit("character_customization");
+      }
+    }
+  });
+
+  socket.on("select_ability", ({ room, playerName, abilities }) => {
+    if (rooms[room]) {
+      if (!rooms[room].abilitySelections) {
+        rooms[room].abilitySelections = {};
+      }
+      rooms[room].abilitySelections[playerName] = abilities;
+      io.to(room).emit("ability_selections_updated", rooms[room].abilitySelections);
+    }
+  });
+
+  socket.on("ability_ready", ({ room, playerName }) => {
+    if (rooms[room]) {
+      if (!rooms[room].abilityReadyPlayers) {
+        rooms[room].abilityReadyPlayers = [];
+      }
+      if (!rooms[room].abilityReadyPlayers.includes(playerName)) {
+        rooms[room].abilityReadyPlayers.push(playerName);
+      }
+      io.to(room).emit("ability_ready_status", rooms[room].abilityReadyPlayers);
+      
+      const allAbilityReady = rooms[room].players.length > 0 && 
+                              rooms[room].players.every(player => 
+                                rooms[room].abilityReadyPlayers.includes(player)
+                              );
+      
+      if (allAbilityReady) {
+        io.to(room).emit("start_game");
+      }
+    }
+  });
+
+  socket.on("update_attribute_points", ({ room, playerName, points }) => {
+    if (rooms[room]) {
+      if (!rooms[room].attributePoints) {
+        rooms[room].attributePoints = {};
+      }
+      rooms[room].attributePoints[playerName] = points;
+      io.to(room).emit("attribute_points_updated", rooms[room].attributePoints);
+    }
+  });
+
+  socket.on("attribute_ready", ({ room, playerName, sortedAttributes }) => {
+    if (rooms[room]) {
+      if (!rooms[room].attributeReadyPlayers) {
+        rooms[room].attributeReadyPlayers = [];
+      }
+      if (!rooms[room].attributeReadyPlayers.includes(playerName)) {
+        rooms[room].attributeReadyPlayers.push(playerName);
+      }
+      
+      // Store sorted attributes
+      if (!rooms[room].sortedAttributeAllocations) {
+        rooms[room].sortedAttributeAllocations = {};
+      }
+      rooms[room].sortedAttributeAllocations[playerName] = sortedAttributes;
+      
+      io.to(room).emit("attribute_ready_status", rooms[room].attributeReadyPlayers);
+      io.to(room).emit("attribute_allocations_updated", rooms[room].sortedAttributeAllocations);
+      
+      const allAttributeReady = rooms[room].players.length > 0 && 
+                                rooms[room].players.every(player => 
+                                  rooms[room].attributeReadyPlayers.includes(player)
+                                );
+      
+      if (allAttributeReady) {
         io.to(room).emit("start_main_game");
       }
     }

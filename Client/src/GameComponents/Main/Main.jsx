@@ -5,7 +5,7 @@ import EnemiesData from '../../Components/Enemies.json';
 import './Main.css';
 
 function Main() {
-    const { players, playerCharacters, playerName, room, socket, gamePhase, setGamePhase, isMyTurn, currentTurn, enemies, setEnemies } = useGameContext();
+    const { players, playerCharacters, playerName, room, socket, attributeAllocations, setGamePhase, isMyTurn, currentTurn, enemies, setEnemies } = useGameContext();
     const [currentPlayerCharacter, setCurrentPlayerCharacter] = useState(null);
     const [ultimateReady, setUltimateReady] = useState(false);
     const [characterPositions, setCharacterPositions] = useState({});
@@ -203,7 +203,29 @@ function Main() {
                             <div className="character-title">
                                 <div className="char-name">{currentPlayerCharacter.name}</div>
                                 <div className="char-role">{currentPlayerCharacter.role}</div>
+                                
+                        <div className='attributes'>
+                            {attributeAllocations[playerName] && attributeAllocations[playerName].length > 0 ? (
+                                <>
+                                    <div className="attribute-line">
+                                        <span className="primary-ability small">
+                                            {attributeAllocations[playerName][0]?.charAt(0).toUpperCase() + attributeAllocations[playerName][0]?.slice(1)}
+                                        </span>
+                                    </div>
+                                    /
+                                    <div className="attribute-line">
+                                        <span className="secondary-ability small">
+                                            {attributeAllocations[playerName][1]?.charAt(0).toUpperCase() + attributeAllocations[playerName][1]?.slice(1)}
+                                        </span>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="no-allocation">No attributes allocated</div>
+                            )}
+                        </div>
                             </div>
+
+                        </div>
                             <div className="stats-section">
                             <h4>Stats</h4>
                             <div className="stats-grid">
@@ -228,8 +250,7 @@ function Main() {
                                     <span className="stat-value">{currentPlayerCharacter.stats.ta}</span>
                                 </div>
                             </div>
-                        </div>
-                        </div>
+                            </div>
                     </div>
 
                     <div className="weapon-section">

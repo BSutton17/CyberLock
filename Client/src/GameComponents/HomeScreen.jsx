@@ -7,6 +7,7 @@ import CharacterSelect from "./CharacterSelect/CharacterSelect";
 import Main from "./Main/Main";
 import Events from "../Components/Events";
 import { useGameContext } from "../Components/Context";
+import CharacterBuilder from "./CharacterBuilder/CharacterBuilder";
 function HomeScreen() {     
   const [name, setName] = useState("");       
   const [isJoining, setIsJoining] = useState(false); 
@@ -100,6 +101,7 @@ function HomeScreen() {
         <div>
           {screen === "waiting" && <WaitingRoom />}
           {screen === "characterSelect" && <CharacterSelect />}
+          {screen === "characterBuilder" && <CharacterBuilder />}
           {screen === "main" && <Main />}
           {screen !== "main" && <button onClick={logout}>Leave Game</button>}
         </div>

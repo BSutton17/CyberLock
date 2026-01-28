@@ -13,7 +13,7 @@
       },
       "weapon": {
         "name": "Hammer",
-        "damage": 10
+        "damage": 8
       },
       "abilities": [
         {
@@ -35,8 +35,7 @@
       "ultimate": {
         "name": "Crushing Judgment",
         "description": "Enemies with equal or lower max health have their health cut in half. Enemies with higher max health lose 20% health."
-      },
-      "nonCombatRole": "Politician"
+      }
     },
     {
       "id": "defensive_tank_2",
@@ -50,7 +49,8 @@
         "ta": 5
       },
       "weapon": {
-        "name": "Taser Shield"
+        "name": "Taser Shield",
+        "damage": 8
       },
       "abilities": [
         {
@@ -72,8 +72,7 @@
       "ultimate": {
         "name": "Fortification",
         "description": "All party members gain +15 health and +10 resistance for 2 turns."
-      },
-      "nonCombatRole": "Intimidation"
+      }
     },
     {
       "id": "spellcaster_dps_1",
@@ -88,7 +87,7 @@
       },
       "weapon": {
         "name": "Ray Gun",
-        "damage": "variable"
+        "damage": 10
       },
       "abilities": [
         {
@@ -110,8 +109,7 @@
       "ultimate": {
         "name": "Spell Overload",
         "description": "All three abilities trigger simultaneously: AoE damage, speed reduction, and heal block."
-      },
-      "nonCombatRole": "Scholar"
+      }
     },
     {
       "id": "aggressive_dps_2",
@@ -125,7 +123,8 @@
         "ta": 10
       },
       "weapon": {
-        "name": "Energy Sword"
+        "name": "Energy Sword",
+        "damage": 10
       },
       "abilities": [
         {
@@ -143,8 +142,7 @@
       "ultimate": {
         "name": "Bladestorm",
         "description": "Hit up to six enemies four times in quick succession."
-      },
-      "nonCombatRole": "Spy"
+      }
     },
     {
       "id": "traditional_warrior_dps_3",
@@ -158,7 +156,8 @@
         "ta": 5
       },
       "weapon": {
-        "name": "Rail Cannon"
+        "name": "Rail Cannon",
+        "damage": 10
       },
       "abilities": [
         {
@@ -179,8 +178,7 @@
       "ultimate": {
         "name": "Power Surge",
         "description": "Gain +20 strength for one attack."
-      },
-      "nonCombatRole": "Detective"
+      }
     },
     {
       "id": "healing_support_1",
@@ -194,7 +192,8 @@
         "ta": 50
       },
       "weapon": {
-        "name": "Drone"
+        "name": "Drone",
+        "damage": 6
       },
       "abilities": [
         {
@@ -216,8 +215,7 @@
       "ultimate": {
         "name": "Mass Restoration",
         "description": "All allies restore 50% health."
-      },
-      "nonCombatRole": "Medic"
+      }
     },
     {
       "id": "offensive_support_2",
@@ -231,7 +229,8 @@
         "ta": 40
       },
       "weapon": {
-        "name": "Electric Guitar"
+        "name": "Electric Guitar",
+        "damage": 6
       },
       "abilities": [
         {
@@ -253,8 +252,7 @@
       "ultimate": {
         "name": "Encore",
         "description": "Reset all allies' ability cooldowns to 0."
-      },
-      "nonCombatRole": "Gambler"
+      }
     },
     {
       "id": "jack_of_all_trades_support_3",
@@ -268,7 +266,8 @@
         "ta": 45
       },
       "weapon": {
-        "name": "Energy Staff"
+        "name": "Energy Staff",
+        "damage": 6
       },
       "abilities": [
         {
@@ -290,8 +289,7 @@
       "ultimate": {
         "name": "Universal Boost",
         "description": "One ally gains +10 to all stats for 1 turn."
-      },
-      "nonCombatRole": "Banker"
+      }
     },
     {
       "id": "hacker_support_4",
@@ -305,7 +303,8 @@
         "ta": 45
       },
       "weapon": {
-        "name": "Laptop"
+        "name": "Laptop",
+        "damage": 6
       },
       "abilities": [
         {
@@ -327,8 +326,7 @@
       "ultimate": {
         "name": "Total Shutdown",
         "description": "Enemies cannot use abilities for 1 turn."
-      },
-      "nonCombatRole": "Disable Electronic Devices"
+      }
     }
   ]
 }

@@ -187,7 +187,7 @@
     overflow-y: auto;
     width: 21vw;
     max-height: 45vh;
-    bottom: 45vh;
+    bottom: 35vh;
     border: 2px solid;
     border-radius: 6px;
     padding: 8px;
@@ -333,22 +333,18 @@
     gap: 0.5rem;
 }
 
-.ready-button {
+.ready-button-select {
     padding: 6px 16px;
+    position: fixed;
+    bottom: 1rem;
+    left: 50%;
     font-size: 1rem;
     cursor: pointer;
     border: 2px solid;
     border-radius: 6px;
-    background: rgba(255, 255, 255, 0.1);
-    transition: all 0.2s ease;
 }
 
-.ready-button:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.15);
-    transform: translateY(-2px);
-}
-
-.ready-button:disabled {
+.ready-button-select:disabled {
     opacity: 0.5;
     cursor: not-allowed;
 }

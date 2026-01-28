@@ -24,6 +24,7 @@ export const GameProvider = ({ children }) => {
     const [gamePhase, setGamePhase] = useState('story');
     const [storyText, setStoryText] = useState('The adventure begins...');
     const [combatRewards, setCombatRewards] = useState(null);
+    const [attributeAllocations, setAttributeAllocations] = useState({});
 
 
   return (
@@ -44,7 +45,8 @@ export const GameProvider = ({ children }) => {
         currentTurn, setCurrentTurn,
         turnOrder, setTurnOrder,
         isMyTurn, setIsMyTurn,
-        enemies, setEnemies
+        enemies, setEnemies,
+        attributeAllocations, setAttributeAllocations
       }}
     >
       {children}

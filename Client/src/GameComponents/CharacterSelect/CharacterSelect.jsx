@@ -14,22 +14,18 @@ function CharacterSelect() {
     };
 
     const handleAddToTeam = (character) => {
-        // Emit to server to update character selection
         socket.emit("character_selected", { room, playerName, character });
     };
 
     const handleRemoveFromTeam = () => {
-        // Emit to server to remove character selection
         socket.emit("character_removed", { room, playerName });
     };
 
     const handleReady = () => {
-        // Check if current player has selected a character
         if (!playerCharacters[playerName]) {
             alert("Please select a character before readying up!");
             return;
         }
-        // Emit ready status to server
         socket.emit("player_ready", { room, playerName });
     };
 
@@ -108,7 +104,7 @@ function CharacterSelect() {
                                     className={`character-card ${selectedCharacter?.id === character.id ? 'selected' : ''}`}
                                     onClick={() => {
                                         handleCharacterClick(character)
-                                        setDisplayClassInfo("");
+                                        setDisplayClassInfo(true);
                                     }}
                                     onDoubleClick={() => handleAddToTeam(character)}
                                 >
@@ -122,9 +118,6 @@ function CharacterSelect() {
                                         <span>STR: {character.stats.strength}</span>
                                         <span>TA: {character.stats.ta}</span>
                                     </div>
-                                    {/* <button onClick={(e) => { e.stopPropagation(); handleAddToTeam(character); }}>
-                                        Add to Team
-                                    </button> */}
                                 </div>
                             ))}
                         </div>
@@ -133,7 +126,6 @@ function CharacterSelect() {
             </div>
 
             <div>
-                <button className='class-info' onClick={() => setDisplayClassInfo(selectedCharacter)}>Class Info</button>
                 {selectedCharacter !== "" && displayClassInfo && (
                     <>
                     <div className='right-section'>
@@ -142,7 +134,6 @@ function CharacterSelect() {
                                 <div className='character-details'>
                                     <h4>{selectedCharacter.name}</h4>
                                     <p><strong>Role:</strong> {selectedCharacter.role}</p>
-                                    <p><strong>Non-Combat Role:</strong> {selectedCharacter.nonCombatRole}</p>
                                     
                                     <div className='stats-detail'>
                                         <h5>Stats:</h5>
@@ -189,13 +180,13 @@ function CharacterSelect() {
 
             <div className='footer-controls'>
                 <button 
-                    className='ready-button' 
+                    className='ready-button-select' 
                     onClick={handleReady}
                     disabled={!playerCharacters[playerName] || isPlayerReady}
                 >
                     {isPlayerReady ? "Ready! Waiting for others..." : "Ready"}
                 </button>
-                <p className='ready-status'>{readyPlayers.length}/{players.length} players ready</p>
+                <p className='ready-status'>{readyPlayers}/{players.length}) players ready</p>
             </div>
         </div>
     );

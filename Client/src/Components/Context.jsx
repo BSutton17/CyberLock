@@ -12,6 +12,9 @@ export const GameProvider = ({ children }) => {
     const [isAdmin, setAdmin] = useState(false);
     const [room, setRoom] = useState("");
     const [displayGame, setDisplayGame] = useState(false);
+<<<<<<< HEAD
+    const [socket] = useState(() => io.connect("http://localhost:5000"));
+=======
     const [screen, setScreen] = useState("waiting"); 
     const [playerName, setPlayerName] = useState("");
     const [playerCharacters, setPlayerCharacters] = useState({});
@@ -24,6 +27,7 @@ export const GameProvider = ({ children }) => {
     const [gamePhase, setGamePhase] = useState('story');
     const [storyText, setStoryText] = useState('The adventure begins...');
     const [combatRewards, setCombatRewards] = useState(null);
+>>>>>>> d28f15df6fa543ebc1cdc4303af54e1198a16ad7
 
 
   return (

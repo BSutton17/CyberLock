@@ -6,33 +6,39 @@
       "role": "Tank",
       "stats": {
         "health": 95,
+        "maxHealth": 95,
         "speed": 20,
         "resistance": 30,
         "strength": 30,
         "ta": 15
       },
       "weapon": {
+        "range": 1,
         "name": "Hammer",
         "damage": 8
       },
       "abilities": [
         {
+          "id": "ability_boost",
           "name": "Battle Surge",
           "description": "Grants yourself +5 Speed and +5 bonus health for 2 turns.",
           "cooldown": 3
         },
         {
+          "id": "binding_chains",
           "name": "Immobilizing Item",
           "description": "Use an item to temporarily immobilize 2 enemies for 1 turn.",
           "cooldown": 2
         },
         {
+          "id": "shadow_strike",
           "name": "Single Target Strike",
           "description": "Deals damage to a single enemy.",
           "cooldown": 1
         }
       ],
       "ultimate": {
+        "id": "executioners_judgment",
         "name": "Crushing Judgment",
         "description": "Enemies with equal or lower max health have their health cut in half. Enemies with higher max health lose 20% health."
       }
@@ -43,12 +49,14 @@
       "role": "Tank",
       "stats": {
         "health": 110,
+        "maxHealth": 110,
         "speed": 10,
         "resistance": 40,
         "strength": 35,
         "ta": 5
       },
       "weapon": {
+        "range": 1,
         "name": "Taser Shield",
         "damage": 8
       },
@@ -80,12 +88,14 @@
       "role": "DPS",
       "stats": {
         "health": 75,
+        "maxHealth": 75,
         "speed": 25,
         "resistance": 35,
         "strength": 10,
         "ta": 55
       },
       "weapon": {
+        "range": 1,
         "name": "Ray Gun",
         "damage": 10
       },
@@ -117,12 +127,14 @@
       "role": "DPS",
       "stats": {
         "health": 80,
+        "maxHealth": 80,
         "speed": 40,
         "resistance": 25,
         "strength": 45,
         "ta": 10
       },
       "weapon": {
+        "range": 1,
         "name": "Energy Sword",
         "damage": 10
       },
@@ -150,12 +162,14 @@
       "role": "DPS",
       "stats": {
         "health": 80,
+        "maxHealth": 80,
         "speed": 35,
         "resistance": 30,
         "strength": 50,
         "ta": 5
       },
       "weapon": {
+        "range": 1,
         "name": "Rail Cannon",
         "damage": 10
       },
@@ -186,12 +200,14 @@
       "role": "Support",
       "stats": {
         "health": 60,
+        "maxHealth": 60,
         "speed": 20,
         "resistance": 35,
         "strength": 10,
         "ta": 50
       },
       "weapon": {
+        "range": 1,
         "name": "Drone",
         "damage": 6
       },
@@ -223,12 +239,14 @@
       "role": "Support",
       "stats": {
         "health": 70,
+        "maxHealth": 70,
         "speed": 25,
         "resistance": 20,
         "strength": 20,
         "ta": 40
       },
       "weapon": {
+        "range": 1,
         "name": "Electric Guitar",
         "damage": 6
       },
@@ -260,12 +278,14 @@
       "role": "Support",
       "stats": {
         "health": 65,
+        "maxHealth": 65,
         "speed": 25,
         "resistance": 25,
         "strength": 15,
         "ta": 45
       },
       "weapon": {
+        "range": 1,
         "name": "Energy Staff",
         "damage": 6
       },
@@ -297,12 +317,14 @@
       "role": "Support",
       "stats": {
         "health": 65,
+        "maxHealth": 65,
         "speed": 25,
         "resistance": 25,
         "strength": 15,
         "ta": 45
       },
       "weapon": {
+        "range": 1,
         "name": "Laptop",
         "damage": 6
       },

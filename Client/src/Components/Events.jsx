@@ -9,7 +9,7 @@ function Events(){
       setReadyPlayers, setGamePhase, setStoryText, 
       setCombatRewards, room, setEnemies, 
       setTurnOrder, setCurrentTurn, 
-      setIsMyTurn, playerName, setAttributeAllocations } = useGameContext();
+      setIsMyTurn, playerName, setAttributeAllocations, playerCharacters } = useGameContext();
     useEffect(() => {
     
         socket.on("updatePlayerList", (playerList) => {
@@ -52,12 +52,27 @@ function Events(){
         });
 
         socket.on("turn_changed", ({ currentTurn }) => {
+          console.log('TURN CHANGED EVENT RECEIVED');
+          console.log('Current Turn:', currentTurn);
+          console.log('Turn Type:', currentTurn.type);
+          console.log('Turn ID:', currentTurn.id);
           setCurrentTurn(currentTurn);
           setIsMyTurn(currentTurn.id === playerName && currentTurn.type === 'ally');
         });
 
         socket.on("attribute_allocations_updated", (allocations) => {
           setAttributeAllocations(allocations);
+        });
+
+        socket.on("player_health_updated", ({ playerName: damagedPlayer, newHealth }) => {
+          console.log(`🩹 Player health updated: ${damagedPlayer} -> ${newHealth}`);
+          setPlayerCharacters(prev => ({
+            ...prev,
+            [damagedPlayer]: {
+              ...prev[damagedPlayer],
+              stats: { ...prev[damagedPlayer].stats, health: newHealth }
+            }
+          }));
         });
     
         return () => {
@@ -70,6 +85,7 @@ function Events(){
           socket.off("phase_changed_combat");
           socket.off("turn_changed");
           socket.off("attribute_allocations_updated");
+          socket.off("player_health_updated");
         };
     }, [room]);
     

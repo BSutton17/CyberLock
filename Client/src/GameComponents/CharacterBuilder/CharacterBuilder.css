@@ -114,6 +114,10 @@
     text-shadow: 0 2px 8px rgba(139, 92, 246, 0.6);
 }
 
+.item-name{
+    width: 8rem;
+}
+
 .attributes-list {
     display: flex;
     flex-direction: column;
@@ -126,23 +130,55 @@
 .attribute-item {
     background: rgba(30, 30, 50, 0.7);
     backdrop-filter: blur(8px);
-    border: 1px solid rgba(139, 92, 246, 0.2);
-    border-radius: 6px;
+    border-radius: 20px;
     padding: 0.6rem;
     display: flex;
+    justify-content: flex-end;
     align-items: center;
     gap: 0.5rem;
     transition: all 0.3s ease;
     position: relative;
     overflow: hidden;
-    min-height: 3.5rem;
+    max-height: 0.25rem;
+    width: 40rem;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    margin-left: 2.5rem;
 }
 
 .attribute-item:hover {
-    transform: translateX(4px);
     border-color: rgba(139, 92, 246, 0.5);
     box-shadow: 0 4px 16px rgba(139, 92, 246, 0.3);
+}
+
+.attribute-item.max-attribute::after {
+    content: '';
+    position: absolute;
+    left: -100%;
+    top: 0;
+    height: 100%;
+    width: 30%;
+    background: linear-gradient(90deg, 
+        transparent 0%, 
+        rgba(255, 255, 255, 0.1) 40%, 
+        rgba(255, 255, 255, 0.3) 50%, 
+        rgba(255, 255, 255, 0.1) 60%, 
+        transparent 100%);
+    z-index: 2;
+    animation: sweepLine 2.5s ease-in-out infinite;
+    pointer-events: none;
+}
+
+@keyframes sweepLine {
+    0% {
+        left: -100%;
+    }
+    100% {
+        left: 100%;
+    }
+}
+
+.max-attribute-fill{
+
 }
 
 .attribute-item::before {
@@ -152,16 +188,21 @@
     top: 0;
     height: 100%;
     width: var(--fill-percentage, 0%);
-    background: linear-gradient(90deg, rgba(139, 92, 246, 0.4) 0%, rgba(59, 130, 246, 0.4) 100%);
+    background: linear-gradient(90deg, rgba(59, 130, 246, 0.4) 0%, rgba(139, 92, 246, 0.4) 100%);
     z-index: 0;
     transition: width 0.4s ease;
     border-right: 3px solid rgba(167, 139, 250, 0.7);
     box-shadow: 0 0 15px rgba(139, 92, 246, 0.5);
 }
 
+
 .attribute-info {
     flex: 1;
     position: relative;
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
     z-index: 1;
     max-width: 90%;
     margin-right: 10%;
@@ -193,14 +234,19 @@
     z-index: 1;
 }
 
+.attribute-controls:active, .attribute-controls:after {
+    border: none;
+}
+
 .control-btn {
     width: 2rem;
     height: 2rem;
     background: linear-gradient(135deg, #a78bfa 0%, #60a5fa 100%);
     color: #fff;
     border: none;
+    outline: none;
     border-radius: 6px;
-    font-size: 1.1rem;
+    font-size: 0.85rem;
     cursor: pointer;
     transition: all 0.3s ease;
     font-weight: 900;
@@ -215,6 +261,11 @@
 
 .control-btn:active:not(:disabled) {
     transform: scale(0.95);
+    outline: none;
+}
+
+.control-btn:focus {
+    outline: none;
 }
 
 .control-btn:disabled {
@@ -225,7 +276,7 @@
 }
 
 .attribute-value {
-    font-size: 1.4rem;
+    font-size: 1.2rem;
     font-weight: 900;
     color: #c4b5fd;
     min-width: 2rem;
@@ -317,22 +368,37 @@
     font-style: italic;
 }
 
-.error-message {
-    background: rgba(220, 38, 38, 0.15);
+.error-message, .desc-message {
+    position: fixed;
+    bottom: 5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    width: calc(100% - 4rem);
+    max-width: 86.5rem;
     backdrop-filter: blur(8px);
-    color: #fca5a5;
     padding: 0.6rem;
     border-radius: 6px;
     text-align: center;
-    margin-top: 0.5rem;
-    border: 2px solid rgba(220, 38, 38, 0.5);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 1px;
     font-size: 0.75rem;
+    z-index: 100;
+}
+
+.error-message{
+    color: #fca5a5;
+    background: rgba(220, 38, 38, 0.15);
+    border: 2px solid rgba(220, 38, 38, 0.5);
     box-shadow: 0 0 15px rgba(220, 38, 38, 0.3);
     animation: pulseError 2s infinite;
 }
+
+.desc-message{
+    border: 2px solid rgba(248, 243, 243, 0.5);
+}
+
+
 
 @keyframes pulseError {
     0%, 100% { opacity: 1; box-shadow: 0 0 15px rgba(220, 38, 38, 0.3); }

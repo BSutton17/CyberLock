@@ -26,6 +26,7 @@ function CharacterBuilder() {
     const [allPlayerPoints, setAllPlayerPoints] = useState({});
     const [isReady, setIsReady] = useState(false);
     const [readyPlayers, setReadyPlayers] = useState([]);
+    const [showDescription, setShowDescription] = useState(null);
 
     useEffect(() => {
         socket.on('attribute_points_updated', (points) => {
@@ -159,15 +160,20 @@ function CharacterBuilder() {
                             const fillPercentage = (currentValue / MAX_POINTS_PER_ATTRIBUTE) * 100;
                             
                             return (
+                                <>
+                                <div className="attribute-info" >
+                                   <div 
+                                   onMouseEnter={() => setShowDescription(attr.id)}
+                                    onMouseLeave={() => setShowDescription(null)}
+                                    className='item-name'>
+                                    <h4>{attr.name}</h4>
+                                    </div> 
                                 <div 
                                     key={attr.id} 
-                                    className="attribute-item"
+                                    className={`attribute-item ${currentValue === MAX_POINTS_PER_ATTRIBUTE ? 'max-attribute' : ''}`}
                                     style={{ '--fill-percentage': `${fillPercentage}%` }}
                                 >
-                                    <div className="attribute-info">
-                                        <h4>{attr.name}</h4>
-                                        <p>{attr.description}</p>
-                                    </div>
+                                    <div className={`${currentValue === MAX_POINTS_PER_ATTRIBUTE ? 'max-attribute-fill' : ''}`}></div>
                                     <div className="attribute-controls">
                                         <button 
                                             onClick={() => handleDecrement(attr.id)}
@@ -184,8 +190,10 @@ function CharacterBuilder() {
                                         >
                                             +
                                         </button>
+                                        </div>
                                     </div>
                                 </div>
+                                </>
                             );
                         })}
                     </div>
@@ -224,6 +232,13 @@ function CharacterBuilder() {
                 </div>
             </div>
 
+            {showDescription && (
+                <div className="desc-message">
+                        {NON_COMBAT_ATTRIBUTES.find(a => a.id === showDescription)?.description}
+                </div>
+            )}
+
+
             {hasDuplicateValues() && (
                 <div className="error-message">
                     Warning: No two attributes can have the same point value!
@@ -241,6 +256,7 @@ function CharacterBuilder() {
                     Only Support characters can have Medic as primary or secondary trait
                 </div>
             )}
+            
 
             <div className="builder-footer">
                 <button 

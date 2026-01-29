@@ -1,0 +1,62 @@
+# Cyberpunk DM Configuration
+
+system:
+  name: "Capstone DM AI"
+  version: "1.0.0"
+  description: "AI powered Dungeon Master for Cyberpunk 2077/RED campaigns"
+
+world:
+  setting: "Cyberpunk 2077/RED"
+  tone: "Dark, gritty, high-tech low-life"
+  style: "Narrative-focused with tactical combat"
+
+model:
+  # Model inference settings
+  generation:
+    temperature: 0.8  # Creativity (0.0-2.0)
+    top_p: 0.9  # Nucleus sampling
+    top_k: 50  # Top-k sampling
+    repetition_penalty: 1.1
+    max_new_tokens: 2048
+    min_new_tokens: 50
+    do_sample: true
+  
+  # Context management
+  context:
+    max_history_tokens: 8000  # Reserve for chat history
+    max_lore_tokens: 4000  # Reserve for static lore
+    max_rag_tokens: 2000  # Reserve for retrieved memories
+
+memory:
+  # Short-term memory (in-request)
+  short_term:
+    enabled: true
+    max_messages: 30
+  
+  # Long-term memory (RAG)
+  long_term:
+    enabled: true
+    similarity_threshold: 0.7
+    max_retrievals: 5
+    
+  # What to remember
+  store_types:
+    - "npcs"
+    - "locations"
+    - "plot_points"
+    - "player_actions"
+    - "relationships"
+    - "inventory_changes"
+
+game_rules:
+  # Combat
+  combat:
+    initiative_reminder: true
+    track_ammo: true
+    cover_system: true
+  
+  # Skill checks
+  skills:
+    difficulty_scale: "Easy/Medium/Hard/Very Hard/Nearly Impossible"
+    critical_success: 20
+    critical_failure: 1

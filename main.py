@@ -1,0 +1,378 @@
+"""
+Main FastAPI application
+"""
+
+from fastapi import FastAPI, HTTPException, Depends, Header
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from contextlib import asynccontextmanager
+from typing import Optional
+import time
+import torch
+from loguru import logger
+
+from app.config import settings, GAME_CONFIG
+from app.model import ModelLoader, ConversationManager
+from app.memory import MemoryStore, ContextBuilder
+from app.prompts import build_system_prompt
+from app.schemas import (
+    ChatRequest, ChatResponse,
+    AddMemoryRequest, AddMemoryResponse,
+    RetrieveMemoriesRequest, RetrieveMemoriesResponse,
+    HealthResponse, ErrorResponse
+)
+
+
+# Global instances
+model_loader: Optional[ModelLoader] = None
+memory_store: Optional[MemoryStore] = None
+context_builder: Optional[ContextBuilder] = None
+conversation_manager: Optional[ConversationManager] = None
+
+# Session storage (in production we will use a database)
+sessions = {}
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup and shutdown events"""
+    global model_loader, memory_store, context_builder, conversation_manager
+    
+    logger.info("Starting DM AI API...")
+    
+    try:
+        # Initialize model
+        logger.info("Loading AI model...")
+        model_loader = ModelLoader(
+            model_name=settings.MODEL_NAME,
+            quantization=settings.QUANTIZATION,
+            max_context_length=settings.MAX_CONTEXT_LENGTH
+        )
+        model_loader.load_model()
+        
+        # Initialize conversation manager
+        conversation_manager = ConversationManager(model_loader.tokenizer)
+        
+        # Initialize memory system
+        logger.info("Initializing memory system...")
+        memory_store = MemoryStore(
+            db_path=settings.CHROMA_DB_PATH,
+            embedding_model=settings.EMBEDDING_MODEL
+        )
+        context_builder = ContextBuilder(memory_store)
+        
+        logger.success("All systems ready!")
+        
+        yield
+        
+    finally:
+        # Cleanup
+        logger.info("Shutting down...")
+        if model_loader:
+            model_loader.unload_model()
+
+
+# Create FastAPI app
+app = FastAPI(
+    title="Capstone DM AI API",
+    description="AI powered Dungeon Master using Mistral and PyTorch",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins_list,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# Security dependency (optional)
+async def verify_api_key(x_api_key: Optional[str] = Header(None)):
+    """Verify API key if enabled"""
+    if settings.ENABLE_API_KEY:
+        if not x_api_key or x_api_key != settings.API_KEY:
+            raise HTTPException(status_code=401, detail="Invalid API key")
+    return True
+
+
+@app.get("/", tags=["General"])
+async def root():
+    """Root endpoint"""
+    return {
+        "service": "Capstone DM AI API",
+        "version": "1.0.0",
+        "status": "online",
+        "docs": "/docs"
+    }
+
+
+@app.get("/health", response_model=HealthResponse, tags=["General"])
+async def health_check():
+    """Health check endpoint"""
+    
+    vram_stats = None
+    if model_loader and torch.cuda.is_available():
+        vram_stats = model_loader.get_memory_stats()
+    
+    memory_stats = None
+    if memory_store:
+        memory_stats = memory_store.get_stats()
+    
+    return HealthResponse(
+        status="healthy" if model_loader and model_loader.model else "degraded",
+        model_loaded=model_loader is not None and model_loader.model is not None,
+        gpu_available=torch.cuda.is_available(),
+        vram_stats=vram_stats,
+        memory_stats=memory_stats
+    )
+
+
+@app.post("/chat", response_model=ChatResponse, tags=["AI"])
+async def chat(
+    request: ChatRequest,
+    authenticated: bool = Depends(verify_api_key)
+):
+    """
+    Main chat endpoint - send a message and get AI response
+    """
+    
+    if not model_loader or not model_loader.model:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+    
+    start_time = time.time()
+    
+    try:
+        # Get or create session
+        if request.session_id not in sessions:
+            sessions[request.session_id] = {
+                "messages": [],
+                "created_at": time.time()
+            }
+        
+        session = sessions[request.session_id]
+        
+        # Add user message to history
+        user_message = {"role": "user", "content": request.message}
+        session["messages"].append(user_message)
+        
+        # Keep only recent messages (sliding window)
+        recent_messages = session["messages"][-settings.MEMORY_CONTEXT_SIZE:]
+        
+        # Build system prompt
+        system_prompt = build_system_prompt(
+            scenario_type=request.scenario_type
+        )
+        
+        # Use RAG to enhance context
+        context = None
+        if request.use_memory and memory_store:
+            context = context_builder.build_context(
+                system_prompt=system_prompt,
+                recent_messages=recent_messages[:-1],  # Exclude current message
+                current_query=request.message,
+                session_id=request.session_id,
+                max_rag_results=settings.RAG_TOP_K
+            )
+            system_prompt = context["system_prompt"]
+        
+        # Format conversation
+        formatted_prompt = conversation_manager.format_conversation(
+            system_prompt=system_prompt,
+            messages=recent_messages
+        )
+        
+        # Generate response
+        temperature = request.temperature or settings.TEMPERATURE
+        max_tokens = request.max_tokens or settings.MAX_NEW_TOKENS
+        
+        response_text = model_loader.generate(
+            prompt=formatted_prompt,
+            temperature=temperature,
+            top_p=settings.TOP_P,
+            max_new_tokens=max_tokens,
+            repetition_penalty=GAME_CONFIG["model"]["generation"]["repetition_penalty"]
+        )
+        
+        # Add assistant message to history
+        assistant_message = {"role": "assistant", "content": response_text}
+        session["messages"].append(assistant_message)
+        
+        # Auto-save important information to memory
+        if memory_store and request.use_memory:
+            # Extract and save key information (NPCs, locations, etc.)
+            await _auto_save_memories(
+                request.message,
+                response_text,
+                request.session_id,
+                request.character_name
+            )
+        
+        processing_time = time.time() - start_time
+        
+        return ChatResponse(
+            response=response_text,
+            session_id=request.session_id,
+            memories_used=len(context["retrieved_memories"]) if context else 0,
+            processing_time=processing_time
+        )
+        
+    except Exception as e:
+        logger.error(f"Chat error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+async def _auto_save_memories(
+    user_message: str,
+    ai_response: str,
+    session_id: str,
+    character_name: Optional[str]
+):
+    """Automatically save important game events to memory"""
+    
+    # Save user action
+    memory_store.add_memory(
+        content=f"Player action: {user_message}",
+        memory_type="player_action",
+        session_id=session_id,
+        metadata={"character": character_name} if character_name else None
+    )
+    
+    # Save AI response as plot point
+    memory_store.add_memory(
+        content=f"DM response: {ai_response}",
+        memory_type="plot_point",
+        session_id=session_id,
+        metadata={}
+    )
+
+
+@app.post("/memory/add", response_model=AddMemoryResponse, tags=["Memory"])
+async def add_memory(
+    request: AddMemoryRequest,
+    authenticated: bool = Depends(verify_api_key)
+):
+    """Manually add a memory to the database"""
+    
+    if not memory_store:
+        raise HTTPException(status_code=503, detail="Memory system not initialized")
+    
+    try:
+        memory_id = memory_store.add_memory(
+            content=request.content,
+            memory_type=request.memory_type,
+            session_id=request.session_id,
+            metadata=request.metadata
+        )
+        
+        return AddMemoryResponse(
+            memory_id=memory_id,
+            success=True
+        )
+        
+    except Exception as e:
+        logger.error(f"Add memory error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/memory/retrieve", response_model=RetrieveMemoriesResponse, tags=["Memory"])
+async def retrieve_memories(
+    request: RetrieveMemoriesRequest,
+    authenticated: bool = Depends(verify_api_key)
+):
+    """Retrieve relevant memories"""
+    
+    if not memory_store:
+        raise HTTPException(status_code=503, detail="Memory system not initialized")
+    
+    try:
+        memories = memory_store.retrieve_memories(
+            query=request.query,
+            session_id=request.session_id,
+            memory_types=request.memory_types,
+            top_k=request.top_k
+        )
+        
+        return RetrieveMemoriesResponse(
+            memories=memories,
+            count=len(memories)
+        )
+        
+    except Exception as e:
+        logger.error(f"Retrieve memories error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/session/{session_id}", tags=["Session"])
+async def delete_session(
+    session_id: str,
+    authenticated: bool = Depends(verify_api_key)
+):
+    """Delete a session and all its memories"""
+    
+    # Delete from memory store
+    if memory_store:
+        count = memory_store.delete_session_memories(session_id)
+    else:
+        count = 0
+    
+    # Delete from session storage
+    if session_id in sessions:
+        del sessions[session_id]
+    
+    return {
+        "success": True,
+        "session_id": session_id,
+        "memories_deleted": count
+    }
+
+
+@app.get("/session/{session_id}", tags=["Session"])
+async def get_session(
+    session_id: str,
+    authenticated: bool = Depends(verify_api_key)
+):
+    """Get session information"""
+    
+    if session_id not in sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    session = sessions[session_id]
+    
+    return {
+        "session_id": session_id,
+        "message_count": len(session["messages"]),
+        "created_at": session["created_at"],
+        "messages": session["messages"]
+    }
+
+
+# Error handlers
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": exc.detail}
+    )
+
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request, exc):
+    logger.error(f"Unhandled exception: {str(exc)}")
+    return JSONResponse(
+        status_code=500,
+        content={"error": "Internal server error", "detail": str(exc)}
+    )
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "main:app",
+        host=settings.HOST,
+        port=settings.PORT,
+        reload=settings.ENVIRONMENT == "development"
+    )

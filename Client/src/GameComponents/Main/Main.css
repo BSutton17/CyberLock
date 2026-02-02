@@ -413,6 +413,12 @@ li{
     font-weight: 600;
 }
 
+.weapon-range {
+    font-size: max-content;
+    color: #17a536;
+    font-weight: 600;
+}
+
 .abilities-grid {
     display: flex;
     gap: 0.5rem;

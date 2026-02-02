@@ -42,10 +42,24 @@ function Events(){
         });
 
         // Game phase transitions
-        socket.on("phase_changed_combat", ({ enemies, turnOrder, currentTurn }) => {
+        socket.on("phase_changed_combat", ({ enemies, enemyPositions, turnOrder, currentTurn, characterSelections }) => {
           console.log('Combat Phase Started - Turn Order:', turnOrder);
           console.log('Received enemies:', enemies);
+          console.log('Received enemy positions:', enemyPositions);
+          console.log('Received character selections:', characterSelections);
+          
+          // Update character selections to ensure all players have current data
+          if (characterSelections) {
+            setPlayerCharacters(characterSelections);
+          }
+          
           setEnemies(enemies);
+          
+          // Store enemy positions in session storage so Main.jsx can use them
+          if (enemyPositions) {
+            sessionStorage.setItem(`enemyPositions_${room}`, JSON.stringify(enemyPositions));
+          }
+          
           setTurnOrder(turnOrder);
           setCurrentTurn(currentTurn);
           setIsMyTurn(currentTurn.id === playerName && currentTurn.type === 'ally');
@@ -56,6 +70,9 @@ function Events(){
           console.log('Current Turn:', currentTurn);
           console.log('Turn Type:', currentTurn.type);
           console.log('Turn ID:', currentTurn.id);
+          console.log('[TURN DEBUG] playerName in Events:', playerName);
+          console.log('[TURN DEBUG] Comparison:', currentTurn.id === playerName, 'type check:', currentTurn.type === 'ally');
+          console.log('[TURN DEBUG] Setting isMyTurn to:', currentTurn.id === playerName && currentTurn.type === 'ally');
           setCurrentTurn(currentTurn);
           setIsMyTurn(currentTurn.id === playerName && currentTurn.type === 'ally');
         });
@@ -87,7 +104,7 @@ function Events(){
           socket.off("attribute_allocations_updated");
           socket.off("player_health_updated");
         };
-    }, [room]);
+    }, [room, playerName]); // Added playerName dependency so listeners update when it changes
     
     return (
         <>

@@ -1,5 +1,47 @@
 {
   "characters": [
+    {"id": "test_character",
+      "name": "Test",
+      "role": "Tank",
+      "stats": {
+        "health": 70,
+        "maxHealth": 95,
+        "speed": 200,
+        "resistance": 30,
+        "strength": 30,
+        "ta": 15
+      },
+      "weapon": {
+        "range": 1,
+        "name": "Hammer",
+        "damage": 8
+      },
+      "abilities": [
+        {
+          "id": "hurry_up",
+          "name": "Hurry Up!",
+          "description": "Add +10 speed to one ally for 1 turns",
+          "cooldown": 2
+        },
+        {
+          "id": "flood_of_frost",
+          "name": "Flood of Frost",
+          "description": "Deals damage and slows an enemy's speed by 50% for 2 turns.",
+          "cooldown": 2
+        },
+        {
+          "id": "shadow_strike",
+          "name": "Shadow Strike",
+          "description": "Deals heavy damage to an enemy.",
+          "cooldown": 1
+        }
+      ],
+      "ultimate": {
+        "id": "murus_fictilis",
+        "name": "Murus Fictilis",
+        "description": "All allies gain +15 bonus health and +10 resistance for 2 turns."
+      }
+    },
     {
       "id": "offensive_tank_1",
       "name": "Offensive Tank #1",
@@ -20,26 +62,26 @@
       "abilities": [
         {
           "id": "ability_boost",
-          "name": "Battle Surge",
+          "name": "Ability Boost",
           "description": "Grants yourself +5 Speed and +5 bonus health for 2 turns.",
           "cooldown": 3
         },
         {
           "id": "binding_chains",
-          "name": "Immobilizing Item",
+          "name": "Binding Chains",
           "description": "Use an item to temporarily immobilize 2 enemies for 1 turn.",
           "cooldown": 2
         },
         {
           "id": "shadow_strike",
-          "name": "Single Target Strike",
-          "description": "Deals damage to a single enemy.",
+          "name": "Shadow Strike",
+          "description": "Deals heavy damage to an enemy.",
           "cooldown": 1
         }
       ],
       "ultimate": {
         "id": "executioners_judgment",
-        "name": "Crushing Judgment",
+        "name": "Executioner's Judgment",
         "description": "Enemies with equal or lower max health have their health cut in half. Enemies with higher max health lose 20% health."
       }
     },
@@ -95,7 +137,7 @@
         "ta": 55
       },
       "weapon": {
-        "range": 1,
+        "range": 3,
         "name": "Ray Gun",
         "damage": 10
       },
@@ -207,7 +249,7 @@
         "ta": 50
       },
       "weapon": {
-        "range": 1,
+        "range": 4,
         "name": "Drone",
         "damage": 6
       },
@@ -246,7 +288,7 @@
         "ta": 40
       },
       "weapon": {
-        "range": 1,
+        "range": 2,
         "name": "Electric Guitar",
         "damage": 6
       },
@@ -285,7 +327,7 @@
         "ta": 45
       },
       "weapon": {
-        "range": 1,
+        "range": 3,
         "name": "Energy Staff",
         "damage": 6
       },
@@ -324,7 +366,7 @@
         "ta": 45
       },
       "weapon": {
-        "range": 1,
+        "range": 3,
         "name": "Laptop",
         "damage": 6
       },

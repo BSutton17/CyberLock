@@ -155,6 +155,60 @@ function getValidMovementCells(position, maxMovement, characterPositions, ROWS =
     return validCells;
 }
 
+/**
+ * BFS pathfinding to find reachable cells within movement range
+ * Returns all reachable cells with their actual path distance
+ */
+function getReachableCells(startPos, maxMovement, characterPositions, ROWS = 7, COLS = 10) {
+    const visited = new Set();
+    const queue = [{ pos: startPos, distance: 0 }];
+    const reachable = [];
+    
+    visited.add(`${startPos.row},${startPos.col}`);
+    
+    while (queue.length > 0) {
+        const { pos, distance } = queue.shift();
+        
+        // Add to reachable cells (except starting position)
+        if (distance > 0) {
+            reachable.push({ row: pos.row, col: pos.col, distance });
+        }
+        
+        // Stop expanding if we've reached max movement
+        if (distance >= maxMovement) continue;
+        
+        // Check all 4 adjacent cells (up, down, left, right)
+        const neighbors = [
+            { row: pos.row - 1, col: pos.col },
+            { row: pos.row + 1, col: pos.col },
+            { row: pos.row, col: pos.col - 1 },
+            { row: pos.row, col: pos.col + 1 }
+        ];
+        
+        for (const neighbor of neighbors) {
+            // Check bounds
+            if (neighbor.row < 0 || neighbor.row >= ROWS || neighbor.col < 0 || neighbor.col >= COLS) {
+                continue;
+            }
+            
+            const key = `${neighbor.row},${neighbor.col}`;
+            if (visited.has(key)) continue;
+            
+            // Check if occupied
+            const isOccupied = Object.values(characterPositions).some(
+                p => p.row === neighbor.row && p.col === neighbor.col
+            );
+            
+            if (!isOccupied) {
+                visited.add(key);
+                queue.push({ pos: neighbor, distance: distance + 1 });
+            }
+        }
+    }
+    
+    return reachable;
+}
+
 //aggressive behavior type movement logic
 function calculateAggressiveMovement(enemy, allies, characterPositions) {
     const enemyPos = characterPositions[enemy.id];
@@ -173,12 +227,13 @@ function calculateAggressiveMovement(enemy, allies, characterPositions) {
     if (!closest || !closest.targetId) return null;
     
     const targetPos = characterPositions[closest.targetId];
-    const validCells = getValidMovementCells(enemyPos, maxMovement, characterPositions);
+    // Use BFS pathfinding to get reachable cells
+    const reachableCells = getReachableCells(enemyPos, maxMovement, characterPositions);
     
-    if (validCells.length === 0) return null;
+    if (reachableCells.length === 0) return null;
     
     // Move toward closest ally (try to get in attack range)
-    const bestMove = validCells.reduce((best, cell) => {
+    const bestMove = reachableCells.reduce((best, cell) => {
         const distance = getDistance(cell, targetPos);
         const bestDistance = getDistance(best, targetPos);
         return distance < bestDistance ? cell : best;
@@ -204,10 +259,11 @@ function calculateDefensiveMovement(enemy, alliedEnemies, playerCharacters, char
     if (!closest || !closest.targetId) return null;
     
     const targetPos = characterPositions[closest.targetId];
-    const validCells = getValidMovementCells(enemyPos, maxMovement, characterPositions);
+    // Use BFS pathfinding to get reachable cells
+    const reachableCells = getReachableCells(enemyPos, maxMovement, characterPositions);
     
-    if (validCells.length === 0) return null;
-    const bestMove = validCells.reduce((best, cell) => {
+    if (reachableCells.length === 0) return null;
+    const bestMove = reachableCells.reduce((best, cell) => {
         const distance = getDistance(cell, targetPos);
         const bestDistance = getDistance(best, targetPos);
         return distance < bestDistance ? cell : best;
@@ -234,10 +290,11 @@ function calculateSupportMovement(enemy, alliedEnemies, characterPositions) {
     if (!closest || !closest.targetId) return null;
     
     const targetPos = characterPositions[closest.targetId];
-    const validCells = getValidMovementCells(enemyPos, maxMovement, characterPositions);
+    // Use BFS pathfinding to get reachable cells
+    const reachableCells = getReachableCells(enemyPos, maxMovement, characterPositions);
     
-    if (validCells.length === 0) return null;
-    const bestMove = validCells.reduce((best, cell) => {
+    if (reachableCells.length === 0) return null;
+    const bestMove = reachableCells.reduce((best, cell) => {
         const distance = getDistance(cell, targetPos);
         const bestDistance = getDistance(best, targetPos);
         return distance < bestDistance ? cell : best;

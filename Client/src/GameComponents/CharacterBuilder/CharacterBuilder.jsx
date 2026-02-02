@@ -15,7 +15,7 @@ const NON_COMBAT_ATTRIBUTES = [
     { id: 'electrician', name: 'Electrician', description: 'Electricians are experts in power systems and circuitry. They thrive when repairing, sabotaging, or rerouting electrical systems and technology.' }
 ];
 
-const TOTAL_POINTS = 45;
+const TOTAL_POINTS = 1;
 const MAX_POINTS_PER_ATTRIBUTE = 9;
 
 function CharacterBuilder() {

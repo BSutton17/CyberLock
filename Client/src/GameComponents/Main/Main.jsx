@@ -1,5 +1,5 @@
 import React from 'react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useGameContext } from '../../Components/Context';
 import EnemiesData from '../../Components/Enemies.json';
 import { executeEnemyTurn } from './EnemyCombat';
@@ -20,9 +20,31 @@ function Main() {
     const [movementUsed, setMovementUsed] = useState(0);
     const [actionUsed, setActionUsed] = useState(false);
 
+    // Refs to track latest state values for handleEndTurn
+    const activeEffectsRef = useRef(activeEffects);
+    const playerCharactersRef = useRef(playerCharacters);
+    const enemiesRef = useRef(enemies);
+
+    // Update refs whenever state changes
+    useEffect(() => {
+        activeEffectsRef.current = activeEffects;
+    }, [activeEffects]);
+
+    useEffect(() => {
+        playerCharactersRef.current = playerCharacters;
+    }, [playerCharacters]);
+
+    useEffect(() => {
+        enemiesRef.current = enemies;
+    }, [enemies]);
+
     useEffect(() => {
         if (playerCharacters[playerName]) {
             setCurrentPlayerCharacter(playerCharacters[playerName]);
+            console.log('[CHARACTER LOADED]', playerName, ':', playerCharacters[playerName]?.name);
+        } else {
+            console.warn('[CHARACTER MISSING] No character data for', playerName);
+            console.warn('[CHARACTER MISSING] Available characters:', Object.keys(playerCharacters));
         }
     }, [playerCharacters, playerName]);
 
@@ -33,6 +55,14 @@ function Main() {
             setMovementUsed(0);
             setActionUsed(false);
             console.log('Turn started - movement reset');
+            console.log('[TURN DEBUG] Player:', playerName);
+            console.log('[TURN DEBUG] Current character:', currentPlayerCharacter?.name);
+            console.log('[TURN DEBUG] Character position:', characterPositions[playerName]);
+            console.log('[TURN DEBUG] Character stats:', currentPlayerCharacter?.stats);
+        } else if (isMyTurn && !characterPositions[playerName]) {
+            console.error('[TURN DEBUG] ITS MY TURN BUT NO POSITION!');
+            console.error('[TURN DEBUG] Player:', playerName);
+            console.error('[TURN DEBUG] All positions:', characterPositions);
         }
     }, [isMyTurn, playerName]);
 
@@ -65,27 +95,75 @@ function Main() {
     }, [players]);
 
     useEffect(() => {
-        if (enemies.length > 0) {
-            const enemyPositions = {};
-            const topRow = Math.floor(Math.random() * 2);
-            enemies.forEach((enemy, index) => {
-                // Only set position if enemy doesn't already have one
-                if (!characterPositions[enemy.id]) {
-                    enemyPositions[enemy.id] = { row: topRow, col: index + 3 };
+        if (enemies && enemies.length > 0) {
+            // Check if server provided positions
+            const storedPositions = sessionStorage.getItem(`enemyPositions_${room}`);
+            
+            if (storedPositions) {
+                // Use server-provided positions
+                const serverPositions = JSON.parse(storedPositions);
+                const enemyPositions = {};
+                
+                enemies.forEach((enemy) => {
+                    // Only set position if enemy doesn't already have one
+                    if (!characterPositions[enemy.id] && serverPositions[enemy.id]) {
+                        enemyPositions[enemy.id] = serverPositions[enemy.id];
+                    }
+                });
+                
+                if (Object.keys(enemyPositions).length > 0) {
+                    setCharacterPositions(prev => ({ ...prev, ...enemyPositions }));
                 }
-            });
-            if (Object.keys(enemyPositions).length > 0) {
-                setCharacterPositions(prev => ({ ...prev, ...enemyPositions }));
+            } else {
+                // Fallback to client-side generation (shouldn't happen in multiplayer)
+                const enemyPositions = {};
+                const topRow = Math.floor(Math.random() * 2);
+                enemies.forEach((enemy, index) => {
+                    if (!characterPositions[enemy.id]) {
+                        enemyPositions[enemy.id] = { row: topRow, col: index + 3 };
+                    }
+                });
+                if (Object.keys(enemyPositions).length > 0) {
+                    setCharacterPositions(prev => ({ ...prev, ...enemyPositions }));
+                }
             }
         }
-    }, [enemies.length]); // Only re-run when enemy count changes, not when enemy data updates
+    }, [enemies]);
+
+    // Helper function to calculate path between two positions
+    const calculatePath = (start, end) => {
+        const path = [];
+        let current = { ...start };
+        
+        // Move row-wise first, then column-wise
+        while (current.row !== end.row) {
+            current = { ...current, row: current.row + (end.row > current.row ? 1 : -1) };
+            path.push({ ...current });
+        }
+        
+        while (current.col !== end.col) {
+            current = { ...current, col: current.col + (end.col > current.col ? 1 : -1) };
+            path.push({ ...current });
+        }
+        
+        return path;
+    };
 
     // Listen for enemy turn execution
     useEffect(() => {
         const handleExecuteEnemyTurn = ({ enemyId, allies, alliedEnemies }) => {
             console.log('EXECUTE_ENEMY_TURN EVENT RECEIVED');
             console.log('Enemy ID:', enemyId);
-            console.log('Allies:', allies);
+            console.log('Player Name:', playerName);
+            console.log('Allies list:', allies);
+            
+            // Only the first player in the allies list handles enemy turns
+            if (allies[0] !== playerName) {
+                console.log('[ENEMY TURN] Not the designated handler, skipping');
+                return;
+            }
+            
+            console.log('[ENEMY TURN] This player will handle the enemy turn');
             console.log('Allied Enemies:', alliedEnemies);
             
             const enemy = enemies.find(e => e.id === enemyId);
@@ -108,18 +186,28 @@ function Main() {
 
             console.log('Turn Action:', turnAction);
 
-            // Apply movement
+            // Calculate movement path and total animation time
+            let movementDelay = 0;
             if (turnAction.movement) {
-                console.log(`Moving ${enemy.name} to`, turnAction.movement);
-                setCharacterPositions(prev => ({
-                    ...prev,
-                    [enemyId]: turnAction.movement
-                }));
+                const startPos = characterPositions[enemyId];
+                const endPos = { row: turnAction.movement.row, col: turnAction.movement.col };
+                const path = calculatePath(startPos, endPos);
+                const stepDelay = 10000 / enemy.stats.speed;
+                movementDelay = path.length * stepDelay;
+                
+                // Emit the path for animation
+                socket.emit('enemy_moved', {
+                    room,
+                    enemyId,
+                    path: path,
+                    stepDelay: stepDelay
+                });
             }
 
-            // Apply damage if target selected
+            // Apply damage after movement delay
             if (turnAction.target && turnAction.useWeapon) {
-                const target = playerCharacters[turnAction.target];
+                setTimeout(() => {
+                    const target = playerCharacters[turnAction.target];
                 if (target) {
                     let damageAmount = Math.max(1, (enemy.stats.strength / 10) * enemy.weapon.damage - (target.stats.resistance / 10));
                     console.log(`${enemy.name} attacks ${turnAction.target} for ${damageAmount.toFixed(1)} damage!`);
@@ -158,7 +246,15 @@ function Main() {
                         }
                     });
                     
-                    setActiveEffects(updatedEffects);
+                    // Remove health buffs that have been completely consumed (value <= 0)
+                    const filteredEffects = updatedEffects.filter(effect => {
+                        if (effect.stat === 'health' && effect.type === 'stat_buff') {
+                            return effect.value > 0;
+                        }
+                        return true;
+                    });
+                    
+                    setActiveEffects(filteredEffects);
                     
                     // Apply remaining damage to base health
                     const newHealth = target.stats.health - remainingDamage;
@@ -177,43 +273,98 @@ function Main() {
                         setTurnOrder(prevOrder => prevOrder.filter(turn => turn.id !== turnAction.target));
                     }
                     
-                    // Emit to server to sync player health
+                    // Emit to server to sync player health and active effects
                     socket.emit('player_damaged', { 
                         room, 
                         playerName: turnAction.target, 
                         damage: damageAmount, 
                         newHealth: Math.max(0, newHealth),
-                        bonusHealthConsumed: damageAmount - remainingDamage
+                        bonusHealthConsumed: damageAmount - remainingDamage,
+                        updatedActiveEffects: filteredEffects
                     });
                     
                     console.log(`${turnAction.target} health: ${target.stats.health} → ${Math.max(0, newHealth)} (${damageAmount - remainingDamage} absorbed by bonus health)`);
 
-                }
+                    }
+                }, movementDelay); // Apply attack after movement completes
             }
 
-            // Delay before completing turn
+            // Delay before completing turn (movement + attack + visual feedback)
+            const totalDelay = movementDelay + (turnAction.target ? 500 : 0) + 1000;
             setTimeout(() => {
-                console.log('Enemy turn complete, emitting to server');
+                console.log('[ENEMY TURN] Completing turn for', enemyId);
                 socket.emit('enemy_turn_complete', { room });
-            }, 1500);
+            }, totalDelay);
         };
 
         const handleEnemiesUpdated = ({ enemies: updatedEnemies }) => {
             console.log('Enemies updated:', updatedEnemies);
-            setEnemies(updatedEnemies);
+            if (updatedEnemies && Array.isArray(updatedEnemies)) {
+                setEnemies(updatedEnemies);
+            } else {
+                console.error('[ENEMIES UPDATED] Received invalid enemies data:', updatedEnemies);
+            }
+        };
+
+        const handleCharactersUpdated = (updatedCharacters) => {
+            console.log('[CHARACTERS UPDATED] Received from server:', updatedCharacters);
+            setPlayerCharacters(prevChars => ({
+                ...prevChars,
+                ...updatedCharacters
+            }));
+        };
+
+        const handleActiveEffectsUpdated = (updatedEffects) => {
+            console.log('[ACTIVE EFFECTS UPDATED] Received from server:', updatedEffects);
+            setActiveEffects(updatedEffects);
+        };
+
+        const handleEnemyMoved = ({ enemyId, path, stepDelay }) => {
+            if (!path || path.length === 0) return;
+            
+            // Animate through each step in the path
+            path.forEach((position, index) => {
+                setTimeout(() => {
+                    setCharacterPositions(prev => ({
+                        ...prev,
+                        [enemyId]: position
+                    }));
+                }, stepDelay * index);
+            });
+        };
+
+        const handlePlayerMoved = ({ playerName: movedPlayer, position }) => {
+            console.log('[PLAYER MOVED] Received:', movedPlayer, 'to', position);
+            setCharacterPositions(prev => ({
+                ...prev,
+                [movedPlayer]: position
+            }));
         };
 
         socket.on("execute_enemy_turn", handleExecuteEnemyTurn);
         socket.on("enemies_updated", handleEnemiesUpdated);
+        socket.on("characters_updated", handleCharactersUpdated);
+        socket.on("active_effects_updated", handleActiveEffectsUpdated);
+        socket.on("enemy_moved", handleEnemyMoved);
+        socket.on("player_moved", handlePlayerMoved);
 
         return () => {
             socket.off("execute_enemy_turn", handleExecuteEnemyTurn);
             socket.off("enemies_updated", handleEnemiesUpdated);
+            socket.off("characters_updated", handleCharactersUpdated);
+            socket.off("active_effects_updated", handleActiveEffectsUpdated);
+            socket.off("enemy_moved", handleEnemyMoved);
+            socket.off("player_moved", handlePlayerMoved);
         };
     }, [socket, enemies, playerCharacters, setPlayerCharacters, characterPositions, room, turnOrder, setTurnOrder]);
 
     const handleGridClick = (row, col) => {
-        if (!isMyTurn) return;
+        console.log('[GRID CLICK]', { row, col, isMyTurn, playerName, hasCharacter: !!currentPlayerCharacter });
+        
+        if (!isMyTurn) {
+            console.log('[GRID CLICK] Blocked - not my turn');
+            return;
+        }
         
         // Check if clicking on an enemy with weapon selected
         const characterOnCell = Object.entries(characterPositions).find(
@@ -222,17 +373,57 @@ function Main() {
         
         // Handle ability targeting
         if (selectedAbility && characterOnCell) {
-            const enemyId = characterOnCell[0];
-            const enemy = enemies.find(e => e.id === enemyId);
+            const targetId = characterOnCell[0];
+            const abilityData = getAbility(selectedAbility);
             
+            console.log('[ALLY TARGET] Checking target:', {
+                targetId,
+                abilityId: selectedAbility,
+                targetType: abilityData?.targetType,
+                characterOnCell
+            });
+            
+            // Check if targeting an ally
+            const isAlly = playerCharacters[targetId];
+            const enemy = enemies.find(e => e.id === targetId);
+            
+            console.log('[ALLY TARGET] Target validation:', {
+                isAlly: !!isAlly,
+                isEnemy: !!enemy,
+                allyName: isAlly?.name,
+                playerCharacterKeys: Object.keys(playerCharacters)
+            });
+            
+            // Handle ally-targeted abilities
+            if (abilityData.targetType === 'ally' && isAlly) {
+                console.log('[ALLY TARGET] Executing ally-targeted ability on:', targetId);
+                executeAbilityOnTarget(selectedAbility, targetId);
+                return;
+            }
+            
+            // Handle enemy-targeted abilities
             if (enemy) {
-                const abilityData = getAbility(selectedAbility);
+                // Check range for abilities with range requirement
+                if (abilityData.range) {
+                    const currentPos = characterPositions[playerName];
+                    const targetPos = characterPositions[targetId];
+                    
+                    if (currentPos && targetPos) {
+                        const distance = Math.abs(currentPos.row - targetPos.row) + Math.abs(currentPos.col - targetPos.col);
+                        
+                        if (distance > abilityData.range) {
+                            console.log(`[ABILITY RANGE] Target out of range! Distance: ${distance}, Max Range: ${abilityData.range}`);
+                            setSelectedAbility(null);
+                            return;
+                        }
+                    }
+                }
                 
                 // Check if it's a multi-target ability
                 if (abilityData.targetType === 'multi-enemy') {
                     // Add to selected targets
-                    if (!selectedTargets.includes(enemyId)) {
-                        const newTargets = [...selectedTargets, enemyId];
+                    if (!selectedTargets.includes(targetId)) {
+                        const newTargets = [...selectedTargets, targetId];
                         setSelectedTargets(newTargets);
                         
                         console.log(`Selected target ${enemy.name}. Total: ${newTargets.length}/${abilityData.maxTargets || 2}`);
@@ -244,7 +435,7 @@ function Main() {
                     }
                 } else {
                     // Single target ability
-                    executeAbilityOnTarget(selectedAbility, enemyId);
+                    executeAbilityOnTarget(selectedAbility, targetId);
                 }
                 return;
             }
@@ -342,11 +533,19 @@ function Main() {
                 to: { row, col }
             });
             
+            const newPosition = { row, col };
             setCharacterPositions(prev => ({
                 ...prev,
-                [playerName]: { row, col }
+                [playerName]: newPosition
             }));
             setMovementUsed(movementUsed + movementThisStep);
+            
+            // Broadcast player movement to all players
+            socket.emit('player_moved', {
+                room,
+                playerName,
+                position: newPosition
+            });
         } else if (movementThisStep > movementRemaining) {
             console.log('Not enough movement remaining:', {
                 movementThisStep: movementThisStep,
@@ -385,6 +584,7 @@ function Main() {
                                     <>
                                         <div className="enemy-health">
                                             {enemies.find(e => e.id === characterOnCell[0])?.stats.health || 0}
+                                            {enemies.find(e => e.id === characterOnCell[0])?.stats.speed || 0}
                                         </div>
                                         <div className="enemy-name">
                                             {enemies.find(e => e.id === characterOnCell[0])?.name || 'E'}
@@ -413,10 +613,20 @@ function Main() {
         socket.emit('combat_complete', { room, rewards });    }
 
     const handleAbilityClick = (ability) => {
-        if (!isMyTurn || actionUsed) return;
+        console.log('[ABILITY CLICK] Ability clicked:', ability.name, 'ID:', ability.id);
+        
+        if (!isMyTurn || actionUsed) {
+            console.log('[ABILITY CLICK] Blocked - isMyTurn:', isMyTurn, 'actionUsed:', actionUsed);
+            return;
+        }
         
         const abilityData = getAbility(ability.id);
-        if (!abilityData) return;
+        console.log('[ABILITY CLICK] Ability data:', abilityData);
+        
+        if (!abilityData) {
+            console.log('[ABILITY CLICK] No ability data found!');
+            return;
+        }
         
         // Check cooldown
         if (cooldowns[ability.id] > 0) {
@@ -424,8 +634,10 @@ function Main() {
             return;
         }
         
-        // Handle self-targeted abilities immediately
-        if (abilityData.targetType === 'self') {
+        // Handle abilities that don't need target selection
+        console.log('[ABILITY CLICK] Target type:', abilityData.targetType);
+        if (abilityData.targetType === 'self' || abilityData.targetType === 'all-allies' || abilityData.targetType === 'all-enemies') {
+            console.log('[ABILITY CLICK] Executing immediately - no target needed');
             executeAbilityOnTarget(ability.id, null);
         } else {
             // For other abilities, select and wait for target
@@ -439,6 +651,14 @@ function Main() {
     const executeAbilityOnTarget = (abilityId, target) => {
         const abilityData = getAbility(abilityId);
         
+        console.log('[EXECUTE ABILITY] Starting execution:', {
+            abilityId,
+            target,
+            targetType: abilityData?.targetType,
+            caster: currentPlayerCharacter?.name,
+            playerCharacters: Object.keys(playerCharacters)
+        });
+        
         const result = executeAbility(abilityId, {
             caster: currentPlayerCharacter,
             playerName: playerName,
@@ -448,6 +668,8 @@ function Main() {
             playerCharacters: playerCharacters,
             cooldowns: cooldowns
         });
+        
+        console.log('[EXECUTE ABILITY] Result:', result);
         
         if (!result.success) {
             console.log('Ability failed:', result.message);
@@ -467,6 +689,15 @@ function Main() {
         setPlayerCharacters(updates.playerCharacters);
         setActiveEffects(updates.activeEffects);
         
+        console.log('[ABILITY COMPLETE] Updated enemies:', updates.enemies);
+        console.log('[ABILITY COMPLETE] Updated playerCharacters:', updates.playerCharacters);
+        
+        // Check if target was an enemy
+        const targetEnemy = updates.enemies.find(e => e.id === target);
+        if (targetEnemy) {
+            console.log(`[ABILITY COMPLETE] Enemy ${targetEnemy.name} stats:`, targetEnemy.stats);
+        }
+        
         // Update cooldowns
         if (result.newCooldown) {
             console.log(`Setting cooldown for ${abilityId}: ${result.newCooldown} turns`);
@@ -485,16 +716,26 @@ function Main() {
             room,
             playerName,
             abilityId,
-            result
+            result,
+            updatedPlayerCharacters: updates.playerCharacters,
+            updatedEnemies: updates.enemies,
+            updatedActiveEffects: updates.activeEffects
         });
+        
+        console.log('[ABILITY SYNC] Emitting updated playerCharacters and enemies to server');
         
         setSelectedAbility(null);
         setSelectedTargets([]);
         setActionUsed(true);
         
-        // Auto-end turn after 1.5 seconds
+        // Auto-end turn after 1.5 seconds - but only if it's still our turn
         setTimeout(() => {
-            handleEndTurn();
+            if (isMyTurn) {
+                console.log('[AUTO END TURN] Executing after ability use');
+                handleEndTurn();
+            } else {
+                console.log('[AUTO END TURN] CANCELLED - No longer our turn');
+            }
         }, 1500);
     };
 
@@ -545,16 +786,24 @@ function Main() {
             room,
             playerName,
             abilityId,
-            result
+            result,
+            updatedPlayerCharacters: updates.playerCharacters
         });
+        
+        console.log('[ABILITY SYNC] Emitting updated playerCharacters to server (multi-target)');
         
         setSelectedAbility(null);
         setSelectedTargets([]);
         setActionUsed(true);
         
-        // Auto-end turn after 1.5 seconds
+        // Auto-end turn after 1.5 seconds - but only if it's still our turn
         setTimeout(() => {
-            handleEndTurn();
+            if (isMyTurn) {
+                console.log('[AUTO END TURN MULTI] Executing after ability use');
+                handleEndTurn();
+            } else {
+                console.log('[AUTO END TURN MULTI] CANCELLED - No longer our turn');
+            }
         }, 1500);
     };
 
@@ -564,27 +813,28 @@ function Main() {
         console.log('Player Name:', playerName);
         console.log('Room:', room);
         
-        // Tick down cooldowns using functional update
+        // Tick down cooldowns
         setCooldowns(prevCooldowns => tickCooldowns(prevCooldowns));
         
-        // Tick down active effects using functional updates to get latest state
-        setActiveEffects(prevEffects => {
-            setPlayerCharacters(prevChars => {
-                const { updatedEffects, updatedCharacters } = tickActiveEffects(prevEffects, prevChars);
-                
-                console.log('Effects ticked:', {
-                    remainingEffects: updatedEffects.length,
-                    expiredEffects: prevEffects.length - updatedEffects.length
-                });
-                
-                return updatedCharacters;
-            });
-            
-            const { updatedEffects } = tickActiveEffects(prevEffects, playerCharacters);
-            return updatedEffects;
+        // Use refs to get latest state values (avoids closure issues)
+        const { updatedEffects, updatedCharacters, updatedEnemies } = tickActiveEffects(
+            activeEffectsRef.current, 
+            playerCharactersRef.current, 
+            enemiesRef.current
+        );
+        
+        console.log('Effects ticked:', {
+            remainingEffects: updatedEffects.length,
+            expiredEffects: activeEffectsRef.current.length - updatedEffects.length
         });
         
-        socket.emit('end_turn', { room, playerName });    
+        // Update all states independently
+        setActiveEffects(updatedEffects);
+        setPlayerCharacters(updatedCharacters);
+        setEnemies(updatedEnemies);
+        
+        // Emit updated enemy states to server to maintain sync
+        socket.emit('end_turn', { room, playerName, updatedEnemies });
     };
   
     return (
@@ -763,6 +1013,7 @@ function Main() {
                             <div className="weapon-info">
                                 <div className="weapon-name">{currentPlayerCharacter.weapon.name}</div>
                                 <div className="weapon-damage">DMG: {currentPlayerCharacter.weapon.damage}</div>
+                                <div className="weapon-range">Range: {currentPlayerCharacter.weapon.range == 1 ? "Melee" : currentPlayerCharacter.weapon.range}</div>
                             </div>
                         </div>
                     </div>
@@ -791,6 +1042,7 @@ function Main() {
                                             <div className="ability-cd">
                                                 {isOnCooldown ? currentCooldown : `CD: ${ability.cooldown}`}
                                             </div>
+                                            <div className="ability-range">{ability?.range}</div>
                                         </div>
                                         <div className="ability-desc">{ability.description}</div>
                                     </button>
@@ -801,7 +1053,14 @@ function Main() {
 
                     <div className="ultimate-section">
                         <h4>Ultimate</h4>
-                        <button className="ultimate-card" disabled={!isMyTurn || actionUsed}>
+                        <button 
+                            className="ultimate-card" 
+                            disabled={!isMyTurn || actionUsed}
+                            onClick={() => {
+                                console.log('[ULTIMATE CLICK] Ultimate clicked:', currentPlayerCharacter.ultimate);
+                                handleAbilityClick(currentPlayerCharacter.ultimate);
+                            }}
+                        >
                             <div className="ultimate-header">
                                 <div className="ultimate-name">{currentPlayerCharacter.ultimate.name}</div>
                             </div>

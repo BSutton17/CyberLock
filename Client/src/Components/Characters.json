@@ -1,42 +1,89 @@
 {
   "characters": [
+    {"id": "test_character",
+      "name": "Test",
+      "role": "Tank",
+      "stats": {
+        "health": 70,
+        "maxHealth": 95,
+        "speed": 200,
+        "resistance": 30,
+        "strength": 30,
+        "ta": 15
+      },
+      "weapon": {
+        "range": 1,
+        "name": "Hammer",
+        "damage": 8
+      },
+      "abilities": [
+        {
+          "id": "hurry_up",
+          "name": "Hurry Up!",
+          "description": "Add +10 speed to one ally for 1 turns",
+          "cooldown": 2
+        },
+        {
+          "id": "flood_of_frost",
+          "name": "Flood of Frost",
+          "description": "Deals damage and slows an enemy's speed by 50% for 2 turns.",
+          "cooldown": 2
+        },
+        {
+          "id": "shadow_strike",
+          "name": "Shadow Strike",
+          "description": "Deals heavy damage to an enemy.",
+          "cooldown": 1
+        }
+      ],
+      "ultimate": {
+        "id": "murus_fictilis",
+        "name": "Murus Fictilis",
+        "description": "All allies gain +15 bonus health and +10 resistance for 2 turns."
+      }
+    },
     {
       "id": "offensive_tank_1",
       "name": "Offensive Tank #1",
       "role": "Tank",
       "stats": {
         "health": 95,
+        "maxHealth": 95,
         "speed": 20,
         "resistance": 30,
         "strength": 30,
         "ta": 15
       },
       "weapon": {
+        "range": 1,
         "name": "Hammer",
-        "damage": 10
+        "damage": 8
       },
       "abilities": [
         {
-          "name": "Battle Surge",
+          "id": "ability_boost",
+          "name": "Ability Boost",
           "description": "Grants yourself +5 Speed and +5 bonus health for 2 turns.",
           "cooldown": 3
         },
         {
-          "name": "Immobilizing Item",
+          "id": "binding_chains",
+          "name": "Binding Chains",
           "description": "Use an item to temporarily immobilize 2 enemies for 1 turn.",
           "cooldown": 2
         },
         {
-          "name": "Single Target Strike",
-          "description": "Deals damage to a single enemy.",
+          "id": "shadow_strike",
+          "name": "Shadow Strike",
+          "description": "Deals heavy damage to an enemy.",
           "cooldown": 1
         }
       ],
       "ultimate": {
-        "name": "Crushing Judgment",
+        "id": "executioners_judgment",
+        "name": "Executioner's Judgment",
         "description": "Enemies with equal or lower max health have their health cut in half. Enemies with higher max health lose 20% health."
-      },
-      "nonCombatRole": "Politician"
+      }
     },
     {
       "id": "defensive_tank_2",
@@ -44,13 +91,16 @@
       "role": "Tank",
       "stats": {
         "health": 110,
+        "maxHealth": 110,
         "speed": 10,
         "resistance": 40,
         "strength": 35,
         "ta": 5
       },
       "weapon": {
-        "name": "Taser Shield"
+        "range": 1,
+        "name": "Taser Shield",
+        "damage": 8
       },
       "abilities": [
         {
@@ -72,8 +122,7 @@
       "ultimate": {
         "name": "Fortification",
         "description": "All party members gain +15 health and +10 resistance for 2 turns."
-      },
-      "nonCombatRole": "Intimidation"
+      }
     },
     {
       "id": "spellcaster_dps_1",
@@ -81,14 +130,16 @@
       "role": "DPS",
       "stats": {
         "health": 75,
+        "maxHealth": 75,
         "speed": 25,
         "resistance": 35,
         "strength": 10,
         "ta": 55
       },
       "weapon": {
+        "range": 3,
         "name": "Ray Gun",
-        "damage": "variable"
+        "damage": 10
       },
       "abilities": [
         {
@@ -110,8 +161,7 @@
       "ultimate": {
         "name": "Spell Overload",
         "description": "All three abilities trigger simultaneously: AoE damage, speed reduction, and heal block."
-      },
-      "nonCombatRole": "Scholar"
+      }
     },
     {
       "id": "aggressive_dps_2",
@@ -119,13 +169,16 @@
       "role": "DPS",
       "stats": {
         "health": 80,
+        "maxHealth": 80,
         "speed": 40,
         "resistance": 25,
         "strength": 45,
         "ta": 10
       },
       "weapon": {
-        "name": "Energy Sword"
+        "range": 1,
+        "name": "Energy Sword",
+        "damage": 10
       },
       "abilities": [
         {
@@ -143,8 +196,7 @@
       "ultimate": {
         "name": "Bladestorm",
         "description": "Hit up to six enemies four times in quick succession."
-      },
-      "nonCombatRole": "Spy"
+      }
     },
     {
       "id": "traditional_warrior_dps_3",
@@ -152,13 +204,16 @@
       "role": "DPS",
       "stats": {
         "health": 80,
+        "maxHealth": 80,
         "speed": 35,
         "resistance": 30,
         "strength": 50,
         "ta": 5
       },
       "weapon": {
-        "name": "Rail Cannon"
+        "range": 1,
+        "name": "Rail Cannon",
+        "damage": 10
       },
       "abilities": [
         {
@@ -179,8 +234,7 @@
       "ultimate": {
         "name": "Power Surge",
         "description": "Gain +20 strength for one attack."
-      },
-      "nonCombatRole": "Detective"
+      }
     },
     {
       "id": "healing_support_1",
@@ -188,13 +242,16 @@
       "role": "Support",
       "stats": {
         "health": 60,
+        "maxHealth": 60,
         "speed": 20,
         "resistance": 35,
         "strength": 10,
         "ta": 50
       },
       "weapon": {
-        "name": "Drone"
+        "range": 4,
+        "name": "Drone",
+        "damage": 6
       },
       "abilities": [
         {
@@ -216,8 +273,7 @@
       "ultimate": {
         "name": "Mass Restoration",
         "description": "All allies restore 50% health."
-      },
-      "nonCombatRole": "Medic"
+      }
     },
     {
       "id": "offensive_support_2",
@@ -225,13 +281,16 @@
       "role": "Support",
       "stats": {
         "health": 70,
+        "maxHealth": 70,
         "speed": 25,
         "resistance": 20,
         "strength": 20,
         "ta": 40
       },
       "weapon": {
-        "name": "Electric Guitar"
+        "range": 2,
+        "name": "Electric Guitar",
+        "damage": 6
       },
       "abilities": [
         {
@@ -253,8 +312,7 @@
       "ultimate": {
         "name": "Encore",
         "description": "Reset all allies' ability cooldowns to 0."
-      },
-      "nonCombatRole": "Gambler"
+      }
     },
     {
       "id": "jack_of_all_trades_support_3",
@@ -262,13 +320,16 @@
       "role": "Support",
       "stats": {
         "health": 65,
+        "maxHealth": 65,
         "speed": 25,
         "resistance": 25,
         "strength": 15,
         "ta": 45
       },
       "weapon": {
-        "name": "Energy Staff"
+        "range": 3,
+        "name": "Energy Staff",
+        "damage": 6
       },
       "abilities": [
         {
@@ -290,8 +351,7 @@
       "ultimate": {
         "name": "Universal Boost",
         "description": "One ally gains +10 to all stats for 1 turn."
-      },
-      "nonCombatRole": "Banker"
+      }
     },
     {
       "id": "hacker_support_4",
@@ -299,13 +359,16 @@
       "role": "Support",
       "stats": {
         "health": 65,
+        "maxHealth": 65,
         "speed": 25,
         "resistance": 25,
         "strength": 15,
         "ta": 45
       },
       "weapon": {
-        "name": "Laptop"
+        "range": 3,
+        "name": "Laptop",
+        "damage": 6
       },
       "abilities": [
         {
@@ -327,8 +390,7 @@
       "ultimate": {
         "name": "Total Shutdown",
         "description": "Enemies cannot use abilities for 1 turn."
-      },
-      "nonCombatRole": "Disable Electronic Devices"
+      }
     }
   ]
 }

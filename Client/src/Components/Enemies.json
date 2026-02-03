@@ -4,60 +4,95 @@
       "id": "goblin_scout",
       "name": "Goblin",
       "tier": "generic",
+      "role": "DPS",
+      "behavior": "aggressive",
       "stats": {
-        "health": 30,
+        "health": 70,
+        "maxHealth": 70,
         "speed": 30,
-        "resistance": 10,
+        "resistance": 20,
         "strength": 15,
         "ta": 5
+      },
+      "weapon": {
+        "name": "Rusty Dagger",
+        "damage": 8
       }
     },
     {
       "id": "kobold_warrior",
       "name": "Bad Guy",
       "tier": "generic",
+      "role": "Tank",
+      "behavior": "defensive",
       "stats": {
-        "health": 40,
+        "health": 80,
+        "maxHealth": 80,
         "speed": 25,
-        "resistance": 15,
+        "resistance": 35,
         "strength": 20,
         "ta": 10
+      },
+      "weapon": {
+        "name": "Club",
+        "damage": 10
       }
     },
     {
       "id": "orc_soldier",
       "name": "Orc Soldier",
       "tier": "mid-tier",
+      "role": "Tank",
+      "behavior": "intelligent",
       "stats": {
         "health": 80,
+        "maxHealth": 80,
         "speed": 20,
         "resistance": 25,
         "strength": 35,
         "ta": 15
+      },
+      "weapon": {
+        "name": "War Axe",
+        "damage": 12
       }
     },
     {
       "id": "dark_mage",
       "name": "Dark Mage",
       "tier": "mid-tier",
+      "role": "Support",
+      "behavior": "defensive",
       "stats": {
         "health": 60,
+        "maxHealth": 60,
         "speed": 25,
         "resistance": 20,
         "strength": 10,
         "ta": 5
+      },
+      "weapon": {
+        "name": "Dark Staff",
+        "damage": 6
       }
     },
     {
       "id": "golem_guardian",
       "name": "Golem Guardian",
       "tier": "boss",
+      "role": "Tank",
+      "behavior": "aggressive",
       "stats": {
         "health": 300,
+        "maxHealth": 300,
         "speed": 10,
         "resistance": 50,
         "strength": 40,
         "ta": 20
+      },
+      "weapon": {
+        "name": "Stone Fist",
+        "damage": 15
       }
     }
   ]

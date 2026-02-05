@@ -39,16 +39,7 @@ function HomeScreen() {
     }
   }, [setAdmin, setPlayerName, setRoom, socket]);
 
-  // Listen for admin status from server and save to localStorage
-  useEffect(() => {
-    socket.on('setAdmin', (admin) => {
-      localStorage.setItem('isAdmin', admin.toString());
-    });
 
-    return () => {
-      socket.off('setAdmin');
-    };
-  }, [socket]);
 
   const joinRoom = () => {
     if (room !== '' && name !== '') {

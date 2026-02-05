@@ -22,7 +22,17 @@ function Events(){
         });
         
         socket.on("setAdmin", (admin) => {
-          setAdmin(admin);
+          let isAdmin = admin;
+          const storedIsAdmin = localStorage.getItem('isAdmin') === 'true';
+          const storedRoom = localStorage.getItem('room');
+          
+          // Identify race condition on refresh where server denies admin because old socket persists
+          if (!admin && storedIsAdmin && storedRoom === room) {
+            isAdmin = true;
+          }
+
+          setAdmin(isAdmin);
+          localStorage.setItem('isAdmin', isAdmin.toString());
         });
 
         socket.on("update_character_selections", (selections) => {

@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useGameContext } from '../../Components/Context';
 import EnemiesData from '../../Components/Enemies.json';
 import { executeEnemyTurn } from './EnemyCombat';
-import { getAbility, executeAbility, applyAbilityEffects, tickCooldowns, tickActiveEffects } from './AbilityStore';
+import { getAbility, executeAbility, applyAbilityEffects, tickCooldowns, tickActiveEffects, calculateTotalStat, getStatBonuses } from './AbilityLogic';
 import './Main.css';
 
 function Main() {
@@ -341,12 +341,76 @@ function Main() {
             }));
         };
 
+        const handleCooldownReduced = ({ targetPlayer, value }) => {
+            console.log('[COOLDOWN REDUCED] Received for player:', targetPlayer, 'value:', value);
+            // Only apply if this is the target player
+            if (targetPlayer === playerName) {
+                console.log('[COOLDOWN REDUCED] Applying to my cooldowns');
+                setCooldowns(prev => {
+                    const updated = { ...prev };
+                    const myCharacter = playerCharacters[playerName];
+                    
+                    if (myCharacter) {
+                        // Reduce cooldown for each ability
+                        myCharacter.abilities.forEach(ability => {
+                            if (updated[ability.id] > 0) {
+                                const oldValue = updated[ability.id];
+                                updated[ability.id] = Math.max(0, updated[ability.id] - value);
+                                console.log(`  - ${ability.name}: ${oldValue} → ${updated[ability.id]}`);
+                            }
+                        });
+                        
+                        // Also check ultimate
+                        if (myCharacter.ultimate && updated[myCharacter.ultimate.id] > 0) {
+                            const oldValue = updated[myCharacter.ultimate.id];
+                            updated[myCharacter.ultimate.id] = Math.max(0, updated[myCharacter.ultimate.id] - value);
+                            console.log(`  - ${myCharacter.ultimate.name} (Ultimate): ${oldValue} → ${updated[myCharacter.ultimate.id]}`);
+                        }
+                    }
+                    
+                    return updated;
+                });
+            }
+        };
+
+        const handleCooldownsReset = ({ targetPlayer }) => {
+            console.log('[COOLDOWNS RESET] Received for player:', targetPlayer);
+            // Only apply if this is the target player
+            if (targetPlayer === playerName) {
+                console.log('[COOLDOWNS RESET] Resetting all my cooldowns to 0');
+                setCooldowns(prev => {
+                    const updated = { ...prev };
+                    const myCharacter = playerCharacters[playerName];
+                    
+                    if (myCharacter) {
+                        // Reset cooldown for each ability
+                        myCharacter.abilities.forEach(ability => {
+                            if (updated[ability.id] > 0) {
+                                console.log(`  - ${ability.name}: ${updated[ability.id]} → 0`);
+                                updated[ability.id] = 0;
+                            }
+                        });
+                        
+                        // Also reset ultimate (but it stays at 0 since ultimates don't have cooldowns)
+                        if (myCharacter.ultimate && updated[myCharacter.ultimate.id] > 0) {
+                            console.log(`  - ${myCharacter.ultimate.name} (Ultimate): ${updated[myCharacter.ultimate.id]} → 0`);
+                            updated[myCharacter.ultimate.id] = 0;
+                        }
+                    }
+                    
+                    return updated;
+                });
+            }
+        };
+
         socket.on("execute_enemy_turn", handleExecuteEnemyTurn);
         socket.on("enemies_updated", handleEnemiesUpdated);
         socket.on("characters_updated", handleCharactersUpdated);
         socket.on("active_effects_updated", handleActiveEffectsUpdated);
         socket.on("enemy_moved", handleEnemyMoved);
         socket.on("player_moved", handlePlayerMoved);
+        socket.on("cooldown_reduced", handleCooldownReduced);
+        socket.on("cooldowns_reset", handleCooldownsReset);
 
         return () => {
             socket.off("execute_enemy_turn", handleExecuteEnemyTurn);
@@ -355,6 +419,8 @@ function Main() {
             socket.off("active_effects_updated", handleActiveEffectsUpdated);
             socket.off("enemy_moved", handleEnemyMoved);
             socket.off("player_moved", handlePlayerMoved);
+            socket.off("cooldown_reduced", handleCooldownReduced);
+            socket.off("cooldowns_reset", handleCooldownsReset);
         };
     }, [socket, enemies, playerCharacters, setPlayerCharacters, characterPositions, room, turnOrder, setTurnOrder]);
 
@@ -364,6 +430,31 @@ function Main() {
         if (!isMyTurn) {
             console.log('[GRID CLICK] Blocked - not my turn');
             return;
+        }
+        
+        // Handle ground-target abilities
+        if (selectedAbility) {
+            const abilityData = getAbility(selectedAbility);
+            
+            if (abilityData?.targetType === 'ground-target') {
+                console.log('[GROUND TARGET] Executing ground-target ability at:', { row, col });
+                
+                // Check range from caster position
+                const currentPos = characterPositions[playerName];
+                if (currentPos && abilityData.range) {
+                    const distance = Math.abs(currentPos.row - row) + Math.abs(currentPos.col - col);
+                    
+                    if (distance > abilityData.range) {
+                        console.log(`[GROUND TARGET] Target out of range! Distance: ${distance}, Max Range: ${abilityData.range}`);
+                        setSelectedAbility(null);
+                        return;
+                    }
+                }
+                
+                // Execute ground-target ability
+                executeAbilityOnGroundTarget(selectedAbility, { row, col });
+                return;
+            }
         }
         
         // Check if clicking on an enemy with weapon selected
@@ -376,7 +467,7 @@ function Main() {
             const targetId = characterOnCell[0];
             const abilityData = getAbility(selectedAbility);
             
-            console.log('[ALLY TARGET] Checking target:', {
+            console.log('[ABILITY TARGET] Checking target:', {
                 targetId,
                 abilityId: selectedAbility,
                 targetType: abilityData?.targetType,
@@ -387,17 +478,23 @@ function Main() {
             const isAlly = playerCharacters[targetId];
             const enemy = enemies.find(e => e.id === targetId);
             
-            console.log('[ALLY TARGET] Target validation:', {
+            console.log('[ABILITY TARGET] Target validation:', {
                 isAlly: !!isAlly,
                 isEnemy: !!enemy,
                 allyName: isAlly?.name,
+                enemyName: enemy?.name,
                 playerCharacterKeys: Object.keys(playerCharacters)
             });
             
             // Handle ally-targeted abilities
-            if (abilityData.targetType === 'ally' && isAlly) {
-                console.log('[ALLY TARGET] Executing ally-targeted ability on:', targetId);
-                executeAbilityOnTarget(selectedAbility, targetId);
+            if (abilityData.targetType === 'ally') {
+                if (isAlly) {
+                    console.log('[ALLY TARGET] Executing ally-targeted ability on:', targetId, isAlly.name);
+                    executeAbilityOnTarget(selectedAbility, targetId);
+                } else {
+                    console.log('[ALLY TARGET] Target is not an ally, cannot use this ability');
+                    setSelectedAbility(null);
+                }
                 return;
             }
             
@@ -508,8 +605,15 @@ function Main() {
         const currentPos = characterPositions[playerName];
         if (!currentPos) return;
 
-        // Calculate max movement based on speed
-        const maxMovement = Math.floor(currentPlayerCharacter.stats.speed / 10);
+        // Calculate max movement based on speed (including buffs from activeEffects)
+        const totalSpeed = calculateTotalStat(currentPlayerCharacter, playerName, 'speed', activeEffects);
+        const maxMovement = Math.floor(totalSpeed / 10);
+        
+        console.log('[MOVEMENT CALC]', {
+            baseSpeed: currentPlayerCharacter.stats.speed,
+            totalSpeed,
+            maxMovement
+        });
         
         // Calculate distance from current position to target
         const movementThisStep = Math.abs(row - currentPos.row) + Math.abs(col - currentPos.col);
@@ -698,6 +802,32 @@ function Main() {
             console.log(`[ABILITY COMPLETE] Enemy ${targetEnemy.name} stats:`, targetEnemy.stats);
         }
         
+        // Handle cooldown modification effects (cooldown_reduction, cooldown_increase, cooldown_reset)
+        if (result.effects) {
+            result.effects.forEach(effect => {
+                if (effect.type === 'cooldown_reduction') {
+                    // Emit cooldown reduction to target player via socket
+                    console.log(`[COOLDOWN REDUCTION] Emitting to ${effect.target} to reduce by ${effect.value}`);
+                    socket.emit('reduce_cooldown', {
+                        room,
+                        targetPlayer: effect.target,
+                        value: effect.value
+                    });
+                } else if (effect.type === 'cooldown_reset') {
+                    // Reset all cooldowns for target player
+                    console.log(`[COOLDOWN RESET] Resetting cooldowns for ${effect.target}`);
+                    socket.emit('reset_cooldowns', {
+                        room,
+                        targetPlayer: effect.target
+                    });
+                } else if (effect.type === 'cooldown_increase') {
+                    // Increase cooldowns for target enemy (currently enemies don't have cooldowns tracked, but structure is here for future)
+                    console.log(`[COOLDOWN INCREASE] Increasing cooldowns for enemy ${effect.target} by ${effect.value}`);
+                    // Note: Enemy cooldown tracking would need to be implemented for this to work
+                }
+            });
+        }
+        
         // Update cooldowns
         if (result.newCooldown) {
             console.log(`Setting cooldown for ${abilityId}: ${result.newCooldown} turns`);
@@ -807,6 +937,90 @@ function Main() {
         }, 1500);
     };
 
+    const executeAbilityOnGroundTarget = (abilityId, targetPosition) => {
+        const abilityData = getAbility(abilityId);
+        
+        console.log('[EXECUTE GROUND TARGET] Starting execution:', {
+            abilityId,
+            targetPosition,
+            caster: currentPlayerCharacter?.name
+        });
+        
+        const result = executeAbility(abilityId, {
+            caster: currentPlayerCharacter,
+            playerName: playerName,
+            targetPosition: targetPosition,
+            characterPositions: characterPositions,
+            enemies: enemies,
+            playerCharacters: playerCharacters,
+            cooldowns: cooldowns
+        });
+        
+        console.log('[EXECUTE GROUND TARGET] Result:', result);
+        
+        if (!result.success) {
+            console.log('Ground-target ability failed:', result.message);
+            setSelectedAbility(null);
+            return;
+        }
+        
+        console.log('✨ Ground-target ability executed:', result.message);
+        
+        // Apply effects to game state
+        const updates = applyAbilityEffects(result, {
+            enemies,
+            playerCharacters,
+            activeEffects
+        });
+        
+        setEnemies(updates.enemies);
+        setPlayerCharacters(updates.playerCharacters);
+        setActiveEffects(updates.activeEffects);
+        
+        console.log('[GROUND TARGET COMPLETE] Updated enemies:', updates.enemies);
+        console.log('[GROUND TARGET COMPLETE] Updated playerCharacters:', updates.playerCharacters);
+        console.log('[GROUND TARGET COMPLETE] Updated activeEffects:', updates.activeEffects);
+        
+        // Update cooldowns
+        if (result.newCooldown) {
+            console.log(`Setting cooldown for ${abilityId}: ${result.newCooldown} turns`);
+            setCooldowns(prev => {
+                const updated = {
+                    ...prev,
+                    [abilityId]: result.newCooldown
+                };
+                console.log('Updated cooldowns:', updated);
+                return updated;
+            });
+        }
+        
+        // Emit to server for sync
+        socket.emit('ability_used', {
+            room,
+            playerName,
+            abilityId,
+            result,
+            updatedPlayerCharacters: updates.playerCharacters,
+            updatedEnemies: updates.enemies,
+            updatedActiveEffects: updates.activeEffects
+        });
+        
+        console.log('[GROUND TARGET SYNC] Emitting updated game state to server');
+        
+        setSelectedAbility(null);
+        setActionUsed(true);
+        
+        // Auto-end turn after 1.5 seconds
+        setTimeout(() => {
+            if (isMyTurn) {
+                console.log('[AUTO END TURN GROUND] Executing after ability use');
+                handleEndTurn();
+            } else {
+                console.log('[AUTO END TURN GROUND] CANCELLED - No longer our turn');
+            }
+        }, 1500);
+    };
+
     const handleEndTurn = () => {
         if (!isMyTurn) return;
         console.log('END TURN clicked');
@@ -898,7 +1112,7 @@ function Main() {
 
         <div className="AI-script">
             <h3>AI Log goes here</h3>
-            <button onClick={handleStoryComplete}>Combat</button>
+            {/* <button onClick={handleStoryComplete}>Combat</button> */}
         </div>
         <div className="inventory">
             {currentPlayerCharacter ? (
@@ -934,71 +1148,68 @@ function Main() {
                             <div className="stats-section">
                             <h4>Stats</h4>
                             <div className="stats-grid">
-                                <div className="stat-item">
-                                    <span className="stat-label">Health</span>
-                                    <span className="stat-value">
-                                        {currentPlayerCharacter.stats.health}
-                                        {activeEffects
-                                            .filter(e => e.target === playerName && e.stat === 'health' && e.turnsRemaining > 0)
-                                            .map((effect, idx) => (
-                                                <span key={idx} className={effect.type === 'stat_buff' ? 'stat-buff' : 'stat-debuff'}>
-                                                    {effect.type === 'stat_buff' ? ' +' : ' -'}{effect.value}
+                                {(() => {
+                                    const statBonuses = getStatBonuses(playerName, activeEffects);
+                                    return (
+                                        <>
+                                            <div className="stat-item">
+                                                <span className="stat-label">Health</span>
+                                                <span className="stat-value">
+                                                    {currentPlayerCharacter.stats.health}
+                                                    {statBonuses.health && (
+                                                        <span className={statBonuses.health > 0 ? 'stat-buff' : 'stat-debuff'}>
+                                                            {statBonuses.health > 0 ? ' +' : ' '}{statBonuses.health}
+                                                        </span>
+                                                    )}
                                                 </span>
-                                            ))}
-                                    </span>
-                                </div>
-                                <div className="stat-item">
-                                    <span className="stat-label">Speed</span>
-                                    <span className="stat-value">
-                                        {currentPlayerCharacter.stats.speed}
-                                        {activeEffects
-                                            .filter(e => e.target === playerName && e.stat === 'speed' && e.turnsRemaining > 0)
-                                            .map((effect, idx) => (
-                                                <span key={idx} className={effect.type === 'stat_buff' ? 'stat-buff' : 'stat-debuff'}>
-                                                    {effect.type === 'stat_buff' ? ' +' : ' -'}{effect.value}
+                                            </div>
+                                            <div className="stat-item">
+                                                <span className="stat-label">Speed</span>
+                                                <span className="stat-value">
+                                                    {currentPlayerCharacter.stats.speed}
+                                                    {statBonuses.speed && (
+                                                        <span className={statBonuses.speed > 0 ? 'stat-buff' : 'stat-debuff'}>
+                                                            {statBonuses.speed > 0 ? ' +' : ' '}{statBonuses.speed}
+                                                        </span>
+                                                    )}
                                                 </span>
-                                            ))}
-                                    </span>
-                                </div>
-                                <div className="stat-item">
-                                    <span className="stat-label">Resistance</span>
-                                    <span className="stat-value">
-                                        {currentPlayerCharacter.stats.resistance}
-                                        {activeEffects
-                                            .filter(e => e.target === playerName && e.stat === 'resistance' && e.turnsRemaining > 0)
-                                            .map((effect, idx) => (
-                                                <span key={idx} className={effect.type === 'stat_buff' ? 'stat-buff' : 'stat-debuff'}>
-                                                    {effect.type === 'stat_buff' ? ' +' : ' -'}{effect.value}
+                                            </div>
+                                            <div className="stat-item">
+                                                <span className="stat-label">Resistance</span>
+                                                <span className="stat-value">
+                                                    {currentPlayerCharacter.stats.resistance}
+                                                    {statBonuses.resistance && (
+                                                        <span className={statBonuses.resistance > 0 ? 'stat-buff' : 'stat-debuff'}>
+                                                            {statBonuses.resistance > 0 ? ' +' : ' '}{statBonuses.resistance}
+                                                        </span>
+                                                    )}
                                                 </span>
-                                            ))}
-                                    </span>
-                                </div>
-                                <div className="stat-item">
-                                    <span className="stat-label">Strength</span>
-                                    <span className="stat-value">
-                                        {currentPlayerCharacter.stats.strength}
-                                        {activeEffects
-                                            .filter(e => e.target === playerName && e.stat === 'strength' && e.turnsRemaining > 0)
-                                            .map((effect, idx) => (
-                                                <span key={idx} className={effect.type === 'stat_buff' ? 'stat-buff' : 'stat-debuff'}>
-                                                    {effect.type === 'stat_buff' ? ' +' : ' -'}{effect.value}
+                                            </div>
+                                            <div className="stat-item">
+                                                <span className="stat-label">Strength</span>
+                                                <span className="stat-value">
+                                                    {currentPlayerCharacter.stats.strength}
+                                                    {statBonuses.strength && (
+                                                        <span className={statBonuses.strength > 0 ? 'stat-buff' : 'stat-debuff'}>
+                                                            {statBonuses.strength > 0 ? ' +' : ' '}{statBonuses.strength}
+                                                        </span>
+                                                    )}
                                                 </span>
-                                            ))}
-                                    </span>
-                                </div>
-                                <div className="stat-item">
-                                    <span className="stat-label">Technical Ability</span>
-                                    <span className="stat-value">
-                                        {currentPlayerCharacter.stats.ta}
-                                        {activeEffects
-                                            .filter(e => e.target === playerName && e.stat === 'ta' && e.turnsRemaining > 0)
-                                            .map((effect, idx) => (
-                                                <span key={idx} className={effect.type === 'stat_buff' ? 'stat-buff' : 'stat-debuff'}>
-                                                    {effect.type === 'stat_buff' ? ' +' : ' -'}{effect.value}
+                                            </div>
+                                            <div className="stat-item">
+                                                <span className="stat-label">Technical Ability</span>
+                                                <span className="stat-value">
+                                                    {currentPlayerCharacter.stats.ta}
+                                                    {statBonuses.ta && (
+                                                        <span className={statBonuses.ta > 0 ? 'stat-buff' : 'stat-debuff'}>
+                                                            {statBonuses.ta > 0 ? ' +' : ' '}{statBonuses.ta}
+                                                        </span>
+                                                    )}
                                                 </span>
-                                            ))}
-                                    </span>
-                                </div>
+                                            </div>
+                                        </>
+                                    );
+                                })()}
                             </div>
                             </div>
                     </div>
@@ -1013,7 +1224,7 @@ function Main() {
                             <div className="weapon-info">
                                 <div className="weapon-name">{currentPlayerCharacter.weapon.name}</div>
                                 <div className="weapon-damage">DMG: {currentPlayerCharacter.weapon.damage}</div>
-                                <div className="weapon-range">Range: {currentPlayerCharacter.weapon.range == 1 ? "Melee" : currentPlayerCharacter.weapon.range}</div>
+                                <div className="weapon-range">{currentPlayerCharacter.weapon.range == 1 ? "Melee" : currentPlayerCharacter.weapon.range}</div>
                             </div>
                         </div>
                     </div>
@@ -1042,7 +1253,11 @@ function Main() {
                                             <div className="ability-cd">
                                                 {isOnCooldown ? currentCooldown : `CD: ${ability.cooldown}`}
                                             </div>
-                                            <div className="ability-range">{ability?.range}</div>
+                                            {ability.range && (
+                                                <div className="ability-range">
+                                                    {ability.range === 1 ? "Melee" : ability.range}
+                                                </div>
+                                            )}
                                         </div>
                                         <div className="ability-desc">{ability.description}</div>
                                     </button>

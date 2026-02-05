@@ -30,7 +30,7 @@
         "maxHealth": 80,
         "speed": 25,
         "resistance": 35,
-        "strength": 20,
+        "strength": 40,
         "ta": 10
       },
       "weapon": {

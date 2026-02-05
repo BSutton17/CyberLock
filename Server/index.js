@@ -376,6 +376,16 @@ io.on('connection', (socket) => {
     io.to(room).emit("player_moved", { playerName, position });
   });
 
+  socket.on("reduce_cooldown", ({ room, targetPlayer, value }) => {
+    console.log(`[SERVER] Cooldown reduction for ${targetPlayer} by ${value} in room ${room}`);
+    io.to(room).emit("cooldown_reduced", { targetPlayer, value });
+  });
+
+  socket.on("reset_cooldowns", ({ room, targetPlayer }) => {
+    console.log(`[SERVER] Cooldown reset for ${targetPlayer} in room ${room}`);
+    io.to(room).emit("cooldowns_reset", { targetPlayer });
+  });
+
   socket.on("enemy_damaged", ({ room, enemyId, damage, newHealth }) => {
     const combat = combatSessions[room];
     if (!combat) return;

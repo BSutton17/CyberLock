@@ -1,53 +1,11 @@
 {
   "characters": [
-    {"id": "test_character",
-      "name": "Test",
-      "role": "Tank",
-      "stats": {
-        "health": 70,
-        "maxHealth": 95,
-        "speed": 200,
-        "resistance": 30,
-        "strength": 30,
-        "ta": 15
-      },
-      "weapon": {
-        "range": 1,
-        "name": "Hammer",
-        "damage": 8
-      },
-      "abilities": [
-        {
-          "id": "hurry_up",
-          "name": "Hurry Up!",
-          "description": "Add +10 speed to one ally for 1 turns",
-          "cooldown": 2
-        },
-        {
-          "id": "flood_of_frost",
-          "name": "Flood of Frost",
-          "description": "Deals damage and slows an enemy's speed by 50% for 2 turns.",
-          "cooldown": 2
-        },
-        {
-          "id": "shadow_strike",
-          "name": "Shadow Strike",
-          "description": "Deals heavy damage to an enemy.",
-          "cooldown": 1
-        }
-      ],
-      "ultimate": {
-        "id": "murus_fictilis",
-        "name": "Murus Fictilis",
-        "description": "All allies gain +15 bonus health and +10 resistance for 2 turns."
-      }
-    },
     {
       "id": "offensive_tank_1",
       "name": "Offensive Tank #1",
       "role": "Tank",
       "stats": {
-        "health": 95,
+        "health": 55,
         "maxHealth": 95,
         "speed": 20,
         "resistance": 30,
@@ -104,23 +62,27 @@
       },
       "abilities": [
         {
-          "name": "Defensive Barrier",
-          "description": "Place a shield; all supports gain +10 resistance this turn.",
-          "cooldown": 2
-        },
-        {
-          "name": "Shield Shockwave",
-          "description": "Deals area-of-effect damage.",
+          "id": "diamond_boy",
+          "name": "Diamond Boy",
+          "description": "All tanks gain +5 resistance for 1 turn.",
           "cooldown": 1
         },
         {
-          "name": "Overpower",
+          "id": "sword_slash",
+          "name": "Sword Slash",
+          "description": "Deal high AOE damage to enemies in front and to the sides.",
+          "cooldown": 1
+        },
+        {
+          "id": "charge",
+          "name": "Charge!",
           "description": "Instantly defeats an enemy with lower strength.",
           "cooldown": 3
         }
       ],
       "ultimate": {
-        "name": "Fortification",
+        "id": "murus_fictilis",
+        "name": "Murus Fictilis",
         "description": "All party members gain +15 health and +10 resistance for 2 turns."
       }
     },
@@ -143,24 +105,28 @@
       },
       "abilities": [
         {
-          "name": "Arcane Blast",
-          "description": "Deals area-of-effect damage.",
+          "id": "fireball",
+          "name": "Fireball",
+          "description": "A move that does AOE damage with 20% chance to burn.",
           "cooldown": 1
         },
         {
-          "name": "Cryo Lock",
+          "id": "flood_of_frost",
+          "name": "Flood of Frost",
           "description": "Freezes an enemy, halves their speed for 2 turns, and deals damage.",
           "cooldown": 2
         },
         {
-          "name": "Heal Suppression",
-          "description": "Prevents enemies from healing for 1 turn.",
+          "id": "poison_apple",
+          "name": "Poison Apple",
+          "description": "A spell that prevents enemies from healing for 1 turn.",
           "cooldown": 2
         }
       ],
       "ultimate": {
-        "name": "Spell Overload",
-        "description": "All three abilities trigger simultaneously: AoE damage, speed reduction, and heal block."
+        "id": "black_hole",
+        "name": "Black Hole",
+        "description": "Click on a square, all enemies in a 5x5 area are sucked in and cannot move for 1 turn."
       }
     },
     {
@@ -182,20 +148,28 @@
       },
       "abilities": [
         {
-          "name": "MP Conversion",
-          "description": "Lose 10 TA to gain +5 speed and +5 strength for 2 turns.",
+          "id": "selfish_sacrifice",
+          "name": "Selfish Sacrifice",
+          "description": "Drain your MP and transfer it elsewhere, giving you -10 MP but +5 Speed and +5 Strength for 2 turns.",
           "cooldown": 4
         },
         {
-          "name": "Flash Strike",
-          "description": "Priority attack that always goes first and deals damage to one enemy.",
-          "cooldown": 1,
-          "priority": true
+          "id": "flash_step",
+          "name": "Flash Step",
+          "description": "Double your speed for one turn.",
+          "cooldown": 3
+        },
+        {
+          "id": "iron_sharpens_iron",
+          "name": "Iron Sharpens Iron",
+          "description": "All DPS gain +5 strength for 1 turn.",
+          "cooldown": 1
         }
       ],
       "ultimate": {
-        "name": "Bladestorm",
-        "description": "Hit up to six enemies four times in quick succession."
+        "id": "starward_sword",
+        "name": "Starward Sword",
+        "description": "Allows you to use your weapon 3 times in one turn."
       }
     },
     {
@@ -217,23 +191,28 @@
       },
       "abilities": [
         {
-          "name": "Focused Shot",
-          "description": "Deals high damage to a single enemy.",
+          "id": "shadow_strike",
+          "name": "Shadow Strike",
+          "description": "Deals heavy damage to a single enemy.",
           "cooldown": 1
         },
         {
-          "name": "Explosive Barrage",
-          "description": "Deals area-of-effect damage.",
+          "id": "fireball",
+          "name": "Fireball",
+          "description": "A move that does AOE damage with 20% chance to burn.",
           "cooldown": 1
         },
         {
-          "name": "Second Wind",
-          "description": "Heals yourself."
+          "id": "calm_under_pressure",
+          "name": "Calm Under Pressure",
+          "description": "Heals yourself.",
+          "cooldown": 2
         }
       ],
       "ultimate": {
-        "name": "Power Surge",
-        "description": "Gain +20 strength for one attack."
+        "id": "dedicating",
+        "name": "Dedicating Everything to You",
+        "description": "Give one ally +15 to all stats for 2 turns."
       }
     },
     {
@@ -255,23 +234,27 @@
       },
       "abilities": [
         {
-          "name": "Priority Protocol",
-          "description": "All allies gain priority for 1 turn.",
+          "id": "blackjack",
+          "name": "Blackjack",
+          "description": "50% chance to restore one ally 50% HP. Every 5 TA above 30 grants +1% chance.",
+          "cooldown": 3
+        },
+        {
+          "id": "humble",
+          "name": "Humble",
+          "description": "Gain +10 TA for 1 turn.",
           "cooldown": 2
         },
         {
-          "name": "Energy Recharge",
-          "description": "Restore 10 MP to yourself.",
+          "id": "battery_drain",
+          "name": "Battery Drain",
+          "description": "Drain energy from enemies to heal weakest ally.",
           "cooldown": 1
-        },
-        {
-          "name": "Life Link",
-          "description": "Allies heal for 15% of damage dealt for 1 turn.",
-          "cooldown": 2
         }
       ],
       "ultimate": {
-        "name": "Mass Restoration",
+        "id": "love_galore",
+        "name": "Love Galore",
         "description": "All allies restore 50% health."
       }
     },
@@ -294,24 +277,28 @@
       },
       "abilities": [
         {
-          "name": "Speed Boost",
-          "description": "Grant one ally +10 speed.",
+          "id": "hurry_up",
+          "name": "Hurry Up!",
+          "description": "Add +10 speed to one ally for 1 turn.",
           "cooldown": 2
         },
         {
-          "name": "Lucky Roll",
-          "description": "Grant one ally +2 on their next dice roll.",
-          "cooldown": 3
+          "id": "eagle_eye",
+          "name": "Eagle Eye",
+          "description": "See the health of all enemies for one turn.",
+          "cooldown": 2
         },
         {
-          "name": "Healing Field",
-          "description": "Create a field that heals allies for 5 health for 2 turns.",
+          "id": "feels_like_home",
+          "name": "Feels Like Home",
+          "description": "Place a healing field that heals allies +5 for two turns.",
           "cooldown": 2
         }
       ],
       "ultimate": {
-        "name": "Encore",
-        "description": "Reset all allies' ability cooldowns to 0."
+        "id": "here_we_go_again",
+        "name": "Here We Go Again",
+        "description": "All allies have all of their cooldowns set to 0."
       }
     },
     {
@@ -333,24 +320,28 @@
       },
       "abilities": [
         {
-          "name": "Tank Reinforcement",
-          "description": "Tanks gain +5 resistance for 1 turn.",
+          "id": "diamond_boy",
+          "name": "Diamond Boy",
+          "description": "All tanks gain +5 resistance for 1 turn.",
           "cooldown": 1
         },
         {
-          "name": "DPS Empowerment",
-          "description": "DPS gain +5 strength for 1 turn.",
+          "id": "iron_sharpens_iron",
+          "name": "Iron Sharpens Iron",
+          "description": "All DPS gain +5 strength for 1 turn.",
           "cooldown": 1
         },
         {
-          "name": "Support Recharge",
-          "description": "All supports gain +10 MP.",
+          "id": "zen",
+          "name": "Zen",
+          "description": "All support receive +10 TA for one turn.",
           "cooldown": 2
         }
       ],
       "ultimate": {
-        "name": "Universal Boost",
-        "description": "One ally gains +10 to all stats for 1 turn."
+        "id": "dedicating",
+        "name": "Dedicating Everything to You",
+        "description": "Give one ally +15 to all stats for 2 turns."
       }
     },
     {
@@ -372,24 +363,28 @@
       },
       "abilities": [
         {
-          "name": "System Lag",
+          "id": "butterfly_effect",
+          "name": "Butterfly Effect",
           "description": "Add one turn of cooldown to enemy abilities.",
           "cooldown": 2
         },
         {
+          "id": "battery_drain",
           "name": "Battery Drain",
-          "description": "Drain energy from enemies to heal allies.",
+          "description": "Drain energy from enemies to heal weakest ally.",
           "cooldown": 1
         },
         {
-          "name": "Cooldown Override",
-          "description": "Remove cooldown from one ally ability.",
-          "cooldown": 4
+          "id": "count_me_out",
+          "name": "Count Me Out",
+          "description": "Remove one turn of cooldown from one ally.",
+          "cooldown": 3
         }
       ],
       "ultimate": {
-        "name": "Total Shutdown",
-        "description": "Enemies cannot use abilities for 1 turn."
+        "id": "emp",
+        "name": "EMP",
+        "description": "Remove all abilities from enemies for one turn."
       }
     }
   ]

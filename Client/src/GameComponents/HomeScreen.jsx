@@ -1,4 +1,5 @@
 import "../App.css";
+import "./HomeScreen.css";
 
 import App from "../App";
 import { useState, useEffect } from "react";
@@ -91,7 +92,7 @@ function HomeScreen() {
   };
 
   return (
-    <div>
+    <div className="home-screen-container">
       <Events />
       {!isJoining ? (
         <div className="case">

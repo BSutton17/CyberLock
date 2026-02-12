@@ -257,6 +257,7 @@ io.on('connection', (socket) => {
     }
   });
 
+
   socket.on("ability_used", ({ room, playerName, abilityId, result, updatedPlayerCharacters, updatedEnemies, updatedActiveEffects }) => {
     // Update character selections with the new stats
     if (rooms[room] && updatedPlayerCharacters) {

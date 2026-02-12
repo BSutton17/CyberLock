@@ -20,10 +20,11 @@ export const GameProvider = ({ children }) => {
     const [turnOrder, setTurnOrder] = useState([]); 
     const [isMyTurn, setIsMyTurn] = useState(false);
     const [enemies, setEnemies] = useState([]);
-    const [socket] = useState(() => io.connect("http://localhost:3001"));
+    const [socket] = useState(() => io.connect(import.meta.env.VITE_API_URL || "http://localhost:5000"));
     const [gamePhase, setGamePhase] = useState('story');
     const [storyText, setStoryText] = useState('The adventure begins...');
     const [combatRewards, setCombatRewards] = useState(null);
+    const [attributeAllocations, setAttributeAllocations] = useState({});
 
 
   return (
@@ -44,7 +45,8 @@ export const GameProvider = ({ children }) => {
         currentTurn, setCurrentTurn,
         turnOrder, setTurnOrder,
         isMyTurn, setIsMyTurn,
-        enemies, setEnemies
+        enemies, setEnemies,
+        attributeAllocations, setAttributeAllocations
       }}
     >
       {children}

@@ -1,0 +1,190 @@
+/* User Header */
+.home-screen-container {
+    background-image: url('/CyberpunkCity.jpg');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    min-width: 100vw;
+    padding: 2rem;
+    box-sizing: border-box;
+    font-family: 'Arial', sans-serif;
+    color: #ffffff;
+    position: relative;
+    /* align-items: center; */ /* Keep default alignment but maybe center content manually */
+}
+
+.home-screen-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(10, 10, 30, 0.5) 0%, rgba(5, 5, 15, 0.2) 100%);
+    z-index: 0;
+}
+
+.home-screen-container > * {
+    position: relative;
+    z-index: 1;
+}
+
+.user-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  background: rgba(20, 20, 40, 0.6);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  margin-bottom: 2rem;
+}
+
+.user-info {
+  flex: 1;
+}
+
+.welcome-text {
+  color: #c4b5fd;
+  font-size: 1.1rem;
+  font-weight: 500;
+  text-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
+}
+
+.welcome-text strong {
+  font-weight: 700;
+  color: #fff;
+  margin-left: 5px;
+  text-shadow: 0 0 10px rgba(139, 92, 246, 0.8);
+}
+
+.logout-btn {
+  background: rgba(220, 38, 38, 0.8); /* Redder for logout */
+  color: white;
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  padding: 0.5rem 1.2rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  backdrop-filter: blur(4px);
+}
+
+.logout-btn:hover {
+  background: rgba(239, 68, 68, 0.9);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);
+}
+
+.logout-btn:active {
+  transform: translateY(0);
+}
+
+.case {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 80vh;
+}
+
+.name_input {
+    background: rgba(30, 30, 50, 0.7);
+    backdrop-filter: blur(12px);
+    border: 2px solid rgba(139, 92, 246, 0.3);
+    border-radius: 16px;
+    padding: 2.5rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    width: 100%;
+    max-width: 450px;
+}
+
+.name_input input {
+    background: rgba(10, 10, 20, 0.6);
+    border: 1px solid rgba(139, 92, 246, 0.4);
+    border-radius: 8px;
+    padding: 1rem;
+    color: #fff;
+    font-size: 1rem;
+    outline: none;
+    transition: all 0.3s ease;
+}
+
+.name_input input:focus {
+    border-color: #a78bfa;
+    box-shadow: 0 0 15px rgba(139, 92, 246, 0.3);
+    background: rgba(10, 10, 20, 0.8);
+}
+
+.name_input input::placeholder {
+    color: #9ca3af;
+}
+
+.name_input button {
+    padding: 1rem;
+    font-size: 1.1rem;
+    font-weight: 800;
+    cursor: pointer;
+    background: linear-gradient(135deg, #a78bfa 0%, #60a5fa 100%);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+    transition: all 0.3s ease;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.name_input button:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(139, 92, 246, 0.6);
+    background: linear-gradient(135deg, #c4b5fd 0%, #93c5fd 100%);
+}
+
+.name_input .user-header {
+    background: transparent;
+    backdrop-filter: none;
+    box-shadow: none;
+    border: none;
+    padding: 0;
+    margin-bottom: 1rem;
+    border-bottom: 2px solid rgba(139, 92, 246, 0.3);
+    padding-bottom: 1rem;
+    border-radius: 0;
+}
+
+/* Mobile responsive */
+@media (max-width: 600px) {
+  .user-header {
+    flex-direction: column;
+    gap: 10px;
+    align-items: stretch;
+  }
+
+  .user-info {
+    text-align: center;
+  }
+
+  .logout-btn {
+    width: 100%;
+  }
+
+  .home-screen-container {
+      padding: 1rem;
+  }
+
+  .name_input {
+      padding: 1.5rem;
+  }
+}

@@ -40,7 +40,7 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (username, email, password) => {
     try {
-      const response = await axios.post(`${API_URL}/auth/register`, {
+      const response = await axios.post(`${API_URL}/api/auth/register`, {
         username,
         email,
         password,
@@ -67,7 +67,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (username, password) => {
     try {
-      const response = await axios.post(`${API_URL}/auth/login`, {
+      const response = await axios.post(`${API_URL}/api/auth/login`, {
         username,
         password,
       });
@@ -97,7 +97,7 @@ export const AuthProvider = ({ children }) => {
         return { success: false };
       }
 
-      const response = await axios.post(`${API_URL}/auth/refresh-token`, {
+      const response = await axios.post(`${API_URL}/api/auth/refresh-token`, {
         refreshToken,
       });
 
@@ -117,7 +117,7 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     try {
       if (refreshToken) {
-        await axios.post(`${API_URL}/auth/logout`, { refreshToken });
+        await axios.post(`${API_URL}/api/auth/logout`, { refreshToken });
       }
     } catch (error) {
       console.error('Logout error:', error);

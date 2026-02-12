@@ -1,42 +1,56 @@
 import "../App.css";
-import io from "socket.io-client";
+import "./HomeScreen.css";
+
 import App from "../App";
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../Components/AuthContext";
 import WaitingRoom from "./WaitingRoom";
 import CharacterSelect from "./CharacterSelect/CharacterSelect";
 import Main from "./Main/Main";
 import Events from "../Components/Events";
 import { useGameContext } from "../Components/Context";
-function HomeScreen() {     
-  const [name, setName] = useState("");       
-  const [isJoining, setIsJoining] = useState(false); 
-  const { players, socket, room, setRoom, screen, setPlayerName } = useGameContext();
+import CharacterBuilder from "./CharacterBuilder/CharacterBuilder";
+import LevelUp from "./LevelUp/LevelUp.jsx"
 
-  // Load saved name and room from localStorage on first load
+function HomeScreen() {       
+  const [isJoining, setIsJoining] = useState(() => {
+    const savedName = localStorage.getItem('name');
+    const savedRoom = localStorage.getItem('room');
+    return !!(savedName && savedRoom);
+  }); 
+  const { socket, room, setRoom, screen, setPlayerName, setAdmin } = useGameContext();
+  const navigate = useNavigate();
+  const { user, logout: logoutAuth } = useAuth();
+  const [name] = useState(() => {
+    const savedName = localStorage.getItem('name');
+    const savedRoom = localStorage.getItem('room');
+    return (savedName && savedRoom) ? savedName : user?.username;
+  });
+
   useEffect(() => {
     const savedName = localStorage.getItem('name');
     const savedRoom = localStorage.getItem('room');
+    const savedIsAdmin = localStorage.getItem('isAdmin') === 'true';
 
     if (savedName && savedRoom) {
-      setName(savedName);
-      setPlayerName(savedName);
+      if (setPlayerName) setPlayerName(savedName);
       setRoom(savedRoom);
-      setIsJoining(true);
+      if (setAdmin) setAdmin(savedIsAdmin);
 
       socket.emit('join_room', savedRoom, savedName);
     }
-  }, []);
+  }, [setAdmin, setPlayerName, setRoom, socket]);
+
+
 
   const joinRoom = () => {
     if (room !== '' && name !== '') {
       localStorage.setItem('name', name);
       localStorage.setItem('room', room);
+      if (setPlayerName) setPlayerName(name);
 
-      localStorage.setItem("name", name);
-      localStorage.setItem("room", room);
-      setPlayerName(name);
-
-      socket.emit("join_room", room, name); 
+      socket.emit('join_room', room, name);
       setIsJoining(true);
     } else {
       alert('Please enter a valid room and name.');
@@ -44,10 +58,6 @@ function HomeScreen() {
   };
 
   const startRoom = () => {
-    if (name === '') {
-      alert('Please enter a valid name.');
-      return;
-    }
 
     // Generate random 4-digit room ID
     const newRoom = Math.floor(Math.random() * (9999 - 1000 + 1) + 1000);
@@ -59,62 +69,45 @@ function HomeScreen() {
     setTimeout(() => setRoom(strRoom), 60);
 
     setTimeout(() => {
-      localStorage.setItem("name", name);
-      localStorage.setItem("room", strRoom);
-      setPlayerName(name);
+      localStorage.setItem('name', name);
+      localStorage.setItem('room', strRoom);
+      if (setPlayerName) setPlayerName(name);
 
       socket.emit('join_room', strRoom, name);
       setIsJoining(true);
     }, 20);
   };
 
-  // Leave game
+  // Get rid of the saved data
   const leaveGame = () => {
-    localStorage.removeItem('name');
-    localStorage.removeItem('room');
-    socket.emit('disconnect');
-    setIsJoining(false);
-    setName('');
-    setRoom('');
+    localStorage.removeItem("name");
+    localStorage.removeItem("room");
+    localStorage.removeItem("isAdmin");
+    window.location.reload(); 
+    socket.emit("disconnect");
   };
 
-  // Logout from app
+  // Logout from authentication
   const handleLogout = async () => {
-    localStorage.removeItem('name');
-    localStorage.removeItem('room');
-    //socket.emit('disconnect');
     await logoutAuth();
     navigate('/login');
   };
 
   return (
-    <div>
-      <div style={{ position: 'absolute', top: 20, right: 20 }}>
-        <span style={{ marginRight: '15px' }}>Welcome, {user?.username}!</span>
-        <button
-          onClick={handleLogout}
-          style={{
-            padding: '8px 16px',
-            backgroundColor: '#dc3545',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-          }}
-        >
-          Logout
-        </button>
-      </div>
-
+    <div className="home-screen-container">
       <Events />
       {!isJoining ? (
         <div className="case">
+          {/* User Header */}
           <div className="name_input">
-            <input
-              placeholder="Name..."
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-            />
+            <div className="user-header">
+              <div className="user-info">
+                <span className="welcome-text">Welcome, <strong>{user?.username}</strong></span>
+              </div>
+              <button className="logout-btn" onClick={handleLogout}>
+                Logout
+              </button>
+            </div>
             <input
               placeholder="Room Id..."
               type="number"
@@ -129,8 +122,11 @@ function HomeScreen() {
         <div>
           {screen === "waiting" && <WaitingRoom />}
           {screen === "characterSelect" && <CharacterSelect />}
+          {screen === "characterBuilder" && <CharacterBuilder />}
           {screen === "main" && <Main />}
-          {screen !== "main" && <button onClick={logout}>Leave Game</button>}
+          {screen !== "main" && <button className="leave" onClick={leaveGame}>Leave Game</button>}
+          {screen === "levelup" && <LevelUp />}
+          
         </div>
       )}
     </div>

@@ -1,33 +1,46 @@
-import '../App.css';
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../Components/AuthContext';
-import { useGameContext } from '../Components/Context';
-import WaitingRoom from './WaitingRoom';
-import Events from '../Components/Events';
-import './HomeScreen.css';
+import "../App.css";
+import "./HomeScreen.css";
 
-function HomeScreen() {
-  const [name, setName] = useState('');
-  const [isJoining, setIsJoining] = useState(false);
-  const { user, logout: logoutAuth } = useAuth();
-  const { players, socket, room, setRoom, screen, setPlayerName } = useGameContext();
+import App from "../App";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../Components/AuthContext";
+import WaitingRoom from "./WaitingRoom";
+import CharacterSelect from "./CharacterSelect/CharacterSelect";
+import Main from "./Main/Main";
+import Events from "../Components/Events";
+import { useGameContext } from "../Components/Context";
+import CharacterBuilder from "./CharacterBuilder/CharacterBuilder";
+function HomeScreen() {       
+  const [isJoining, setIsJoining] = useState(() => {
+    const savedName = localStorage.getItem('name');
+    const savedRoom = localStorage.getItem('room');
+    return !!(savedName && savedRoom);
+  }); 
+  const { socket, room, setRoom, screen, setPlayerName, setAdmin } = useGameContext();
   const navigate = useNavigate();
+  const { user, logout: logoutAuth } = useAuth();
+  const [name] = useState(() => {
+    const savedName = localStorage.getItem('name');
+    const savedRoom = localStorage.getItem('room');
+    return (savedName && savedRoom) ? savedName : user?.username;
+  });
 
-  // Load saved name and room from localStorage on first load
   useEffect(() => {
     const savedName = localStorage.getItem('name');
     const savedRoom = localStorage.getItem('room');
+    const savedIsAdmin = localStorage.getItem('isAdmin') === 'true';
 
     if (savedName && savedRoom) {
-      setName(savedName);
       if (setPlayerName) setPlayerName(savedName);
       setRoom(savedRoom);
-      setIsJoining(true);
+      if (setAdmin) setAdmin(savedIsAdmin);
 
       socket.emit('join_room', savedRoom, savedName);
     }
-  }, []);
+  }, [setAdmin, setPlayerName, setRoom, socket]);
+
+
 
   const joinRoom = () => {
     if (room !== '' && name !== '') {
@@ -43,10 +56,6 @@ function HomeScreen() {
   };
 
   const startRoom = () => {
-    if (name === '') {
-      alert('Please enter a valid name.');
-      return;
-    }
 
     // Generate random 4-digit room ID
     const newRoom = Math.floor(Math.random() * (9999 - 1000 + 1) + 1000);
@@ -71,6 +80,7 @@ function HomeScreen() {
   const leaveGame = () => {
     localStorage.removeItem("name");
     localStorage.removeItem("room");
+    localStorage.removeItem("isAdmin");
     window.location.reload(); 
     socket.emit("disconnect");
   };
@@ -82,26 +92,20 @@ function HomeScreen() {
   };
 
   return (
-    <div>
-      {/* User Header */}
-      <div className="user-header">
-        <div className="user-info">
-          <span className="welcome-text">Welcome, <strong>{user?.username}</strong></span>
-        </div>
-        <button className="logout-btn" onClick={handleLogout}>
-          Logout
-        </button>
-      </div>
-
+    <div className="home-screen-container">
       <Events />
       {!isJoining ? (
         <div className="case">
+          {/* User Header */}
           <div className="name_input">
-            <input
-              placeholder="Name..."
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-            />
+            <div className="user-header">
+              <div className="user-info">
+                <span className="welcome-text">Welcome, <strong>{user?.username}</strong></span>
+              </div>
+              <button className="logout-btn" onClick={handleLogout}>
+                Logout
+              </button>
+            </div>
             <input
               placeholder="Room Id..."
               type="number"
@@ -114,10 +118,11 @@ function HomeScreen() {
         </div>
       ) : (
         <div>
-          <WaitingRoom />
-          {screen === 'characterSelect' && <div>Character Select Screen</div>}
-          {screen === 'main' && <div>Main Game Screen</div>}
-          <button onClick={leaveGame}>Leave Game</button>
+          {screen === "waiting" && <WaitingRoom />}
+          {screen === "characterSelect" && <CharacterSelect />}
+          {screen === "characterBuilder" && <CharacterBuilder />}
+          {screen === "main" && <Main />}
+          {screen !== "main" && <button className="leave" onClick={leaveGame}>Leave Game</button>}
         </div>
       )}
     </div>

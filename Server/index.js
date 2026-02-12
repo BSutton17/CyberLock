@@ -123,7 +123,6 @@ io.on('connection', (socket) => {
       }
       io.to(room).emit("update_ready_status", rooms[room].readyPlayers);
       
-      // Check if all players are ready and have selected characters
       const allReady = rooms[room].players.length > 0 && 
                        rooms[room].players.every(player => 
                          rooms[room].readyPlayers.includes(player) && 
@@ -131,45 +130,353 @@ io.on('connection', (socket) => {
                          rooms[room].characterSelections[player]
                        );
       
-      if (allReady) {
+      // if (allReady) {
+      //   io.to(room).emit("start_main_game");
+      // }
+       if (allReady) {
+        io.to(room).emit("character_customization");
+      }
+    }
+  });
+
+  socket.on("select_ability", ({ room, playerName, abilities }) => {
+    if (rooms[room]) {
+      if (!rooms[room].abilitySelections) {
+        rooms[room].abilitySelections = {};
+      }
+      rooms[room].abilitySelections[playerName] = abilities;
+      io.to(room).emit("ability_selections_updated", rooms[room].abilitySelections);
+    }
+  });
+
+  socket.on("ability_ready", ({ room, playerName }) => {
+    if (rooms[room]) {
+      if (!rooms[room].abilityReadyPlayers) {
+        rooms[room].abilityReadyPlayers = [];
+      }
+      if (!rooms[room].abilityReadyPlayers.includes(playerName)) {
+        rooms[room].abilityReadyPlayers.push(playerName);
+      }
+      io.to(room).emit("ability_ready_status", rooms[room].abilityReadyPlayers);
+      
+      const allAbilityReady = rooms[room].players.length > 0 && 
+                              rooms[room].players.every(player => 
+                                rooms[room].abilityReadyPlayers.includes(player)
+                              );
+      
+      if (allAbilityReady) {
+        io.to(room).emit("start_game");
+      }
+    }
+  });
+
+  socket.on("update_attribute_points", ({ room, playerName, points }) => {
+    if (rooms[room]) {
+      if (!rooms[room].attributePoints) {
+        rooms[room].attributePoints = {};
+      }
+      rooms[room].attributePoints[playerName] = points;
+      io.to(room).emit("attribute_points_updated", rooms[room].attributePoints);
+    }
+  });
+
+  socket.on("attribute_ready", ({ room, playerName, sortedAttributes }) => {
+    if (rooms[room]) {
+      if (!rooms[room].attributeReadyPlayers) {
+        rooms[room].attributeReadyPlayers = [];
+      }
+      if (!rooms[room].attributeReadyPlayers.includes(playerName)) {
+        rooms[room].attributeReadyPlayers.push(playerName);
+      }
+      
+      // Store sorted attributes
+      if (!rooms[room].sortedAttributeAllocations) {
+        rooms[room].sortedAttributeAllocations = {};
+      }
+      rooms[room].sortedAttributeAllocations[playerName] = sortedAttributes;
+      
+      io.to(room).emit("attribute_ready_status", rooms[room].attributeReadyPlayers);
+      io.to(room).emit("attribute_allocations_updated", rooms[room].sortedAttributeAllocations);
+      
+      const allAttributeReady = rooms[room].players.length > 0 && 
+                                rooms[room].players.every(player => 
+                                  rooms[room].attributeReadyPlayers.includes(player)
+                                );
+      
+      if (allAttributeReady) {
         io.to(room).emit("start_main_game");
       }
     }
   });
 
   socket.on("start_combat", ({ room, generatedEnemies }) => {
-    console.log('Starting combat for room:', room, 'with enemies:', generatedEnemies);
+    console.log('Starting combat for room:', room);
     if(!combatSessions[room]) {
       combatSessions[room] = {};
     }
 
     combatSessions[room].enemies = generatedEnemies;
 
+    // Generate enemy positions (server decides so all clients see same positions)
+    const topRow = Math.floor(Math.random() * 2);
+    const enemyPositions = {};
+    generatedEnemies.forEach((enemy, index) => {
+      enemyPositions[enemy.id] = { row: topRow, col: index + 3 };
+    });
+    combatSessions[room].enemyPositions = enemyPositions;
+
     const turnOrder = calculateTurnOrder(room);
     combatSessions[room].turnOrder = turnOrder;
     combatSessions[room].currentTurnIndex = 0;
 
+    const firstTurn = turnOrder[0];
+    
+    // Broadcast character selections to ensure all players have current data
+    const characterSelections = rooms[room]?.characterSelections || {};
+    
     io.to(room).emit("phase_changed_combat", { 
       enemies: combatSessions[room].enemies, 
+      enemyPositions: enemyPositions,
       turnOrder: turnOrder,
-      currentTurn: turnOrder[0]
+      currentTurn: firstTurn,
+      characterSelections: characterSelections
      });
+     
+    // If first turn is an enemy, trigger enemy AI after positions are set
+    if (firstTurn.type === 'enemy') {
+      const combat = combatSessions[room];
+      
+      // Small delay to ensure client has set up enemy positions
+      setTimeout(() => {
+        io.to(room).emit("execute_enemy_turn", { 
+          enemyId: firstTurn.id,
+          allies: rooms[room]?.players || [],
+          alliedEnemies: combat.enemies.map(e => e.id).filter(id => id !== firstTurn.id)
+        });
+      }, 500);
+    }
   });
 
-  socket.on("end_turn", ({ room, playerName }) => {
+
+  socket.on("ability_used", ({ room, playerName, abilityId, result, updatedPlayerCharacters, updatedEnemies, updatedActiveEffects }) => {
+    // Update character selections with the new stats
+    if (rooms[room] && updatedPlayerCharacters) {
+      rooms[room].characterSelections = {
+        ...rooms[room].characterSelections,
+        ...updatedPlayerCharacters
+      };
+      
+      io.to(room).emit("characters_updated", updatedPlayerCharacters);
+    }
+    
+    // Update enemies with new stats (for debuffs/buffs)
+    if (rooms[room] && updatedEnemies) {
+      if (combatSessions[room]) {
+        combatSessions[room].enemies = updatedEnemies;
+        console.log('[SERVER] Updated enemies in combatSession:', updatedEnemies.map(e => ({ id: e.id, speed: e.stats.speed })));
+      }
+      
+      io.to(room).emit("enemies_updated", { enemies: updatedEnemies });
+    }
+    
+    // Broadcast active effects so all players see buff/debuff indicators
+    if (updatedActiveEffects) {
+      io.to(room).emit("active_effects_updated", updatedActiveEffects);
+    }
+  });
+
+  socket.on("end_turn", ({ room, playerName, updatedEnemies }) => {
     const combat = combatSessions[room];
+    
+    if (!combat) return;
+
+    // Update enemies with any debuffs/buffs that were ticked
+    if (updatedEnemies && Array.isArray(updatedEnemies)) {
+      combat.enemies = updatedEnemies;
+      console.log('[SERVER] Updated enemies on end_turn:', updatedEnemies.map(e => ({ id: e.id, speed: e.stats.speed, health: e.stats.health })));
+    }
 
     const currentTurn = combat?.turnOrder[combat.currentTurnIndex];
+    
+    // Safety check for undefined currentTurn
+    if (!currentTurn) {
+      combat.currentTurnIndex = 0;
+      if (combat.turnOrder.length === 0) {
+        io.to(room).emit('combat_ended', { result: 'all_dead' });
+        return;
+      }
+      const firstTurn = combat.turnOrder[0];
+      io.to(room).emit("turn_changed", { currentTurn: firstTurn });
+      if (firstTurn.type === 'enemy') {
+        io.to(room).emit("execute_enemy_turn", { 
+          enemyId: firstTurn.id,
+          allies: rooms[room]?.players || [],
+          alliedEnemies: combat.enemies.map(e => e.id).filter(id => id !== firstTurn.id)
+        });
+      }
+      return;
+    }
+    
     if (currentTurn.id !== playerName) return;
 
     combat.currentTurnIndex++;
     if(combat.currentTurnIndex >= combat.turnOrder.length) {
       combat.currentTurnIndex = 0;
     }
+    
+    if (combat.turnOrder.length === 0) {
+      io.to(room).emit('combat_ended', { result: 'all_dead' });
+      return;
+    }
 
     const nextTurn = combat.turnOrder[combat.currentTurnIndex];
     io.to(room).emit("turn_changed", { currentTurn: nextTurn });
+    
+    // If next turn is an enemy, trigger enemy AI
+    if (nextTurn.type === 'enemy') {
+      io.to(room).emit("execute_enemy_turn", { 
+        enemyId: nextTurn.id,
+        allies: rooms[room]?.players || [],
+        alliedEnemies: combat.enemies.map(e => e.id).filter(id => id !== nextTurn.id)
+      });
+    }
+  });
 
+  socket.on("enemy_turn_complete", ({ room }) => {
+    const combat = combatSessions[room];
+    if (!combat) return;
+
+    combat.currentTurnIndex++;
+    if(combat.currentTurnIndex >= combat.turnOrder.length) {
+      combat.currentTurnIndex = 0;
+    }
+    
+    if (combat.turnOrder.length === 0) {
+      io.to(room).emit('combat_ended', { result: 'all_dead' });
+      return;
+    }
+
+    const nextTurn = combat.turnOrder[combat.currentTurnIndex];
+    io.to(room).emit("turn_changed", { currentTurn: nextTurn });
+    
+    // Chain enemy turns if needed
+    if (nextTurn.type === 'enemy') {
+      io.to(room).emit("execute_enemy_turn", { 
+        enemyId: nextTurn.id,
+        allies: rooms[room]?.players || [],
+        alliedEnemies: combat.enemies.map(e => e.id).filter(id => id !== nextTurn.id)
+      });
+    }
+  });
+
+  socket.on("enemy_moved", ({ room, enemyId, path, stepDelay }) => {
+    io.to(room).emit("enemy_moved", { enemyId, path, stepDelay });
+  });
+
+  socket.on("player_moved", ({ room, playerName, position }) => {
+    io.to(room).emit("player_moved", { playerName, position });
+  });
+
+  socket.on("reduce_cooldown", ({ room, targetPlayer, value }) => {
+    console.log(`[SERVER] Cooldown reduction for ${targetPlayer} by ${value} in room ${room}`);
+    io.to(room).emit("cooldown_reduced", { targetPlayer, value });
+  });
+
+  socket.on("reset_cooldowns", ({ room, targetPlayer }) => {
+    console.log(`[SERVER] Cooldown reset for ${targetPlayer} in room ${room}`);
+    io.to(room).emit("cooldowns_reset", { targetPlayer });
+  });
+
+  socket.on("enemy_damaged", ({ room, enemyId, damage, newHealth }) => {
+    const combat = combatSessions[room];
+    if (!combat) return;
+
+    // Update enemy health in combat session
+    combat.enemies = combat.enemies.map(e => 
+      e.id === enemyId ? { ...e, stats: { ...e.stats, health: newHealth } } : e
+    ).filter(e => e.stats.health > 0);
+
+    // Remove dead enemy from turn order
+    if (newHealth <= 0) {
+      const currentTurn = combat.turnOrder[combat.currentTurnIndex];
+      const wasCurrentTurn = currentTurn && currentTurn.id === enemyId;
+      
+      combat.turnOrder = combat.turnOrder.filter(turn => turn.id !== enemyId);
+      console.log(`Enemy ${enemyId} defeated`);
+      
+      // If the dead enemy was the current turn, advance immediately
+      if (wasCurrentTurn) {
+        
+        // Adjust index if needed
+        if (combat.currentTurnIndex >= combat.turnOrder.length) {
+          combat.currentTurnIndex = 0;
+        }
+        
+        if (combat.turnOrder.length === 0) {
+          io.to(room).emit('combat_ended', { result: 'all_dead' });
+          return;
+        }
+        
+        const nextTurn = combat.turnOrder[combat.currentTurnIndex];
+        io.to(room).emit("turn_changed", { currentTurn: nextTurn });
+        
+        if (nextTurn.type === 'enemy') {
+          io.to(room).emit("execute_enemy_turn", { 
+            enemyId: nextTurn.id,
+            allies: rooms[room]?.players || [],
+            alliedEnemies: combat.enemies.map(e => e.id).filter(id => id !== nextTurn.id)
+          });
+        }
+      }
+    }
+
+    // Broadcast updated enemies to all clients
+    io.to(room).emit("enemies_updated", { enemies: combat.enemies });
+  });
+
+  socket.on("player_damaged", ({ room, playerName, damage, newHealth, updatedActiveEffects }) => {
+    const combat = combatSessions[room];
+    if (combat && newHealth <= 0) {
+      const currentTurn = combat.turnOrder[combat.currentTurnIndex];
+      const wasCurrentTurn = currentTurn && currentTurn.id === playerName;
+      
+      // Remove dead player from turn order
+      combat.turnOrder = combat.turnOrder.filter(turn => turn.id !== playerName);
+      console.log(`Player ${playerName} died`);
+      
+      // If the dead player was the current turn, advance immediately
+      if (wasCurrentTurn) {
+        
+        // Adjust index if needed
+        if (combat.currentTurnIndex >= combat.turnOrder.length) {
+          combat.currentTurnIndex = 0;
+        }
+        
+        if (combat.turnOrder.length === 0) {
+          io.to(room).emit('combat_ended', { result: 'all_dead' });
+          return;
+        }
+        
+        const nextTurn = combat.turnOrder[combat.currentTurnIndex];
+        io.to(room).emit("turn_changed", { currentTurn: nextTurn });
+        
+        if (nextTurn.type === 'enemy') {
+          io.to(room).emit("execute_enemy_turn", { 
+            enemyId: nextTurn.id,
+            allies: rooms[room]?.players || [],
+            alliedEnemies: combat.enemies.map(e => e.id).filter(id => id !== nextTurn.id)
+          });
+        }
+      }
+    }
+    
+    // Broadcast updated active effects if bonus health was consumed
+    if (updatedActiveEffects) {
+      io.to(room).emit("active_effects_updated", updatedActiveEffects);
+    }
+    
+    // Broadcast player health update to all clients in the room
+    io.to(room).emit("player_health_updated", { playerName, newHealth });
   });
 
 

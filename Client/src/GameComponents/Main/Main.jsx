@@ -713,6 +713,10 @@ function Main() {
         socket.emit('start_combat', { room, generatedEnemies });
     }
 
+    function handleLevelUp(){
+        socket.emit('level_up', {room});
+    }
+
     function handleCombatComplete(rewards) {
         socket.emit('combat_complete', { room, rewards });    
     }
@@ -1114,6 +1118,7 @@ function Main() {
         <div className="AI-script">
             <h3>AI Log goes here</h3>
             {/* <button onClick={handleStoryComplete}>Combat</button> */}
+            <button onClick={handleLevelUp}>Level Up</button>
         </div>
         <div className="inventory">
             {currentPlayerCharacter ? (

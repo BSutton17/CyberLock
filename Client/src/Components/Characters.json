@@ -217,7 +217,7 @@
     },
     {
       "id": "healing_support_1",
-      "name": "Healing Support #1",
+      "name": "Patchwork",
       "role": "Support",
       "stats": {
         "health": 60,
@@ -260,7 +260,7 @@
     },
     {
       "id": "offensive_support_2",
-      "name": "Offensive Support #2",
+      "name": "Livewire",
       "role": "Support",
       "stats": {
         "health": 70,
@@ -303,7 +303,7 @@
     },
     {
       "id": "jack_of_all_trades_support_3",
-      "name": "Jack of All Trades Support #3",
+      "name": "True North",
       "role": "Support",
       "stats": {
         "health": 65,
@@ -346,7 +346,7 @@
     },
     {
       "id": "hacker_support_4",
-      "name": "Hacker Support #3",
+      "name": "Root Null",
       "role": "Support",
       "stats": {
         "health": 65,

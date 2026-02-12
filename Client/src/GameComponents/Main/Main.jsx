@@ -714,7 +714,8 @@ function Main() {
     }
 
     function handleCombatComplete(rewards) {
-        socket.emit('combat_complete', { room, rewards });    }
+        socket.emit('combat_complete', { room, rewards });    
+    }
 
     const handleAbilityClick = (ability) => {
         console.log('[ABILITY CLICK] Ability clicked:', ability.name, 'ID:', ability.id);

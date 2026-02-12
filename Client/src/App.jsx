@@ -2,9 +2,9 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './Components/AuthContext';
 import ProtectedRoute from './Components/ProtectedRoute';
 import Login from './Components/Login';
-import HomeScreen from './Components/HomeScreen';
+import HomeScreen from './GameComponents/HomeScreen';
 import Events from './Components/Events';
-import WaitingRoom from './Components/WaitingRoom';
+import WaitingRoom from './GameComponents/WaitingRoom';
 import './App.css';
 
 function App() {

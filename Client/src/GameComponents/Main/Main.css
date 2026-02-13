@@ -271,7 +271,7 @@ h3, h4, p {
 }
 
 
-.AI-script {
+.AI-script, .Response {
     grid-area: ai;
     background: #16161d33;
     border-radius: 0.75rem;
@@ -279,9 +279,20 @@ h3, h4, p {
     font-size: 0.875rem;
     max-height: 20vh;
     overflow-y: auto;
+    gap: 0.5rem;
+    border: 1px solid green;
+}
+
+.AI-script{
+    display: flex;
+    flex-direction: row;
+}
+
+.Response{
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    width: 200vw;
+    height: 100%;
 }
 
 .ai-header {
@@ -319,6 +330,7 @@ h3, h4, p {
     gap: 0.5rem;
     padding-right: 0.25rem;
 }
+
 
 .ai-empty {
     opacity: 0.7;

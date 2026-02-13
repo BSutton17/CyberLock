@@ -26,9 +26,11 @@ function Main() {
     const [pendingFactionChoice, setPendingFactionChoice] = useState(false);
     const [pendingPostEncounterChoice, setPendingPostEncounterChoice] = useState(false);
     const [pendingNextEncounterChoice, setPendingNextEncounterChoice] = useState(false);
+    const [aiText, setAiText] = useState('');
     const aiLogRef = useRef(null);
     const hasRequestedIntroRef = useRef(false);
     const pendingStartCombatRef = useRef(false);
+   
 
     const getDecisionOwner = (requiredAttribute) => {
         if (!requiredAttribute) return null;
@@ -1432,6 +1434,7 @@ function Main() {
         </div>
 
         <div className="AI-script">
+            <div className='Response'>
             <div className="ai-header">
                 <h3>AI Log</h3>
                 <span className={`ai-status ${aiBusy ? 'busy' : ''}`}>
@@ -1443,9 +1446,9 @@ function Main() {
                     <div className="ai-empty">No AI narration yet.</div>
                 ) : (
                     aiLog.map(entry => (
+                        setAiText(entry.text),
                         <div key={entry.id} className={`ai-entry ${entry.role}`}>
                             <span className="ai-role">{entry.role === 'user' ? 'You' : 'DM'}</span>
-                            <span className="ai-text">{entry.text}</span>
                         </div>
                     ))
                 )}
@@ -1488,7 +1491,9 @@ function Main() {
             </form>
             {/* <button onClick={handleStoryComplete}>Combat</button> */}
             <button className="ai-debug" onClick={handleLevelUp}>Level Up</button>
-        </div>
+            </div>
+            <span className="ai-text">{aiText}</span>
+       </div>
         <div className="inventory">
             {currentPlayerCharacter ? (
                 <>

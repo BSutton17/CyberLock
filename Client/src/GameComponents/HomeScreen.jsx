@@ -1,5 +1,6 @@
 import "../App.css";
-import io from "socket.io-client";
+import "./HomeScreen.css";
+
 import App from "../App";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
@@ -11,39 +12,35 @@ import Events from "../Components/Events";
 import { useGameContext } from "../Components/Context";
 import CharacterBuilder from "./CharacterBuilder/CharacterBuilder";
 function HomeScreen() {       
-  const [isJoining, setIsJoining] = useState(false); 
-  const { players, socket, room, setRoom, screen, setPlayerName, setAdmin } = useGameContext();
+  const [isJoining, setIsJoining] = useState(() => {
+    const savedName = localStorage.getItem('name');
+    const savedRoom = localStorage.getItem('room');
+    return !!(savedName && savedRoom);
+  }); 
+  const { socket, room, setRoom, screen, setPlayerName, setAdmin } = useGameContext();
   const navigate = useNavigate();
   const { user, logout: logoutAuth } = useAuth();
-  const [name, setName] = useState(user?.username);
+  const [name] = useState(() => {
+    const savedName = localStorage.getItem('name');
+    const savedRoom = localStorage.getItem('room');
+    return (savedName && savedRoom) ? savedName : user?.username;
+  });
 
-  // Load saved name and room from localStorage on first load
   useEffect(() => {
     const savedName = localStorage.getItem('name');
     const savedRoom = localStorage.getItem('room');
     const savedIsAdmin = localStorage.getItem('isAdmin') === 'true';
 
     if (savedName && savedRoom) {
-      setName(savedName);
       if (setPlayerName) setPlayerName(savedName);
       setRoom(savedRoom);
       if (setAdmin) setAdmin(savedIsAdmin);
-      setIsJoining(true);
 
       socket.emit('join_room', savedRoom, savedName);
     }
-  }, []);
+  }, [setAdmin, setPlayerName, setRoom, socket]);
 
-  // Listen for admin status from server and save to localStorage
-  useEffect(() => {
-    socket.on('setAdmin', (admin) => {
-      localStorage.setItem('isAdmin', admin.toString());
-    });
 
-    return () => {
-      socket.off('setAdmin');
-    };
-  }, [socket]);
 
   const joinRoom = () => {
     if (room !== '' && name !== '') {
@@ -95,7 +92,7 @@ function HomeScreen() {
   };
 
   return (
-    <div>
+    <div className="home-screen-container">
       <Events />
       {!isJoining ? (
         <div className="case">

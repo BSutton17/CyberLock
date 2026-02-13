@@ -1,24 +1,39 @@
 .main-game-container {
     display: grid;
-    grid-template-columns: minmax(180px, 220px) 1fr minmax(200px, 260px);
-    grid-template-rows: auto 1fr auto;
+    grid-template-columns: 2fr 10fr;
+    grid-template-rows: 1fr 10fr 2fr 2fr ;
     grid-template-areas:
         "scene scene scene"
         "party main main"
         "ai ai ai" 
         "inventory inventory inventory";
     height: 100vh;
+    width: 100vw;
+    max-width: 100vw;
+    margin: 0 auto;
     background: #0e0e12;
     color: #eaeaf0;
     font-family: 'Inter', sans-serif;
     gap: 0.75rem;
     padding: 0.75rem;
     box-sizing: border-box;
-}
+}   
 
 li{
     text-decoration: none;
     list-style: none;
+}
+
+h1 {
+    font-size: 3vmin;
+}
+
+h2 {
+    font-size: 2vmin;
+}
+
+h3, h4, p {
+    font-size: 1vmin;
 }
 
 .scene-name {
@@ -28,7 +43,6 @@ li{
     justify-content: center;
     width: 100%;
     background: #16161d;
-    padding: 0 1.25rem;
     border-radius: 0.75rem;
     min-height: 4rem;
     position: relative;
@@ -40,7 +54,7 @@ li{
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: 1.75rem;
+    font-size: 1.75vmin;
     font-weight: 600;
     color: #eaeaf0;
 }
@@ -55,7 +69,7 @@ li{
 
 .party h3 {
     margin: 0 0 0.625rem 0;
-    font-size: 0.875rem;
+    font-size: 2vmin;
     text-transform: uppercase;
     letter-spacing: 0.03em;
     opacity: 0.7;
@@ -89,7 +103,7 @@ li{
 }
 
 .character-name {
-    font-size: 0.875rem;
+    font-size: 1.5vmin;
     font-weight: 600;
     color: #eaeaf0;
     overflow: hidden;
@@ -100,7 +114,7 @@ li{
 .character-stats {
     display: flex;
     gap: 0.75rem;
-    font-size: 0.75rem;
+    font-size: 1.25vmin;
 }
 
 .stat-speed,
@@ -136,8 +150,7 @@ li{
     display: grid;
     grid-template-columns: repeat(10, 1fr);
     grid-template-rows: repeat(7, 1fr);
-    max-width: 95%;
-    width: 60rem;
+    width: 85%;
     aspect-ratio: 10 / 3.5;
     background: transparent;
 }
@@ -199,7 +212,7 @@ li{
 }
 
 .enemy-health {
-    font-size: 0.75rem;
+    font-size: 0.75vmin;
     font-weight: 700;
     color: #ff6b6b;
     background: rgba(0, 0, 0, 0.6);
@@ -211,7 +224,7 @@ li{
 }
 
 .enemy-name {
-    font-size: 0.85rem;
+    font-size: 0.85vmin;
     font-weight: 600;
 }
 
@@ -231,7 +244,7 @@ li{
     color: #eaeaf0;
     padding: 1rem 2rem;
     border-radius: 0.75rem;
-    font-size: 1.125rem;
+    font-size: 1.125vmin;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.3s ease;
@@ -244,7 +257,7 @@ li{
 }
 
 .attributes{
-    font-size: 0.65rem !important;
+    font-size: 0.95vmin !important;
     display: flex;
     flex-direction: row;
 }
@@ -263,9 +276,10 @@ li{
     background: #16161d33;
     border-radius: 0.75rem;
     padding: 0.875rem;
-    font-size: 0.875rem;
-    max-height: 20vh;
-    overflow-y: auto;
+}
+
+.AI-script h3{
+    font-size: 1.5vmin;
 }
 
 .inventory {
@@ -277,7 +291,7 @@ li{
     grid-template-columns: auto auto 1fr auto;
     gap: 1rem;
     border: 1px solid rgba(74, 106, 138, 0.2);
-    max-height: 12rem;
+    height: 21vmin;
 }
 
 .character-sheet-header {
@@ -311,17 +325,16 @@ li{
 }
 
 .char-name {
-    font-size: 0.875rem;
+    font-size: 1.875vmin;
     font-weight: 700;
     color: #eaeaf0;
     letter-spacing: 0.02em;
 }
 
 .char-role {
-    font-size: 0.7rem;
+    font-size: 1.7vmin;
     color: #7a9aba;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
 }
 
 .stats-section,
@@ -330,7 +343,6 @@ li{
 .ultimate-section {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
 }
 
 .stats-section h4,
@@ -338,7 +350,7 @@ li{
 .abilities-section h4,
 .ultimate-section h4 {
     margin: 0;
-    font-size: 0.75rem;
+    font-size: 1.5vmin;
     text-transform: uppercase;
     letter-spacing: 0.1em;
     color: #7a9aba;
@@ -352,7 +364,7 @@ li{
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 0.375rem;
+    gap: 0.45vmin;
 }
 
 .stat-item {
@@ -366,13 +378,13 @@ li{
 }
 
 .stat-label {
-    font-size: 0.65rem;
+    font-size: 0.75vmin;
     color: #9a9aaa;
     font-weight: 500;
 }
 
 .stat-value {
-    font-size: 0.75rem;
+    font-size: 1vmin;
     font-weight: 700;
     color: #eaeaf0;
 }
@@ -383,11 +395,10 @@ li{
     border-radius: 0.375rem;
     display: flex;
     align-items: center;
-    gap: 0.5rem;
     border: 2px solid #4a6a8a;
     transition: all 0.2s ease;
-    width: 7rem;
-    height: 7rem;
+    width: 12vmin;
+    height: 12.5vmin;
 }
 
 .weapon-card:hover {
@@ -408,7 +419,7 @@ li{
 }
 
 .weapon-icon {
-    font-size: 1.25rem;
+    font-size: 1.25vmin;
     filter: drop-shadow(0 0 0.5rem rgba(74, 138, 138, 0.4));
 }
 
@@ -419,19 +430,19 @@ li{
 }
 
 .weapon-name {
-    font-size: max-content;
+    font-size: 1.75vmin;
     font-weight: 700;
     color: #eaeaf0;
 }
 
 .weapon-damage {
-    font-size: max-content;
+    font-size: 1.5vmin;
     color: #ff6b6b;
     font-weight: 600;
 }
 
 .weapon-range {
-    font-size: max-content;
+    font-size: 1.5vmin;
     color: #17a536;
     font-weight: 600;
 }
@@ -449,8 +460,8 @@ li{
     cursor: pointer;
     transition: all 0.2s ease;
     flex: 1;
-    min-width: 7rem;
-    height: 8rem;
+    width: 12vmin;
+    height: 15vmin;
 }
 
 .ability-card:hover {
@@ -484,13 +495,13 @@ li{
 }
 
 .ability-card .ability-name {
-    font-size: max-content;
+    font-size: 1.75vmin;
     font-weight: 700;
     color: #eaeaf0;
 }
 
 .ability-cd {
-    font-size: 0.825rem;
+    font-size: 1.25vmin;
     color: #7a9aba;
     background: rgba(122, 154, 186, 0.15);
     padding: 0.125rem 0.375rem;
@@ -498,7 +509,7 @@ li{
 }
 
 .ability-desc {
-    font-size: 0.825rem;
+    font-size: 1.5vmin;
     color: #9a9aaa;
     line-height: 1.3;
     text-align: left;
@@ -515,8 +526,8 @@ li{
     padding: 0.5rem 0.625rem;
     cursor: pointer;
     transition: all 0.2s ease;
-    width: 20rem;
-    height: 8rem;
+    width: 50vmin;
+    height: 15vmin;
 }
 
 .ultimate-card:hover {
@@ -533,7 +544,7 @@ li{
 }
 
 .ultimate-card .ultimate-name {
-    font-size: 1.25rem;
+    font-size: 1.75vmin;
     font-weight: 700;
     color: #f0d0ff;
     text-transform: uppercase;
@@ -541,7 +552,7 @@ li{
 }
 
 .ultimate-desc {
-    font-size: 0.825rem;
+    font-size: 1.25vmin;
     color: #d0b0e0;
     line-height: 1.3;
     text-align: left;
@@ -556,7 +567,7 @@ li{
     align-items: center;
     justify-content: center;
     color: #7a9aba;
-    font-size: 1rem;
+    font-size: 1vmin;
     opacity: 0.6;
 }
 
@@ -569,12 +580,12 @@ li{
     border: none;
     padding: 0.875rem 1.375rem;
     border-radius: 0.75rem;
-    font-size: 1rem;
+    font-size: 1vmin;
     cursor: pointer;
 }
 
 .small{
-    font-size: 0.65rem !important;
+    font-size: 0.75vmin !important;
 }
 
 .end-turn:hover {
@@ -620,7 +631,7 @@ li{
         bottom: 1rem;
         right: 1rem;
         padding: 0.75rem 1.25rem;
-        font-size: 0.9rem;
+        font-size: 0.9vmin;
     }
 }
 
@@ -640,11 +651,11 @@ li{
     }
     
     .character-name {
-        font-size: 0.8rem;
+        font-size: 0.8vmin;
     }
     
     .character-stats {
-        font-size: 0.7rem;
+        font-size: 0.7vmin;
         gap: 0.5rem;
     }
     
@@ -667,16 +678,16 @@ li{
     
     .party h3,
     .AI-script {
-        font-size: 0.8rem;
+        font-size: 0.8vmin;
     }
     
     .grid-cell {
-        font-size: 0.7rem;
+        font-size: 0.7vmin;
     }
     
     .enemy-health,
     .enemy-name {
-        font-size: 0.65rem;
+        font-size: 0.65vmin;
     }
     
     .portrait-icon {
@@ -694,5 +705,145 @@ li{
     .ultimate-card {
         height: 6rem;
         padding: 0.375rem;
+    }
+}
+
+/* Death Screens */
+.you-died-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    animation: fadeIn 0.3s ease-in;
+}
+
+.you-died-content {
+    text-align: center;
+    animation: scaleIn 0.5s ease-out;
+}
+
+.you-died-content h1 {
+    font-size: 4vmin;
+    color: #ff4444;
+    font-weight: bold;
+    text-shadow: 0 0 20px rgba(255, 68, 68, 0.8);
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 4px;
+}
+
+.you-died-content p {
+    font-size: 1.25vmin;
+    color: #aaaaaa;
+    margin-top: 1rem;
+    font-style: italic;
+}
+
+.game-over-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1001;
+}
+
+.game-over-screen {
+    background: linear-gradient(135deg, #1a0a0a 0%, #2d0000 100%);
+    border: 3px solid #ff4444;
+    border-radius: 1rem;
+    padding: 3rem 4rem;
+    text-align: center;
+    max-width: 500px;
+    box-shadow: 0 0 30px rgba(255, 68, 68, 0.5);
+    animation: slideUp 0.5s ease-out;
+}
+
+.game-over-screen h1 {
+    font-size: 3.5vmin;
+    color: #ff4444;
+    font-weight: bold;
+    text-shadow: 0 0 20px rgba(255, 68, 68, 0.8);
+    margin: 0 0 1rem 0;
+    text-transform: uppercase;
+    letter-spacing: 4px;
+}
+
+.game-over-screen p {
+    font-size: 1.25vmin;
+    color: #cccccc;
+    margin-bottom: 2rem;
+    line-height: 1.5;
+}
+
+.game-over-buttons {
+    display: flex;
+    gap: 1.5rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.game-over-button {
+    padding: 0.75rem 2rem;
+    font-size: 1.1vmin;
+    font-weight: bold;
+    color: #eaeaf0;
+    background: linear-gradient(135deg, #444444 0%, #222222 100%);
+    border: 2px solid #ff4444;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.game-over-button:hover {
+    background: linear-gradient(135deg, #ff4444 0%, #cc0000 100%);
+    box-shadow: 0 0 20px rgba(255, 68, 68, 0.6);
+    transform: translateY(-2px);
+}
+
+.game-over-button:active {
+    transform: translateY(0);
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes scaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.8);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
     }
 }

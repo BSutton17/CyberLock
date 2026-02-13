@@ -4,6 +4,7 @@ import { useGameContext } from '../../Components/Context';
 import EnemiesData from '../../Components/Enemies.json';
 import { executeEnemyTurn } from './EnemyCombat';
 import { getAbility, executeAbility, applyAbilityEffects, tickCooldowns, tickActiveEffects, calculateTotalStat, getStatBonuses } from './AbilityLogic';
+import { enrichCharacterAbilities } from '../../Utils/characterUtils';
 import './Main.css';
 
 function Main() {
@@ -19,6 +20,8 @@ function Main() {
     const [turnStartPosition, setTurnStartPosition] = useState(null);
     const [movementUsed, setMovementUsed] = useState(0);
     const [actionUsed, setActionUsed] = useState(false);
+    const [showYouDiedScreen, setShowYouDiedScreen] = useState(false);
+    const [gameOver, setGameOver] = useState(false);
 
     // Refs to track latest state values for handleEndTurn
     const activeEffectsRef = useRef(activeEffects);
@@ -65,6 +68,9 @@ function Main() {
             console.error('[TURN DEBUG] All positions:', characterPositions);
         }
     }, [isMyTurn, playerName]);
+
+    // Check if current player is alive
+    const isPlayerAlive = currentPlayerCharacter && currentPlayerCharacter.stats.health > 0;
 
     const generateEnemies = () => {
         const genericEnemies = EnemiesData.enemies.filter(e => e.tier === 'generic');
@@ -267,10 +273,29 @@ function Main() {
                     };
                     setPlayerCharacters(updatedPlayerCharacters);
                     
-                    // Remove dead player from turn order
+                    // Remove dead player from turn order and handle death
                     if (newHealth <= 0) {
                         console.log(`Player ${turnAction.target} has died! Removing from turn order.`);
                         setTurnOrder(prevOrder => prevOrder.filter(turn => turn.id !== turnAction.target));
+                        
+                        // Show "You Died" screen if this is the current player
+                        if (turnAction.target === playerName) {
+                            setShowYouDiedScreen(true);
+                            setTimeout(() => {
+                                setShowYouDiedScreen(false);
+                            }, 2500); // Show for 2.5 seconds
+                        }
+                        
+                        // Check if all players are dead
+                        const remainingPlayers = players.filter(p => p !== turnAction.target);
+                        const allPlayersDeadCheck = remainingPlayers.every(p => 
+                            updatedPlayerCharacters[p]?.stats.health <= 0
+                        );
+                        
+                        if (allPlayersDeadCheck) {
+                            console.log('All players defeated! Game Over.');
+                            setGameOver(true);
+                        }
                     }
                     
                     // Emit to server to sync player health and active effects
@@ -308,10 +333,26 @@ function Main() {
 
         const handleCharactersUpdated = (updatedCharacters) => {
             console.log('[CHARACTERS UPDATED] Received from server:', updatedCharacters);
-            setPlayerCharacters(prevChars => ({
-                ...prevChars,
-                ...updatedCharacters
-            }));
+            if (!updatedCharacters) return;
+            setPlayerCharacters(prevChars => {
+                const normalizedUpdates = Object.fromEntries(
+                    Object.entries(updatedCharacters).map(([name, character]) => {
+                        const prevCharacter = prevChars[name] || {};
+                        const mergedCharacter = {
+                            ...prevCharacter,
+                            ...character,
+                            abilities: character?.abilities ?? prevCharacter?.abilities,
+                            ultimate: character?.ultimate ?? prevCharacter?.ultimate
+                        };
+                        return [name, enrichCharacterAbilities(mergedCharacter)];
+                    })
+                );
+
+                return {
+                    ...prevChars,
+                    ...normalizedUpdates
+                };
+            });
         };
 
         const handleActiveEffectsUpdated = (updatedEffects) => {
@@ -427,8 +468,8 @@ function Main() {
     const handleGridClick = (row, col) => {
         console.log('[GRID CLICK]', { row, col, isMyTurn, playerName, hasCharacter: !!currentPlayerCharacter });
         
-        if (!isMyTurn) {
-            console.log('[GRID CLICK] Blocked - not my turn');
+        if (!isMyTurn || !isPlayerAlive) {
+            console.log('[GRID CLICK] Blocked - not my turn or player is dead');
             return;
         }
         
@@ -724,8 +765,8 @@ function Main() {
     const handleAbilityClick = (ability) => {
         console.log('[ABILITY CLICK] Ability clicked:', ability.name, 'ID:', ability.id);
         
-        if (!isMyTurn || actionUsed) {
-            console.log('[ABILITY CLICK] Blocked - isMyTurn:', isMyTurn, 'actionUsed:', actionUsed);
+        if (!isMyTurn || actionUsed || !isPlayerAlive) {
+            console.log('[ABILITY CLICK] Blocked - isMyTurn:', isMyTurn, 'actionUsed:', actionUsed, 'isPlayerAlive:', isPlayerAlive);
             return;
         }
         
@@ -1058,6 +1099,41 @@ function Main() {
   
     return (
         <div className="main-game-container">
+        {showYouDiedScreen && (
+            <div className="you-died-screen">
+                <div className="you-died-content">
+                    <h1>YOU DIED</h1>
+                </div>
+            </div>
+        )}
+        
+        {gameOver && (
+            <div className="game-over-overlay">
+                <div className="game-over-screen">
+                    <h1>GAME OVER</h1>
+                    <p>All team members have fallen. The mission is lost</p>
+                    <div className="game-over-buttons">
+                        <button 
+                            className="game-over-button"
+                            onClick={() => {
+                                setGamePhase('character-select');
+                            }}
+                        >
+                            New Game
+                        </button>
+                        <button 
+                            className="game-over-button"
+                            onClick={() => {
+                                setGamePhase('home');
+                            }}
+                        >
+                            Quit
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+        
         <div className="scene-name">
             <h2>Location</h2>
             <h2>
@@ -1223,9 +1299,9 @@ function Main() {
                     <div className="weapon-section">
                         <h4>Weapon</h4>
                         <div 
-                            className={`weapon-card ${weaponSelected ? 'weapon-selected' : ''} ${actionUsed ? 'weapon-disabled' : ''}`}
-                            onClick={() => isMyTurn && !actionUsed && setWeaponSelected(!weaponSelected)}
-                            style={{ cursor: isMyTurn && !actionUsed ? 'pointer' : 'not-allowed' }}
+                            className={`weapon-card ${weaponSelected ? 'weapon-selected' : ''} ${actionUsed || !isPlayerAlive ? 'weapon-disabled' : ''}`}
+                            onClick={() => isMyTurn && !actionUsed && isPlayerAlive && setWeaponSelected(!weaponSelected)}
+                            style={{ cursor: (isMyTurn && !actionUsed && isPlayerAlive) ? 'pointer' : 'not-allowed' }}
                         >
                             <div className="weapon-info">
                                 <div className="weapon-name">{currentPlayerCharacter.weapon.name}</div>
@@ -1242,6 +1318,7 @@ function Main() {
                                 const currentCooldown = cooldowns[ability.id] || 0;
                                 const isOnCooldown = currentCooldown > 0;
                                 const isSelected = selectedAbility === ability.id;
+                                const range = ability.range === 1 ? "Melee" : ability.range;  
                                 
                                 return (
                                     <button 
@@ -1252,18 +1329,16 @@ function Main() {
                                         } ${
                                             isSelected ? 'ability-selected' : ''
                                         }`}
-                                        disabled={!isMyTurn || isOnCooldown || actionUsed}
+                                        disabled={!isMyTurn || isOnCooldown || actionUsed || !isPlayerAlive}
                                     >
                                         <div className="ability-header">
                                             <div className="ability-name">{ability.name}</div>
                                             <div className="ability-cd">
                                                 {isOnCooldown ? currentCooldown : `CD: ${ability.cooldown}`}
-                                            </div>
-                                            {ability.range && (
                                                 <div className="ability-range">
-                                                    {ability.range === 1 ? "Melee" : ability.range}
+                                                    {range}
                                                 </div>
-                                            )}
+                                            </div>
                                         </div>
                                         <div className="ability-desc">{ability.description}</div>
                                     </button>
@@ -1276,7 +1351,7 @@ function Main() {
                         <h4>Ultimate</h4>
                         <button 
                             className="ultimate-card" 
-                            disabled={!isMyTurn || actionUsed}
+                            disabled={!isMyTurn || actionUsed || !isPlayerAlive}
                             onClick={() => {
                                 console.log('[ULTIMATE CLICK] Ultimate clicked:', currentPlayerCharacter.ultimate);
                                 handleAbilityClick(currentPlayerCharacter.ultimate);

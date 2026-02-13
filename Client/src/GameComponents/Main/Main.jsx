@@ -7,7 +7,7 @@ import { getAbility, executeAbility, applyAbilityEffects, tickCooldowns, tickAct
 import './Main.css';
 
 function Main() {
-    const { players, playerCharacters, setPlayerCharacters, playerName, room, socket, attributeAllocations, setGamePhase, isMyTurn, currentTurn, enemies, setEnemies, turnOrder, setTurnOrder } = useGameContext();
+    const { players, playerCharacters, setPlayerCharacters, playerName, room, socket, attributeAllocations, setGamePhase, isMyTurn, currentTurn, enemies, setEnemies, turnOrder, setTurnOrder, isAdmin } = useGameContext();
     const [currentPlayerCharacter, setCurrentPlayerCharacter] = useState(null);
     const [ultimateReady, setUltimateReady] = useState(false);
     const [characterPositions, setCharacterPositions] = useState({});
@@ -19,6 +19,27 @@ function Main() {
     const [turnStartPosition, setTurnStartPosition] = useState(null);
     const [movementUsed, setMovementUsed] = useState(0);
     const [actionUsed, setActionUsed] = useState(false);
+    const [aiLog, setAiLog] = useState([]);
+    const [aiInput, setAiInput] = useState('');
+    const [aiBusy, setAiBusy] = useState(false);
+    const [pendingFactionChoice, setPendingFactionChoice] = useState(false);
+    const [pendingPostEncounterChoice, setPendingPostEncounterChoice] = useState(false);
+    const [pendingNextEncounterChoice, setPendingNextEncounterChoice] = useState(false);
+    const aiLogRef = useRef(null);
+    const hasRequestedIntroRef = useRef(false);
+    const pendingStartCombatRef = useRef(false);
+
+    const getDecisionOwner = (requiredAttribute) => {
+        if (!requiredAttribute) return null;
+        const owner = players.find(player => attributeAllocations[player]?.[0] === requiredAttribute);
+        return owner || null;
+    };
+
+    const canPlayerDecide = (requiredAttribute) => {
+        const owner = getDecisionOwner(requiredAttribute);
+        if (!owner) return isAdmin;
+        return owner === playerName;
+    };
 
     // Refs to track latest state values for handleEndTurn
     const activeEffectsRef = useRef(activeEffects);
@@ -38,6 +59,66 @@ function Main() {
         enemiesRef.current = enemies;
     }, [enemies]);
 
+    const appendAiLog = (entry) => {
+        const logEntry = {
+            id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            role: entry.role,
+            text: entry.text,
+            eventType: entry.eventType || 'chat'
+        };
+        setAiLog(prev => [...prev, logEntry]);
+    };
+
+    const emitAiEvent = (eventType, message, data = {}, options = {}) => {
+        if (!room) return;
+        setAiBusy(true);
+        socket.emit('ai_request', {
+            room,
+            eventType,
+            message,
+            data,
+            scenarioType: options.scenarioType,
+            characterName: currentPlayerCharacter?.name,
+            playerName
+        });
+    };
+
+    const handleAiChatSubmit = (event) => {
+        event.preventDefault();
+        const trimmed = aiInput.trim();
+        if (!trimmed) return;
+
+        appendAiLog({ role: 'user', text: trimmed, eventType: 'chat' });
+        emitAiEvent('chat', trimmed, { playerName });
+        setAiInput('');
+    };
+
+    const handleFactionChoice = (choice) => {
+        if (!canPlayerDecide('politician')) return;
+        setPendingFactionChoice(false);
+        pendingStartCombatRef.current = true;
+        emitAiEvent('choice_made', `The party chooses to fight with ${choice}.`, { choice });
+    };
+
+    const handlePostEncounterChoice = (choice) => {
+        const requiredAttribute = choice === 'shop' ? 'banker' : 'navigator';
+        if (!canPlayerDecide(requiredAttribute)) return;
+        setPendingPostEncounterChoice(false);
+        if (choice === 'shop') {
+            emitAiEvent('shop_intro', 'The party heads to the shop after the encounter.', { choice });
+        } else {
+            pendingStartCombatRef.current = true;
+            emitAiEvent('next_encounter', 'The party pushes onward to the next encounter.', { choice });
+        }
+    };
+
+    const handleNextEncounter = () => {
+        if (!canPlayerDecide('navigator')) return;
+        setPendingNextEncounterChoice(false);
+        pendingStartCombatRef.current = true;
+        emitAiEvent('next_encounter', 'Leaving the shop, the party moves toward the next encounter.', { choice: 'next_encounter' });
+    };
+
     useEffect(() => {
         if (playerCharacters[playerName]) {
             setCurrentPlayerCharacter(playerCharacters[playerName]);
@@ -47,6 +128,83 @@ function Main() {
             console.warn('[CHARACTER MISSING] Available characters:', Object.keys(playerCharacters));
         }
     }, [playerCharacters, playerName]);
+
+    useEffect(() => {
+        if (aiLogRef.current) {
+            aiLogRef.current.scrollTop = aiLogRef.current.scrollHeight;
+        }
+    }, [aiLog]);
+
+    useEffect(() => {
+        if (!isAdmin || !room || hasRequestedIntroRef.current) return;
+        if (players.length === 0) return;
+
+        hasRequestedIntroRef.current = true;
+        const partySummary = players.map(player => {
+            const character = playerCharacters[player];
+            return character ? `${player} (${character.name})` : player;
+        });
+
+        emitAiEvent(
+            'game_start',
+            `Launch the story for party: ${partySummary.join(', ')}.`,
+            { party: partySummary },
+            { scenarioType: 'street_encounter' }
+        );
+    }, [isAdmin, room, players, playerCharacters]);
+
+    useEffect(() => {
+        const handleAiMessage = ({ eventType, response }) => {
+            setAiBusy(false);
+            appendAiLog({ role: 'ai', text: response, eventType });
+
+            if (eventType === 'game_start') {
+                setPendingFactionChoice(true);
+            }
+
+            if (eventType === 'choice_made') {
+                if (pendingStartCombatRef.current && isAdmin) {
+                    pendingStartCombatRef.current = false;
+                    handleStoryComplete();
+                }
+            }
+
+            if (eventType === 'encounter_end') {
+                setPendingPostEncounterChoice(true);
+            }
+
+            if (eventType === 'shop_intro') {
+                setPendingNextEncounterChoice(true);
+            }
+
+            if (eventType === 'next_encounter') {
+                if (pendingStartCombatRef.current && isAdmin) {
+                    pendingStartCombatRef.current = false;
+                    handleStoryComplete();
+                }
+            }
+        };
+
+        const handleAiError = ({ error }) => {
+            setAiBusy(false);
+            appendAiLog({ role: 'system', text: `AI error: ${error}`, eventType: 'error' });
+        };
+
+        const handleCombatEnded = () => {
+            if (!isAdmin) return;
+            emitAiEvent('encounter_end', 'The encounter has ended.', { room });
+        };
+
+        socket.on('ai_message', handleAiMessage);
+        socket.on('ai_error', handleAiError);
+        socket.on('combat_ended', handleCombatEnded);
+
+        return () => {
+            socket.off('ai_message', handleAiMessage);
+            socket.off('ai_error', handleAiError);
+            socket.off('combat_ended', handleCombatEnded);
+        };
+    }, [socket, isAdmin, room, playerName, players, playerCharacters]);
 
     // Reset movement tracking when turn starts
     useEffect(() => {
@@ -202,6 +360,16 @@ function Main() {
                     path: path,
                     stepDelay: stepDelay
                 });
+
+                if (!turnAction.target) {
+                    setTimeout(() => {
+                        emitAiEvent(
+                            'turn_action',
+                            `${enemy.name} advances across the grid, scanning for a target.`,
+                            { actor: enemy.name, actionType: 'enemy_move', to: endPos }
+                        );
+                    }, movementDelay);
+                }
             }
 
             // Apply damage after movement delay
@@ -211,6 +379,17 @@ function Main() {
                 if (target) {
                     let damageAmount = Math.max(1, (enemy.stats.strength / 10) * enemy.weapon.damage - (target.stats.resistance / 10));
                     console.log(`${enemy.name} attacks ${turnAction.target} for ${damageAmount.toFixed(1)} damage!`);
+
+                    emitAiEvent(
+                        'turn_action',
+                        `${enemy.name} closes in and attacks ${turnAction.target} for ${damageAmount.toFixed(1)} damage.`,
+                        {
+                            actor: enemy.name,
+                            target: turnAction.target,
+                            damage: Number(damageAmount.toFixed(1)),
+                            actionType: 'enemy_attack'
+                        }
+                    );
                     
                     // Check for health buffs (bonus health) - consume them first
                     const healthBuffs = activeEffects.filter(e => 
@@ -576,6 +755,18 @@ function Main() {
                     damage: damage.toFixed(1),
                     newHealth: Math.max(0, newHealth).toFixed(1)
                 });
+
+                emitAiEvent(
+                    'turn_action',
+                    `${currentPlayerCharacter.name} fires ${currentPlayerCharacter.weapon.name} at ${enemy.name}, dealing ${damage.toFixed(1)} damage.`,
+                    {
+                        actor: currentPlayerCharacter.name,
+                        target: enemy.name,
+                        weapon: currentPlayerCharacter.weapon.name,
+                        damage: Number(damage.toFixed(1)),
+                        actionType: 'weapon_attack'
+                    }
+                );
                 
                 // Update enemy health
                 const updatedEnemies = enemies.map(e => 
@@ -786,6 +977,17 @@ function Main() {
         }
         
         console.log('✨ Ability executed:', result.message);
+
+        emitAiEvent(
+            'turn_action',
+            `${currentPlayerCharacter?.name || playerName} uses ${abilityId}: ${result.message}`,
+            {
+                actor: currentPlayerCharacter?.name || playerName,
+                abilityId,
+                target,
+                actionType: 'ability'
+            }
+        );
         
         // Apply effects to game state
         const updates = applyAbilityEffects(result, {
@@ -891,6 +1093,17 @@ function Main() {
         }
         
         console.log('Ability executed:', result.message);
+
+        emitAiEvent(
+            'turn_action',
+            `${currentPlayerCharacter?.name || playerName} unleashes ${abilityId}: ${result.message}`,
+            {
+                actor: currentPlayerCharacter?.name || playerName,
+                abilityId,
+                targets,
+                actionType: 'ability_multi'
+            }
+        );
         
         // Apply effects to game state
         const updates = applyAbilityEffects(result, {
@@ -970,6 +1183,17 @@ function Main() {
         }
         
         console.log('✨ Ground-target ability executed:', result.message);
+
+        emitAiEvent(
+            'turn_action',
+            `${currentPlayerCharacter?.name || playerName} targets the ground with ${abilityId}: ${result.message}`,
+            {
+                actor: currentPlayerCharacter?.name || playerName,
+                abilityId,
+                targetPosition,
+                actionType: 'ability_ground'
+            }
+        );
         
         // Apply effects to game state
         const updates = applyAbilityEffects(result, {
@@ -1047,13 +1271,29 @@ function Main() {
             expiredEffects: activeEffectsRef.current.length - updatedEffects.length
         });
         
-        // Update all states independently
         setActiveEffects(updatedEffects);
         setPlayerCharacters(updatedCharacters);
         setEnemies(updatedEnemies);
         
         // Emit updated enemy states to server to maintain sync
         socket.emit('end_turn', { room, playerName, updatedEnemies });
+
+        if (!actionUsed && turnStartPosition && characterPositions[playerName]) {
+            const endPos = characterPositions[playerName];
+            const moved = endPos.row !== turnStartPosition.row || endPos.col !== turnStartPosition.col;
+            if (moved) {
+                emitAiEvent(
+                    'turn_action',
+                    `${currentPlayerCharacter?.name || playerName} repositions from (${turnStartPosition.row}, ${turnStartPosition.col}) to (${endPos.row}, ${endPos.col}) and ends the turn.`,
+                    {
+                        actor: currentPlayerCharacter?.name || playerName,
+                        from: turnStartPosition,
+                        to: endPos,
+                        actionType: 'movement'
+                    }
+                );
+            }
+        }
     };
   
     return (
@@ -1116,9 +1356,62 @@ function Main() {
         </div>
 
         <div className="AI-script">
-            <h3>AI Log goes here</h3>
+            <div className="ai-header">
+                <h3>AI Log</h3>
+                <span className={`ai-status ${aiBusy ? 'busy' : ''}`}>
+                    {aiBusy ? 'Thinking...' : 'Ready'}
+                </span>
+            </div>
+            <div className="ai-log" ref={aiLogRef}>
+                {aiLog.length === 0 ? (
+                    <div className="ai-empty">No AI narration yet.</div>
+                ) : (
+                    aiLog.map(entry => (
+                        <div key={entry.id} className={`ai-entry ${entry.role}`}>
+                            <span className="ai-role">{entry.role === 'user' ? 'You' : 'DM'}</span>
+                            <span className="ai-text">{entry.text}</span>
+                        </div>
+                    ))
+                )}
+            </div>
+            {pendingFactionChoice && (
+                <div className="ai-choices">
+                    <div className="ai-choice-owner">
+                        Decision owner: {getDecisionOwner('politician') || 'Admin'}
+                    </div>
+                    <button onClick={() => handleFactionChoice('the Enforcers')} disabled={!canPlayerDecide('politician')}>Fight with Enforcers</button>
+                    <button onClick={() => handleFactionChoice('the People of the City')} disabled={!canPlayerDecide('politician')}>Fight with the People of the City</button>
+                </div>
+            )}
+            {pendingPostEncounterChoice && (
+                <div className="ai-choices">
+                    <div className="ai-choice-owner">
+                        Shop decision: {getDecisionOwner('banker') || 'Admin'} | Travel decision: {getDecisionOwner('navigator') || 'Admin'}
+                    </div>
+                    <button onClick={() => handlePostEncounterChoice('shop')} disabled={!canPlayerDecide('banker')}>Go to Shop</button>
+                    <button onClick={() => handlePostEncounterChoice('next_encounter')} disabled={!canPlayerDecide('navigator')}>Next Encounter</button>
+                </div>
+            )}
+            {pendingNextEncounterChoice && (
+                <div className="ai-choices">
+                    <div className="ai-choice-owner">
+                        Travel decision: {getDecisionOwner('navigator') || 'Admin'}
+                    </div>
+                    <button onClick={handleNextEncounter} disabled={!canPlayerDecide('navigator')}>Next Encounter</button>
+                </div>
+            )}
+            <form className="ai-chat" onSubmit={handleAiChatSubmit}>
+                <input
+                    type="text"
+                    placeholder="Ask the DM about the story or NPCs..."
+                    value={aiInput}
+                    onChange={(event) => setAiInput(event.target.value)}
+                    disabled={aiBusy}
+                />
+                <button type="submit" disabled={aiBusy || !aiInput.trim()}>Send</button>
+            </form>
             {/* <button onClick={handleStoryComplete}>Combat</button> */}
-            <button onClick={handleLevelUp}>Level Up</button>
+            <button className="ai-debug" onClick={handleLevelUp}>Level Up</button>
         </div>
         <div className="inventory">
             {currentPlayerCharacter ? (

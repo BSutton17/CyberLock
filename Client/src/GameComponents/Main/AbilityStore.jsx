@@ -1247,6 +1247,7 @@ export const ABILITIES = {
         damageType: 'physical',
         damageScaling: 'strength', // Uses strength stat for damage
         abilityDamage: 15, // Base ability damage multiplier
+        range: 1,
         
         /**
          * @param {Object} params

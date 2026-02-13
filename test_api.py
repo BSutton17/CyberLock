@@ -10,12 +10,12 @@ BASE_URL = "http://localhost:8000"
 
 def test_health():
     """Test health endpoint"""
-    print("🔍 Testing health endpoint...")
+    print(" Testing health endpoint...")
     try:
         response = requests.get(f"{BASE_URL}/health")
         if response.status_code == 200:
             data = response.json()
-            print("✅ Health check passed!")
+            print(" Health check passed!")
             print(f"   Model loaded: {data['model_loaded']}")
             print(f"   GPU available: {data['gpu_available']}")
             if data.get('vram_stats'):
@@ -23,16 +23,16 @@ def test_health():
                 print(f"   VRAM: {vram['allocated_gb']:.1f}GB / {vram['total_gb']:.1f}GB")
             return True
         else:
-            print(f"❌ Health check failed: {response.status_code}")
+            print(f" Health check failed: {response.status_code}")
             return False
     except Exception as e:
-        print(f"❌ Could not connect to API: {e}")
+        print(f" Could not connect to API: {e}")
         print("   Make sure the API is running: python main.py")
         return False
 
 def test_chat():
     """Test chat endpoint"""
-    print("\n🎲 Testing chat endpoint...")
+    print("\n Testing chat endpoint...")
     
     session_id = f"test-{int(time.time())}"
     message = "I walk into a dimly lit bar in Watson. What do I see?"
@@ -53,24 +53,24 @@ def test_chat():
         
         if response.status_code == 200:
             data = response.json()
-            print("\n✅ Chat response received!")
+            print("\n Chat response received!")
             print(f"   Processing time: {data['processing_time']:.2f}s")
             print(f"   Memories used: {data['memories_used']}")
-            print(f"\n📜 DM Response:\n{'-'*60}")
+            print(f"\n DM Response:\n{'-'*60}")
             print(data['response'])
             print('-'*60)
             return True
         else:
-            print(f"❌ Chat failed: {response.status_code}")
+            print(f" Chat failed: {response.status_code}")
             print(f"   {response.text}")
             return False
     except Exception as e:
-        print(f"❌ Chat error: {e}")
+        print(f" Chat error: {e}")
         return False
 
 def test_memory():
     """Test memory endpoints"""
-    print("\n🧠 Testing memory system...")
+    print("\n Testing memory system...")
     
     session_id = f"test-{int(time.time())}"
     
@@ -89,12 +89,12 @@ def test_memory():
         
         if response.status_code == 200:
             data = response.json()
-            print(f"   ✅ Memory added: {data['memory_id'][:8]}...")
+            print(f"   Memory added: {data['memory_id'][:8]}...")
         else:
-            print(f"   ❌ Failed to add memory: {response.status_code}")
+            print(f"   Failed to add memory: {response.status_code}")
             return False
     except Exception as e:
-        print(f"   ❌ Error adding memory: {e}")
+        print(f"   Error adding memory: {e}")
         return False
     
     # Retrieve memory
@@ -111,40 +111,37 @@ def test_memory():
         
         if response.status_code == 200:
             data = response.json()
-            print(f"   ✅ Retrieved {data['count']} memories")
+            print(f"   Retrieved {data['count']} memories")
             return True
         else:
-            print(f"   ❌ Failed to retrieve memories: {response.status_code}")
+            print(f"   Failed to retrieve memories: {response.status_code}")
             return False
     except Exception as e:
-        print(f"   ❌ Error retrieving memories: {e}")
+        print(f"   Error retrieving memories: {e}")
         return False
 
 def main():
     print("=" * 60)
-    print("🎮 Cyberpunk DM AI - Quick Test")
+    print(" Cyberpunk DM AI - Quick Test")
     print("=" * 60)
     
     # Test health
     if not test_health():
-        print("\n❌ Cannot proceed - API is not responding")
+        print("\n Cannot proceed - API is not responding")
         return
     
     # Test chat
     if not test_chat():
-        print("\n⚠️ Chat test failed")
+        print("\nChat test failed")
     
     # Test memory
     if not test_memory():
-        print("\n⚠️ Memory test failed")
+        print("\nMemory test failed")
     
     print("\n" + "=" * 60)
-    print("✅ Testing complete!")
+    print(" Testing complete!")
     print("=" * 60)
-    print("\n📚 Next steps:")
-    print("   1. Integrate with your webapp")
-    print("   2. Customize prompts in app/prompts.py")
-    print("   3. Check out API docs: http://localhost:8000/docs")
+    print("   API docs: http://localhost:8000/docs")
 
 if __name__ == "__main__":
     main()

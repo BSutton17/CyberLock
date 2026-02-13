@@ -1,6 +1,7 @@
 import React from 'react';
 import { useEffect } from 'react';
 import { useGameContext } from './Context.jsx';
+import { enrichCharacterAbilities } from '../Utils/characterUtils';
 
 function Events(){
 
@@ -26,7 +27,13 @@ function Events(){
         });
 
         socket.on("update_character_selections", (selections) => {
-          setPlayerCharacters(selections);
+          const normalizedSelections = Object.fromEntries(
+            Object.entries(selections).map(([name, character]) => [
+              name,
+              enrichCharacterAbilities(character)
+            ])
+          );
+          setPlayerCharacters(normalizedSelections);
         });
 
         socket.on("update_ready_status", (readyList) => {
@@ -50,7 +57,13 @@ function Events(){
           
           // Update character selections to ensure all players have current data
           if (characterSelections) {
-            setPlayerCharacters(characterSelections);
+            const normalizedSelections = Object.fromEntries(
+              Object.entries(characterSelections).map(([name, character]) => [
+                name,
+                enrichCharacterAbilities(character)
+              ])
+            );
+            setPlayerCharacters(normalizedSelections);
           }
           
           setEnemies(enemies);

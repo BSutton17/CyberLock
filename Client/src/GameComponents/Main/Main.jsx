@@ -141,6 +141,13 @@ function Main() {
     }, [aiLog]);
 
     useEffect(() => {
+        if (aiLog.length > 0) {
+            const latestEntry = aiLog[aiLog.length - 1];
+            setAiText(latestEntry.text);
+        }
+    }, [aiLog]);
+
+    useEffect(() => {
         if (!isAdmin || !room || hasRequestedIntroRef.current) return;
         if (players.length === 0) return;
 
@@ -1446,9 +1453,9 @@ function Main() {
                     <div className="ai-empty">No AI narration yet.</div>
                 ) : (
                     aiLog.map(entry => (
-                        setAiText(entry.text),
                         <div key={entry.id} className={`ai-entry ${entry.role}`}>
                             <span className="ai-role">{entry.role === 'user' ? 'You' : 'DM'}</span>
+                            <span className="ai-text">{entry.text}</span>
                         </div>
                     ))
                 )}

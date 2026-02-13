@@ -280,7 +280,6 @@ h3, h4, p {
     max-height: 20vh;
     overflow-y: auto;
     gap: 0.5rem;
-    border: 1px solid green;
 }
 
 .AI-script{
@@ -291,7 +290,7 @@ h3, h4, p {
 .Response{
     display: flex;
     flex-direction: column;
-    width: 200vw;
+    width: 100vw;
     height: 100%;
 }
 

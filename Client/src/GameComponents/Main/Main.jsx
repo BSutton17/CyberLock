@@ -4,10 +4,11 @@ import { useGameContext } from '../../Components/Context';
 import EnemiesData from '../../Components/Enemies.json';
 import { executeEnemyTurn } from './EnemyCombat';
 import { getAbility, executeAbility, applyAbilityEffects, tickCooldowns, tickActiveEffects, calculateTotalStat, getStatBonuses } from './AbilityLogic';
+import { enrichCharacterAbilities } from '../../Utils/characterUtils';
 import './Main.css';
 
 function Main() {
-    const { players, playerCharacters, setPlayerCharacters, playerName, room, socket, attributeAllocations, setGamePhase, isMyTurn, currentTurn, enemies, setEnemies, turnOrder, setTurnOrder } = useGameContext();
+    const { players, playerCharacters, setPlayerCharacters, playerName, room, socket, attributeAllocations, setGamePhase, isMyTurn, currentTurn, enemies, setEnemies, turnOrder, setTurnOrder, isAdmin } = useGameContext();
     const [currentPlayerCharacter, setCurrentPlayerCharacter] = useState(null);
     const [ultimateReady, setUltimateReady] = useState(false);
     const [characterPositions, setCharacterPositions] = useState({});
@@ -19,6 +20,31 @@ function Main() {
     const [turnStartPosition, setTurnStartPosition] = useState(null);
     const [movementUsed, setMovementUsed] = useState(0);
     const [actionUsed, setActionUsed] = useState(false);
+    const [aiLog, setAiLog] = useState([]);
+    const [aiInput, setAiInput] = useState('');
+    const [aiBusy, setAiBusy] = useState(false);
+    const [pendingFactionChoice, setPendingFactionChoice] = useState(false);
+    const [pendingPostEncounterChoice, setPendingPostEncounterChoice] = useState(false);
+    const [pendingNextEncounterChoice, setPendingNextEncounterChoice] = useState(false);
+    const [aiText, setAiText] = useState('');
+    const aiLogRef = useRef(null);
+    const hasRequestedIntroRef = useRef(false);
+    const pendingStartCombatRef = useRef(false);
+   
+
+    const getDecisionOwner = (requiredAttribute) => {
+        if (!requiredAttribute) return null;
+        const owner = players.find(player => attributeAllocations[player]?.[0] === requiredAttribute);
+        return owner || null;
+    };
+
+    const canPlayerDecide = (requiredAttribute) => {
+        const owner = getDecisionOwner(requiredAttribute);
+        if (!owner) return isAdmin;
+        return owner === playerName;
+    };
+    const [showYouDiedScreen, setShowYouDiedScreen] = useState(false);
+    const [gameOver, setGameOver] = useState(false);
 
     // Refs to track latest state values for handleEndTurn
     const activeEffectsRef = useRef(activeEffects);
@@ -38,6 +64,66 @@ function Main() {
         enemiesRef.current = enemies;
     }, [enemies]);
 
+    const appendAiLog = (entry) => {
+        const logEntry = {
+            id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            role: entry.role,
+            text: entry.text,
+            eventType: entry.eventType || 'chat'
+        };
+        setAiLog(prev => [...prev, logEntry]);
+    };
+
+    const emitAiEvent = (eventType, message, data = {}, options = {}) => {
+        if (!room) return;
+        setAiBusy(true);
+        socket.emit('ai_request', {
+            room,
+            eventType,
+            message,
+            data,
+            scenarioType: options.scenarioType,
+            characterName: currentPlayerCharacter?.name,
+            playerName
+        });
+    };
+
+    const handleAiChatSubmit = (event) => {
+        event.preventDefault();
+        const trimmed = aiInput.trim();
+        if (!trimmed) return;
+
+        appendAiLog({ role: 'user', text: trimmed, eventType: 'chat' });
+        emitAiEvent('chat', trimmed, { playerName });
+        setAiInput('');
+    };
+
+    const handleFactionChoice = (choice) => {
+        if (!canPlayerDecide('politician')) return;
+        setPendingFactionChoice(false);
+        pendingStartCombatRef.current = true;
+        emitAiEvent('choice_made', `The party chooses to fight with ${choice}.`, { choice });
+    };
+
+    const handlePostEncounterChoice = (choice) => {
+        const requiredAttribute = choice === 'shop' ? 'banker' : 'navigator';
+        if (!canPlayerDecide(requiredAttribute)) return;
+        setPendingPostEncounterChoice(false);
+        if (choice === 'shop') {
+            emitAiEvent('shop_intro', 'The party heads to the shop after the encounter.', { choice });
+        } else {
+            pendingStartCombatRef.current = true;
+            emitAiEvent('next_encounter', 'The party pushes onward to the next encounter.', { choice });
+        }
+    };
+
+    const handleNextEncounter = () => {
+        if (!canPlayerDecide('navigator')) return;
+        setPendingNextEncounterChoice(false);
+        pendingStartCombatRef.current = true;
+        emitAiEvent('next_encounter', 'Leaving the shop, the party moves toward the next encounter.', { choice: 'next_encounter' });
+    };
+
     useEffect(() => {
         if (playerCharacters[playerName]) {
             setCurrentPlayerCharacter(playerCharacters[playerName]);
@@ -47,6 +133,90 @@ function Main() {
             console.warn('[CHARACTER MISSING] Available characters:', Object.keys(playerCharacters));
         }
     }, [playerCharacters, playerName]);
+
+    useEffect(() => {
+        if (aiLogRef.current) {
+            aiLogRef.current.scrollTop = aiLogRef.current.scrollHeight;
+        }
+    }, [aiLog]);
+
+    useEffect(() => {
+        if (aiLog.length > 0) {
+            const latestEntry = aiLog[aiLog.length - 1];
+            setAiText(latestEntry.text);
+        }
+    }, [aiLog]);
+
+    useEffect(() => {
+        if (!isAdmin || !room || hasRequestedIntroRef.current) return;
+        if (players.length === 0) return;
+
+        hasRequestedIntroRef.current = true;
+        const partySummary = players.map(player => {
+            const character = playerCharacters[player];
+            return character ? `${player} (${character.name})` : player;
+        });
+
+        emitAiEvent(
+            'game_start',
+            `Launch the story for party: ${partySummary.join(', ')}.`,
+            { party: partySummary },
+            { scenarioType: 'street_encounter' }
+        );
+    }, [isAdmin, room, players, playerCharacters]);
+
+    useEffect(() => {
+        const handleAiMessage = ({ eventType, response }) => {
+            setAiBusy(false);
+            appendAiLog({ role: 'ai', text: response, eventType });
+
+            if (eventType === 'game_start') {
+                setPendingFactionChoice(true);
+            }
+
+            if (eventType === 'choice_made') {
+                if (pendingStartCombatRef.current && isAdmin) {
+                    pendingStartCombatRef.current = false;
+                    handleStoryComplete();
+                }
+            }
+
+            if (eventType === 'encounter_end') {
+                setPendingPostEncounterChoice(true);
+            }
+
+            if (eventType === 'shop_intro') {
+                setPendingNextEncounterChoice(true);
+            }
+
+            if (eventType === 'next_encounter') {
+                if (pendingStartCombatRef.current && isAdmin) {
+                    pendingStartCombatRef.current = false;
+                    handleStoryComplete();
+                }
+            }
+        };
+
+        const handleAiError = ({ error }) => {
+            setAiBusy(false);
+            appendAiLog({ role: 'system', text: `AI error: ${error}`, eventType: 'error' });
+        };
+
+        const handleCombatEnded = () => {
+            if (!isAdmin) return;
+            emitAiEvent('encounter_end', 'The encounter has ended.', { room });
+        };
+
+        socket.on('ai_message', handleAiMessage);
+        socket.on('ai_error', handleAiError);
+        socket.on('combat_ended', handleCombatEnded);
+
+        return () => {
+            socket.off('ai_message', handleAiMessage);
+            socket.off('ai_error', handleAiError);
+            socket.off('combat_ended', handleCombatEnded);
+        };
+    }, [socket, isAdmin, room, playerName, players, playerCharacters]);
 
     // Reset movement tracking when turn starts
     useEffect(() => {
@@ -65,6 +235,9 @@ function Main() {
             console.error('[TURN DEBUG] All positions:', characterPositions);
         }
     }, [isMyTurn, playerName]);
+
+    // Check if current player is alive
+    const isPlayerAlive = currentPlayerCharacter && currentPlayerCharacter.stats.health > 0;
 
     const generateEnemies = () => {
         const genericEnemies = EnemiesData.enemies.filter(e => e.tier === 'generic');
@@ -202,6 +375,16 @@ function Main() {
                     path: path,
                     stepDelay: stepDelay
                 });
+
+                if (!turnAction.target) {
+                    setTimeout(() => {
+                        emitAiEvent(
+                            'turn_action',
+                            `${enemy.name} advances across the grid, scanning for a target.`,
+                            { actor: enemy.name, actionType: 'enemy_move', to: endPos }
+                        );
+                    }, movementDelay);
+                }
             }
 
             // Apply damage after movement delay
@@ -211,6 +394,17 @@ function Main() {
                 if (target) {
                     let damageAmount = Math.max(1, (enemy.stats.strength / 10) * enemy.weapon.damage - (target.stats.resistance / 10));
                     console.log(`${enemy.name} attacks ${turnAction.target} for ${damageAmount.toFixed(1)} damage!`);
+
+                    emitAiEvent(
+                        'turn_action',
+                        `${enemy.name} closes in and attacks ${turnAction.target} for ${damageAmount.toFixed(1)} damage.`,
+                        {
+                            actor: enemy.name,
+                            target: turnAction.target,
+                            damage: Number(damageAmount.toFixed(1)),
+                            actionType: 'enemy_attack'
+                        }
+                    );
                     
                     // Check for health buffs (bonus health) - consume them first
                     const healthBuffs = activeEffects.filter(e => 
@@ -267,10 +461,29 @@ function Main() {
                     };
                     setPlayerCharacters(updatedPlayerCharacters);
                     
-                    // Remove dead player from turn order
+                    // Remove dead player from turn order and handle death
                     if (newHealth <= 0) {
                         console.log(`Player ${turnAction.target} has died! Removing from turn order.`);
                         setTurnOrder(prevOrder => prevOrder.filter(turn => turn.id !== turnAction.target));
+                        
+                        // Show "You Died" screen if this is the current player
+                        if (turnAction.target === playerName) {
+                            setShowYouDiedScreen(true);
+                            setTimeout(() => {
+                                setShowYouDiedScreen(false);
+                            }, 2500); // Show for 2.5 seconds
+                        }
+                        
+                        // Check if all players are dead
+                        const remainingPlayers = players.filter(p => p !== turnAction.target);
+                        const allPlayersDeadCheck = remainingPlayers.every(p => 
+                            updatedPlayerCharacters[p]?.stats.health <= 0
+                        );
+                        
+                        if (allPlayersDeadCheck) {
+                            console.log('All players defeated! Game Over.');
+                            setGameOver(true);
+                        }
                     }
                     
                     // Emit to server to sync player health and active effects
@@ -308,10 +521,26 @@ function Main() {
 
         const handleCharactersUpdated = (updatedCharacters) => {
             console.log('[CHARACTERS UPDATED] Received from server:', updatedCharacters);
-            setPlayerCharacters(prevChars => ({
-                ...prevChars,
-                ...updatedCharacters
-            }));
+            if (!updatedCharacters) return;
+            setPlayerCharacters(prevChars => {
+                const normalizedUpdates = Object.fromEntries(
+                    Object.entries(updatedCharacters).map(([name, character]) => {
+                        const prevCharacter = prevChars[name] || {};
+                        const mergedCharacter = {
+                            ...prevCharacter,
+                            ...character,
+                            abilities: character?.abilities ?? prevCharacter?.abilities,
+                            ultimate: character?.ultimate ?? prevCharacter?.ultimate
+                        };
+                        return [name, enrichCharacterAbilities(mergedCharacter)];
+                    })
+                );
+
+                return {
+                    ...prevChars,
+                    ...normalizedUpdates
+                };
+            });
         };
 
         const handleActiveEffectsUpdated = (updatedEffects) => {
@@ -427,8 +656,8 @@ function Main() {
     const handleGridClick = (row, col) => {
         console.log('[GRID CLICK]', { row, col, isMyTurn, playerName, hasCharacter: !!currentPlayerCharacter });
         
-        if (!isMyTurn) {
-            console.log('[GRID CLICK] Blocked - not my turn');
+        if (!isMyTurn || !isPlayerAlive) {
+            console.log('[GRID CLICK] Blocked - not my turn or player is dead');
             return;
         }
         
@@ -576,6 +805,18 @@ function Main() {
                     damage: damage.toFixed(1),
                     newHealth: Math.max(0, newHealth).toFixed(1)
                 });
+
+                emitAiEvent(
+                    'turn_action',
+                    `${currentPlayerCharacter.name} fires ${currentPlayerCharacter.weapon.name} at ${enemy.name}, dealing ${damage.toFixed(1)} damage.`,
+                    {
+                        actor: currentPlayerCharacter.name,
+                        target: enemy.name,
+                        weapon: currentPlayerCharacter.weapon.name,
+                        damage: Number(damage.toFixed(1)),
+                        actionType: 'weapon_attack'
+                    }
+                );
                 
                 // Update enemy health
                 const updatedEnemies = enemies.map(e => 
@@ -713,6 +954,10 @@ function Main() {
         socket.emit('start_combat', { room, generatedEnemies });
     }
 
+    function handleLevelUp(){
+        socket.emit('level_up', {room});
+    }
+
     function handleCombatComplete(rewards) {
         socket.emit('combat_complete', { room, rewards });    
     }
@@ -720,8 +965,8 @@ function Main() {
     const handleAbilityClick = (ability) => {
         console.log('[ABILITY CLICK] Ability clicked:', ability.name, 'ID:', ability.id);
         
-        if (!isMyTurn || actionUsed) {
-            console.log('[ABILITY CLICK] Blocked - isMyTurn:', isMyTurn, 'actionUsed:', actionUsed);
+        if (!isMyTurn || actionUsed || !isPlayerAlive) {
+            console.log('[ABILITY CLICK] Blocked - isMyTurn:', isMyTurn, 'actionUsed:', actionUsed, 'isPlayerAlive:', isPlayerAlive);
             return;
         }
         
@@ -782,6 +1027,17 @@ function Main() {
         }
         
         console.log('✨ Ability executed:', result.message);
+
+        emitAiEvent(
+            'turn_action',
+            `${currentPlayerCharacter?.name || playerName} uses ${abilityId}: ${result.message}`,
+            {
+                actor: currentPlayerCharacter?.name || playerName,
+                abilityId,
+                target,
+                actionType: 'ability'
+            }
+        );
         
         // Apply effects to game state
         const updates = applyAbilityEffects(result, {
@@ -887,6 +1143,17 @@ function Main() {
         }
         
         console.log('Ability executed:', result.message);
+
+        emitAiEvent(
+            'turn_action',
+            `${currentPlayerCharacter?.name || playerName} unleashes ${abilityId}: ${result.message}`,
+            {
+                actor: currentPlayerCharacter?.name || playerName,
+                abilityId,
+                targets,
+                actionType: 'ability_multi'
+            }
+        );
         
         // Apply effects to game state
         const updates = applyAbilityEffects(result, {
@@ -966,6 +1233,17 @@ function Main() {
         }
         
         console.log('✨ Ground-target ability executed:', result.message);
+
+        emitAiEvent(
+            'turn_action',
+            `${currentPlayerCharacter?.name || playerName} targets the ground with ${abilityId}: ${result.message}`,
+            {
+                actor: currentPlayerCharacter?.name || playerName,
+                abilityId,
+                targetPosition,
+                actionType: 'ability_ground'
+            }
+        );
         
         // Apply effects to game state
         const updates = applyAbilityEffects(result, {
@@ -1043,17 +1321,68 @@ function Main() {
             expiredEffects: activeEffectsRef.current.length - updatedEffects.length
         });
         
-        // Update all states independently
         setActiveEffects(updatedEffects);
         setPlayerCharacters(updatedCharacters);
         setEnemies(updatedEnemies);
         
         // Emit updated enemy states to server to maintain sync
         socket.emit('end_turn', { room, playerName, updatedEnemies });
+
+        if (!actionUsed && turnStartPosition && characterPositions[playerName]) {
+            const endPos = characterPositions[playerName];
+            const moved = endPos.row !== turnStartPosition.row || endPos.col !== turnStartPosition.col;
+            if (moved) {
+                emitAiEvent(
+                    'turn_action',
+                    `${currentPlayerCharacter?.name || playerName} repositions from (${turnStartPosition.row}, ${turnStartPosition.col}) to (${endPos.row}, ${endPos.col}) and ends the turn.`,
+                    {
+                        actor: currentPlayerCharacter?.name || playerName,
+                        from: turnStartPosition,
+                        to: endPos,
+                        actionType: 'movement'
+                    }
+                );
+            }
+        }
     };
   
     return (
         <div className="main-game-container">
+        {showYouDiedScreen && (
+            <div className="you-died-screen">
+                <div className="you-died-content">
+                    <h1>YOU DIED</h1>
+                </div>
+            </div>
+        )}
+        
+        {gameOver && (
+            <div className="game-over-overlay">
+                <div className="game-over-screen">
+                    <h1>GAME OVER</h1>
+                    <p>All team members have fallen. The mission is lost</p>
+                    <div className="game-over-buttons">
+                        <button 
+                            className="game-over-button"
+                            onClick={() => {
+                                setGamePhase('character-select');
+                            }}
+                        >
+                            New Game
+                        </button>
+                        <button 
+                            className="game-over-button"
+                            onClick={() => {
+                                setGamePhase('home');
+                            }}
+                        >
+                            Quit
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+        
         <div className="scene-name">
             <h2>Location</h2>
             <h2>
@@ -1112,9 +1441,66 @@ function Main() {
         </div>
 
         <div className="AI-script">
-            <h3>AI Log goes here</h3>
+            <div className='Response'>
+            <div className="ai-header">
+                <h3>AI Log</h3>
+                <span className={`ai-status ${aiBusy ? 'busy' : ''}`}>
+                    {aiBusy ? 'Thinking...' : 'Ready'}
+                </span>
+            </div>
+            <div className="ai-log" ref={aiLogRef}>
+                {aiLog.length === 0 ? (
+                    <div className="ai-empty">No AI narration yet.</div>
+                ) : (
+                    aiLog.map(entry => (
+                        <div key={entry.id} className={`ai-entry ${entry.role}`}>
+                            <span className="ai-role">{entry.role === 'user' ? 'You' : 'DM'}</span>
+                            <span className="ai-text">{entry.text}</span>
+                        </div>
+                    ))
+                )}
+            </div>
+            {pendingFactionChoice && (
+                <div className="ai-choices">
+                    <div className="ai-choice-owner">
+                        Decision owner: {getDecisionOwner('politician') || 'Admin'}
+                    </div>
+                    <button onClick={() => handleFactionChoice('the Enforcers')} disabled={!canPlayerDecide('politician')}>Fight with Enforcers</button>
+                    <button onClick={() => handleFactionChoice('the People of the City')} disabled={!canPlayerDecide('politician')}>Fight with the People of the City</button>
+                </div>
+            )}
+            {pendingPostEncounterChoice && (
+                <div className="ai-choices">
+                    <div className="ai-choice-owner">
+                        Shop decision: {getDecisionOwner('banker') || 'Admin'} | Travel decision: {getDecisionOwner('navigator') || 'Admin'}
+                    </div>
+                    <button onClick={() => handlePostEncounterChoice('shop')} disabled={!canPlayerDecide('banker')}>Go to Shop</button>
+                    <button onClick={() => handlePostEncounterChoice('next_encounter')} disabled={!canPlayerDecide('navigator')}>Next Encounter</button>
+                </div>
+            )}
+            {pendingNextEncounterChoice && (
+                <div className="ai-choices">
+                    <div className="ai-choice-owner">
+                        Travel decision: {getDecisionOwner('navigator') || 'Admin'}
+                    </div>
+                    <button onClick={handleNextEncounter} disabled={!canPlayerDecide('navigator')}>Next Encounter</button>
+                </div>
+            )}
+            <form className="ai-chat" onSubmit={handleAiChatSubmit}>
+                <input
+                    type="text"
+                    placeholder="Ask the DM about the story or NPCs..."
+                    value={aiInput}
+                    onChange={(event) => setAiInput(event.target.value)}
+                    disabled={aiBusy}
+                />
+                <button type="submit" disabled={aiBusy || !aiInput.trim()}>Send</button>
+            </form>
             {/* <button onClick={handleStoryComplete}>Combat</button> */}
-        </div>
+            <button className="ai-debug" onClick={handleLevelUp}>Level Up</button>
+            </div>
+            <span className="ai-text">{aiText}</span>
+       </div>
         <div className="inventory">
             {currentPlayerCharacter ? (
                 <>
@@ -1218,9 +1604,9 @@ function Main() {
                     <div className="weapon-section">
                         <h4>Weapon</h4>
                         <div 
-                            className={`weapon-card ${weaponSelected ? 'weapon-selected' : ''} ${actionUsed ? 'weapon-disabled' : ''}`}
-                            onClick={() => isMyTurn && !actionUsed && setWeaponSelected(!weaponSelected)}
-                            style={{ cursor: isMyTurn && !actionUsed ? 'pointer' : 'not-allowed' }}
+                            className={`weapon-card ${weaponSelected ? 'weapon-selected' : ''} ${actionUsed || !isPlayerAlive ? 'weapon-disabled' : ''}`}
+                            onClick={() => isMyTurn && !actionUsed && isPlayerAlive && setWeaponSelected(!weaponSelected)}
+                            style={{ cursor: (isMyTurn && !actionUsed && isPlayerAlive) ? 'pointer' : 'not-allowed' }}
                         >
                             <div className="weapon-info">
                                 <div className="weapon-name">{currentPlayerCharacter.weapon.name}</div>
@@ -1237,6 +1623,7 @@ function Main() {
                                 const currentCooldown = cooldowns[ability.id] || 0;
                                 const isOnCooldown = currentCooldown > 0;
                                 const isSelected = selectedAbility === ability.id;
+                                const range = ability.range === 1 ? "Melee" : ability.range;  
                                 
                                 return (
                                     <button 
@@ -1247,18 +1634,16 @@ function Main() {
                                         } ${
                                             isSelected ? 'ability-selected' : ''
                                         }`}
-                                        disabled={!isMyTurn || isOnCooldown || actionUsed}
+                                        disabled={!isMyTurn || isOnCooldown || actionUsed || !isPlayerAlive}
                                     >
                                         <div className="ability-header">
                                             <div className="ability-name">{ability.name}</div>
                                             <div className="ability-cd">
                                                 {isOnCooldown ? currentCooldown : `CD: ${ability.cooldown}`}
-                                            </div>
-                                            {ability.range && (
                                                 <div className="ability-range">
-                                                    {ability.range === 1 ? "Melee" : ability.range}
+                                                    {range}
                                                 </div>
-                                            )}
+                                            </div>
                                         </div>
                                         <div className="ability-desc">{ability.description}</div>
                                     </button>
@@ -1271,7 +1656,7 @@ function Main() {
                         <h4>Ultimate</h4>
                         <button 
                             className="ultimate-card" 
-                            disabled={!isMyTurn || actionUsed}
+                            disabled={!isMyTurn || actionUsed || !isPlayerAlive}
                             onClick={() => {
                                 console.log('[ULTIMATE CLICK] Ultimate clicked:', currentPlayerCharacter.ultimate);
                                 handleAbilityClick(currentPlayerCharacter.ultimate);

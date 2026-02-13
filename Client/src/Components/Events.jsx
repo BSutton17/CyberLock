@@ -1,6 +1,7 @@
 import React from 'react';
 import { useEffect } from 'react';
 import { useGameContext } from './Context.jsx';
+import { enrichCharacterAbilities } from '../Utils/characterUtils';
 
 function Events(){
 
@@ -36,7 +37,13 @@ function Events(){
         });
 
         socket.on("update_character_selections", (selections) => {
-          setPlayerCharacters(selections);
+          const normalizedSelections = Object.fromEntries(
+            Object.entries(selections).map(([name, character]) => [
+              name,
+              enrichCharacterAbilities(character)
+            ])
+          );
+          setPlayerCharacters(normalizedSelections);
         });
 
         socket.on("update_ready_status", (readyList) => {
@@ -52,7 +59,7 @@ function Events(){
         });
 
         // Game phase transitions
-        socket.on("phase_changed_combat", ({ enemies, enemyPositions, turnOrder, currentTurn, characterSelections }) => {
+        socket.on("", ({ enemies, enemyPositions, turnOrder, currentTurn, characterSelections }) => {
           console.log('Combat Phase Started - Turn Order:', turnOrder);
           console.log('Received enemies:', enemies);
           console.log('Received enemy positions:', enemyPositions);
@@ -60,7 +67,13 @@ function Events(){
           
           // Update character selections to ensure all players have current data
           if (characterSelections) {
-            setPlayerCharacters(characterSelections);
+            const normalizedSelections = Object.fromEntries(
+              Object.entries(characterSelections).map(([name, character]) => [
+                name,
+                enrichCharacterAbilities(character)
+              ])
+            );
+            setPlayerCharacters(normalizedSelections);
           }
           
           setEnemies(enemies);
@@ -101,7 +114,11 @@ function Events(){
             }
           }));
         });
-    
+        
+        socket.on("level_up", () => {
+          setScreen("levelup");
+        });
+
         return () => {
           socket.off("updatePlayerList");
           socket.off("gameStarted");

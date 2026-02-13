@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useGameContext } from '../../Components/Context';
 import charactersData from '../../Components/Characters.json';
+import { enrichAllCharacters } from '../../Utils/characterUtils';
 import './CharacterSelect.css';
 
 function CharacterSelect() {
@@ -8,6 +9,8 @@ function CharacterSelect() {
     const [selectedFaction, setSelectedFaction] = useState('');
     const [selectedCharacter, setSelectedCharacter] = useState(null);
     const [displayClassInfo, setDisplayClassInfo] = useState(false);
+
+    const enrichedCharactersData = enrichAllCharacters(charactersData);
 
     const handleCharacterClick = (character) => {
         setSelectedCharacter(character);
@@ -88,8 +91,7 @@ function CharacterSelect() {
                             ))}
                         </div>
                         <div className='team-controls'>
-                            <button disabled={!playerCharacters[playerName]}>Confirm Character</button>
-                            <button onClick={handleRemoveFromTeam} disabled={!playerCharacters[playerName]}>Clear My Selection</button>
+                            <button onClick={handleRemoveFromTeam} disabled={!playerCharacters[playerName]}>Clear</button>
                         </div>
                     </div>
                 </div>
@@ -98,7 +100,7 @@ function CharacterSelect() {
                     <div className='characters-grid'>
                         <h3>Available Characters:</h3>
                         <div className='character-cards'>
-                            {charactersData.characters.map((character) => (
+                            {enrichedCharactersData.characters.map((character) => (
                                 <div 
                                     key={character.id} 
                                     className={`character-card ${selectedCharacter?.id === character.id ? 'selected' : ''}`}

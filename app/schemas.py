@@ -35,6 +35,31 @@ class ChatResponse(BaseModel):
     processing_time: float = Field(..., description="Processing time in seconds")
 
 
+class GameEventRequest(BaseModel):
+    """Request for a structured game event"""
+    session_id: str = Field(..., description="Unique session identifier")
+    event_type: str = Field(..., description="Event type (game_start, turn_action, encounter_end, shop_intro, chat)")
+    message: Optional[str] = Field(None, description="Event summary or player message")
+    data: Optional[Dict[str, Any]] = Field(None, description="Structured event data")
+    character_name: Optional[str] = Field(None, description="Player character name")
+    use_memory: bool = Field(True, description="Whether to use RAG memory retrieval")
+    scenario_type: Optional[str] = Field(None, description="Scenario type for system prompt")
+
+    # Generation parameters (optional overrides)
+    temperature: Optional[float] = Field(None, ge=0.0, le=2.0)
+    max_tokens: Optional[int] = Field(None, ge=50, le=4096)
+
+
+class GameEventResponse(BaseModel):
+    """Response from a structured game event"""
+    response: str = Field(..., description="AI's response")
+    session_id: str = Field(..., description="Session identifier")
+    event_type: str = Field(..., description="Event type")
+    tokens_generated: Optional[int] = Field(None, description="Number of tokens generated")
+    memories_used: int = Field(0, description="Number of memories retrieved")
+    processing_time: float = Field(..., description="Processing time in seconds")
+
+
 class MemoryItem(BaseModel):
     """Single memory item"""
     content: str = Field(..., description="Memory content")

@@ -8,6 +8,7 @@
         "ai ai ai" 
         "inventory inventory inventory";
     height: 100vh;
+    width: 100vw;
     max-width: 100vw;
     margin: 0 auto;
     background: #0e0e12;

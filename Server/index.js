@@ -10,6 +10,8 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const AI_API_URL = process.env.AI_API_URL || 'http://localhost:8000';
+const AI_API_KEY = process.env.AI_API_KEY || '';
 
 // Middleware
 app.use(cors({
@@ -63,6 +65,28 @@ let playerNames = {};
 let playerRooms = {};
 let combatSessions = {};
 
+async function requestAiNarration(payload) {
+  if (!AI_API_URL) {
+    throw new Error('AI_API_URL is not configured');
+  }
+
+  const response = await fetch(`${AI_API_URL}/game/event`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(AI_API_KEY ? { 'x-api-key': AI_API_KEY } : {})
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`AI API error ${response.status}: ${errorText}`);
+  }
+
+  return response.json();
+}
+
 function calculateTurnOrder(room) {
   const players = rooms[room]?.players || [];
   const enemies = combatSessions[room]?.enemies || [];
@@ -91,6 +115,32 @@ function calculateTurnOrder(room) {
 
 io.on('connection', (socket) => {
   console.log('A user connected');
+
+  socket.on('ai_request', async ({ room, eventType, message, data, scenarioType, characterName, playerName }) => {
+    if (!room || !eventType) return;
+
+    try {
+      const resolvedPlayer = playerName || playerNames[socket.id] || 'system';
+      const aiResponse = await requestAiNarration({
+        session_id: room,
+        event_type: eventType,
+        message,
+        data,
+        scenario_type: scenarioType,
+        character_name: characterName || resolvedPlayer,
+        use_memory: true
+      });
+
+      io.to(room).emit('ai_message', {
+        eventType,
+        response: aiResponse.response,
+        from: resolvedPlayer
+      });
+    } catch (error) {
+      console.error('[AI] Request failed:', error.message);
+      socket.emit('ai_error', { error: error.message });
+    }
+  });
 
   socket.on("startGame", (room) => {
     io.to(room).emit("gameStarted", { room, players: rooms[room]?.players || [] });
@@ -256,6 +306,7 @@ io.on('connection', (socket) => {
       }, 500);
     }
   });
+
 
   socket.on("ability_used", ({ room, playerName, abilityId, result, updatedPlayerCharacters, updatedEnemies, updatedActiveEffects }) => {
     // Update character selections with the new stats

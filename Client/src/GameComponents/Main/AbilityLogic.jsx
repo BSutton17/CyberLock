@@ -1,14 +1,3 @@
-/**
- * Ability Logic - Ability execution, effects, and cooldown management
- * 
- * This file handles:
- * - Executing abilities and applying effects
- * - Managing cooldowns
- * - Tracking active effects and buffs/debuffs
- * - Calculating total stats with bonuses
- * 
- * Ability definitions are stored in AbilityStore.jsx
- */
 
 import { ABILITIES } from './AbilityStore';
 

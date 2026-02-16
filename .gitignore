@@ -56,5 +56,12 @@ logs/
 .DS_Store
 Thumbs.db
 
+# Training data and outputs (add to your existing .gitignore)
+Training/data/
+Training/outputs/
+*.jsonl
+
+# HuggingFace cache
+.cache/
 PROJECT-COMPLETE-OVERVIEW.md
 INTEGRATION.md

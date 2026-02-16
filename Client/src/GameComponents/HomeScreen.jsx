@@ -11,6 +11,8 @@ import Main from "./Main/Main";
 import Events from "../Components/Events";
 import { useGameContext } from "../Components/Context";
 import CharacterBuilder from "./CharacterBuilder/CharacterBuilder";
+import LevelUp from "./LevelUp/LevelUp.jsx"
+
 function HomeScreen() {       
   const [isJoining, setIsJoining] = useState(() => {
     const savedName = localStorage.getItem('name');
@@ -123,6 +125,8 @@ function HomeScreen() {
           {screen === "characterBuilder" && <CharacterBuilder />}
           {screen === "main" && <Main />}
           {screen !== "main" && <button className="leave" onClick={leaveGame}>Leave Game</button>}
+          {screen === "levelup" && <LevelUp />}
+          
         </div>
       )}
     </div>

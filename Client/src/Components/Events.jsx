@@ -59,7 +59,7 @@ function Events(){
         });
 
         // Game phase transitions
-        socket.on("phase_changed_combat", ({ enemies, enemyPositions, turnOrder, currentTurn, characterSelections }) => {
+        socket.on("", ({ enemies, enemyPositions, turnOrder, currentTurn, characterSelections }) => {
           console.log('Combat Phase Started - Turn Order:', turnOrder);
           console.log('Received enemies:', enemies);
           console.log('Received enemy positions:', enemyPositions);
@@ -114,7 +114,11 @@ function Events(){
             }
           }));
         });
-    
+        
+        socket.on("level_up", () => {
+          setScreen("levelup");
+        });
+
         return () => {
           socket.off("updatePlayerList");
           socket.off("gameStarted");

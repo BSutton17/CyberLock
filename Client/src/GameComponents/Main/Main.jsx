@@ -21,7 +21,7 @@ function Main() {
     const [movementUsed, setMovementUsed] = useState(0);
     const [actionUsed, setActionUsed] = useState(false);
     const [aiLog, setAiLog] = useState([]);
-    const [aiInput, setAiInput] = useState('');
+    // const [aiInput, setAiInput] = useState('');
     const [aiBusy, setAiBusy] = useState(false);
     const [pendingFactionChoice, setPendingFactionChoice] = useState(false);
     const [pendingPostEncounterChoice, setPendingPostEncounterChoice] = useState(false);
@@ -88,15 +88,15 @@ function Main() {
         });
     };
 
-    const handleAiChatSubmit = (event) => {
-        event.preventDefault();
-        const trimmed = aiInput.trim();
-        if (!trimmed) return;
+    // const handleAiChatSubmit = (event) => {
+    //     event.preventDefault();
+    //     const trimmed = aiInput.trim();
+    //     if (!trimmed) return;
 
-        appendAiLog({ role: 'user', text: trimmed, eventType: 'chat' });
-        emitAiEvent('chat', trimmed, { playerName });
-        setAiInput('');
-    };
+    //     appendAiLog({ role: 'user', text: trimmed, eventType: 'chat' });
+    //     emitAiEvent('chat', trimmed, { playerName });
+    //     setAiInput('');
+    // };
 
     const handleFactionChoice = (choice) => {
         if (!canPlayerDecide('politician')) return;
@@ -1455,7 +1455,7 @@ function Main() {
                     aiLog.map(entry => (
                         <div key={entry.id} className={`ai-entry ${entry.role}`}>
                             <span className="ai-role">{entry.role === 'user' ? 'You' : 'DM'}</span>
-                            <span className="ai-text">{entry.text}</span>
+                            {/* <span className="ai-text">{entry.text}</span> */}
                         </div>
                     ))
                 )}
@@ -1486,7 +1486,7 @@ function Main() {
                     <button onClick={handleNextEncounter} disabled={!canPlayerDecide('navigator')}>Next Encounter</button>
                 </div>
             )}
-            <form className="ai-chat" onSubmit={handleAiChatSubmit}>
+            {/* <form className="ai-chat" onSubmit={handleAiChatSubmit}>
                 <input
                     type="text"
                     placeholder="Ask the DM about the story or NPCs..."
@@ -1495,7 +1495,7 @@ function Main() {
                     disabled={aiBusy}
                 />
                 <button type="submit" disabled={aiBusy || !aiInput.trim()}>Send</button>
-            </form>
+            </form> */}
             {/* <button onClick={handleStoryComplete}>Combat</button> */}
             <button className="ai-debug" onClick={handleLevelUp}>Level Up</button>
             </div>

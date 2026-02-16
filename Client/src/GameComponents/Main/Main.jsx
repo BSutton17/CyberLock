@@ -26,9 +26,11 @@ function Main() {
     const [pendingFactionChoice, setPendingFactionChoice] = useState(false);
     const [pendingPostEncounterChoice, setPendingPostEncounterChoice] = useState(false);
     const [pendingNextEncounterChoice, setPendingNextEncounterChoice] = useState(false);
+    const [aiText, setAiText] = useState('');
     const aiLogRef = useRef(null);
     const hasRequestedIntroRef = useRef(false);
     const pendingStartCombatRef = useRef(false);
+   
 
     const getDecisionOwner = (requiredAttribute) => {
         if (!requiredAttribute) return null;
@@ -135,6 +137,13 @@ function Main() {
     useEffect(() => {
         if (aiLogRef.current) {
             aiLogRef.current.scrollTop = aiLogRef.current.scrollHeight;
+        }
+    }, [aiLog]);
+
+    useEffect(() => {
+        if (aiLog.length > 0) {
+            const latestEntry = aiLog[aiLog.length - 1];
+            setAiText(latestEntry.text);
         }
     }, [aiLog]);
 
@@ -1432,6 +1441,7 @@ function Main() {
         </div>
 
         <div className="AI-script">
+            <div className='Response'>
             <div className="ai-header">
                 <h3>AI Log</h3>
                 <span className={`ai-status ${aiBusy ? 'busy' : ''}`}>
@@ -1488,7 +1498,9 @@ function Main() {
             </form>
             {/* <button onClick={handleStoryComplete}>Combat</button> */}
             <button className="ai-debug" onClick={handleLevelUp}>Level Up</button>
-        </div>
+            </div>
+            <span className="ai-text">{aiText}</span>
+       </div>
         <div className="inventory">
             {currentPlayerCharacter ? (
                 <>

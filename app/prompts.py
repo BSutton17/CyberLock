@@ -3,7 +3,8 @@ System prompts and world lore for the Cyberpunk DM
 Custom setting with corporatocracy and rebellion themes
 """
 
-from typing import Optional
+from typing import Optional, Dict, Any
+import json
 
 SYSTEM_PROMPT_BASE = """You are an expert Dungeon Master for a cyberpunk tabletop RPG campaign set in a dystopian corporatocracy.
 
@@ -53,6 +54,14 @@ SYSTEM_PROMPT_BASE = """You are an expert Dungeon Master for a cyberpunk tableto
 - Use the retrieved memories to maintain continuity
 - Ask clarifying questions if player intent is unclear
 - Emphasize moral ambiguity - enforcers maintain order but serve corporate interests, rebels fight tyranny but cause chaos
+"""
+
+SYSTEM_PROMPT_MINIMAL = """You are a concise Dungeon Master for a cyberpunk RPG.
+
+## Rules:
+- Stay in character.
+- Write 1-2 short sentences.
+- Focus on the immediate action and consequence.
 """
 
 
@@ -151,9 +160,39 @@ of the rebellion. "These targets need to be neutralized," she says, her voice co
 }
 
 
+EVENT_INSTRUCTIONS = {
+    "game_start": (
+        "Set the opening scene and background, then introduce the first encounter. "
+        "End with a clear choice asking if the party will fight alongside the Enforcers "
+        "or the People of the City. Keep the prompt concise and actionable."
+    ),
+    "choice_made": (
+        "Acknowledge the chosen side, describe immediate consequences, and set up the first "
+        "combat beat with strong atmosphere."
+    ),
+    "turn_action": (
+        "Narrate the action in 1 vivid sentences. Focus on motion, impact, and consequences."
+    ),
+    "encounter_end": (
+        "Describe the aftermath of the fight and prompt the party to choose: shop or next encounter."
+    ),
+    "shop_intro": (
+        "Describe the shop scene, key NPC vendor, and a few notable items or services."
+    ),
+    "next_encounter": (
+        "Set the scene for the next encounter with tension and a clear hook."
+    ),
+    "chat": (
+        "Answer the player's question in-character and stay grounded in established lore."
+    )
+}
+
+
 def build_system_prompt(
     scenario_type: Optional[str] = None,
-    custom_instructions: Optional[str] = None
+    custom_instructions: Optional[str] = None,
+    include_lore: bool = True,
+    minimal: bool = False
 ) -> str:
     """
     Build a complete system prompt with base + lore + optional additions
@@ -166,7 +205,10 @@ def build_system_prompt(
         Complete system prompt
     """
     
-    prompt = SYSTEM_PROMPT_BASE + "\n\n" + CYBERPUNK_LORE
+    prompt = SYSTEM_PROMPT_MINIMAL if minimal else SYSTEM_PROMPT_BASE
+
+    if include_lore and not minimal:
+        prompt += "\n\n" + CYBERPUNK_LORE
     
     if scenario_type and scenario_type in SCENARIO_STARTERS:
         prompt += f"\n\n## Current Scenario:\n{SCENARIO_STARTERS[scenario_type]}"

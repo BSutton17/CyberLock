@@ -63,3 +63,5 @@ Training/outputs/
 
 # HuggingFace cache
 .cache/
+PROJECT-COMPLETE-OVERVIEW.md
+INTEGRATION.md

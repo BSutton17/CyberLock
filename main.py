@@ -14,9 +14,10 @@ from loguru import logger
 from app.config import settings, GAME_CONFIG
 from app.model import ModelLoader, ConversationManager
 from app.memory import MemoryStore, ContextBuilder
-from app.prompts import build_system_prompt
+from app.prompts import build_system_prompt, build_event_instructions
 from app.schemas import (
     ChatRequest, ChatResponse,
+    GameEventRequest, GameEventResponse,
     AddMemoryRequest, AddMemoryResponse,
     RetrieveMemoriesRequest, RetrieveMemoriesResponse,
     HealthResponse, ErrorResponse
@@ -222,6 +223,122 @@ async def chat(
         
     except Exception as e:
         logger.error(f"Chat error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/game/event", response_model=GameEventResponse, tags=["AI"])
+async def game_event(
+    request: GameEventRequest,
+    authenticated: bool = Depends(verify_api_key)
+):
+    """
+    Structured game event endpoint - narrate game events and choices
+    """
+
+    if not model_loader or not model_loader.model:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+
+    start_time = time.time()
+
+    try:
+        # Get or create session
+        if request.session_id not in sessions:
+            sessions[request.session_id] = {
+                "messages": [],
+                "created_at": time.time()
+            }
+        
+        session = sessions[request.session_id]
+
+        # Build event summary for the user message
+        event_summary = request.message or f"Event type: {request.event_type}."
+        if request.data:
+            event_summary += f" Data: {request.data}"
+
+        # Event-specific performance tuning
+        is_turn_action = request.event_type == "turn_action"
+        context_limit = 6 if is_turn_action else settings.MEMORY_CONTEXT_SIZE
+        use_memory = False if is_turn_action else request.use_memory
+        temperature = request.temperature or (0.6 if is_turn_action else settings.TEMPERATURE)
+        max_tokens = request.max_tokens or (160 if is_turn_action else settings.MAX_NEW_TOKENS)
+        include_lore = False if is_turn_action else True
+        minimal_prompt = True if is_turn_action else False
+
+        # Build event instructions and system prompt
+        event_instructions = build_event_instructions(
+            event_type=request.event_type,
+            data=request.data,
+            message=request.message
+        )
+        system_prompt = build_system_prompt(
+            scenario_type=request.scenario_type,
+            custom_instructions=event_instructions,
+            include_lore=include_lore,
+            minimal=minimal_prompt
+        )
+
+        # Prepare message history (avoid bloating session for turn_action)
+        recent_messages = session["messages"][-context_limit:]
+        if is_turn_action:
+            messages_for_prompt = recent_messages + [{"role": "user", "content": event_summary}]
+        else:
+            user_message = {"role": "user", "content": event_summary}
+            session["messages"].append(user_message)
+            messages_for_prompt = session["messages"][-context_limit:]
+
+        # Use RAG to enhance context (disabled for turn_action)
+        context = None
+        if use_memory and memory_store:
+            context = context_builder.build_context(
+                system_prompt=system_prompt,
+                recent_messages=messages_for_prompt[:-1],
+                current_query=event_summary,
+                session_id=request.session_id,
+                max_rag_results=settings.RAG_TOP_K
+            )
+            system_prompt = context["system_prompt"]
+
+        # Format conversation
+        formatted_prompt = conversation_manager.format_conversation(
+            system_prompt=system_prompt,
+            messages=messages_for_prompt
+        )
+
+        # Generate response
+        response_text = model_loader.generate(
+            prompt=formatted_prompt,
+            temperature=temperature,
+            top_p=settings.TOP_P,
+            max_new_tokens=max_tokens,
+            repetition_penalty=GAME_CONFIG["model"]["generation"]["repetition_penalty"]
+        )
+
+        # Add assistant message to history (skip for turn_action to reduce growth)
+        if not is_turn_action:
+            assistant_message = {"role": "assistant", "content": response_text}
+            session["messages"].append(assistant_message)
+
+        # Auto-save important information to memory (skip for turn_action)
+        if memory_store and use_memory:
+            await _auto_save_memories(
+                event_summary,
+                response_text,
+                request.session_id,
+                request.character_name
+            )
+
+        processing_time = time.time() - start_time
+
+        return GameEventResponse(
+            response=response_text,
+            session_id=request.session_id,
+            event_type=request.event_type,
+            memories_used=len(context["retrieved_memories"]) if context else 0,
+            processing_time=processing_time
+        )
+
+    except Exception as e:
+        logger.error(f"Game event error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

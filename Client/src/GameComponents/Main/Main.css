@@ -277,8 +277,7 @@ h3, h4, p {
     border-radius: 0.75rem;
     padding: 0.875rem;
     font-size: 0.875rem;
-    max-height: 20vh;
-    overflow-y: auto;
+    height: 4vmin;
     gap: 0.5rem;
 }
 
@@ -323,7 +322,6 @@ h3, h4, p {
 
 .ai-log {
     flex: 1;
-    overflow-y: auto;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;

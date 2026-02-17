@@ -1443,23 +1443,23 @@ function Main() {
         <div className="AI-script">
             <div className='Response'>
             <div className="ai-header">
-                <h3>AI Log</h3>
+                {/* <h3>AI Log</h3> */}
                 <span className={`ai-status ${aiBusy ? 'busy' : ''}`}>
                     {aiBusy ? 'Thinking...' : 'Ready'}
                 </span>
             </div>
-            <div className="ai-log" ref={aiLogRef}>
+            {/* <div className="ai-log" ref={aiLogRef}>
                 {aiLog.length === 0 ? (
                     <div className="ai-empty">No AI narration yet.</div>
                 ) : (
                     aiLog.map(entry => (
                         <div key={entry.id} className={`ai-entry ${entry.role}`}>
                             <span className="ai-role">{entry.role === 'user' ? 'You' : 'DM'}</span>
-                            {/* <span className="ai-text">{entry.text}</span> */}
+                            <span className="ai-text">{entry.text}</span>
                         </div>
                     ))
                 )}
-            </div>
+            </div> */}
             {pendingFactionChoice && (
                 <div className="ai-choices">
                     <div className="ai-choice-owner">
@@ -1497,7 +1497,7 @@ function Main() {
                 <button type="submit" disabled={aiBusy || !aiInput.trim()}>Send</button>
             </form> */}
             {/* <button onClick={handleStoryComplete}>Combat</button> */}
-            <button className="ai-debug" onClick={handleLevelUp}>Level Up</button>
+            {/* <button className="ai-debug" onClick={handleLevelUp}>Level Up</button> */}
             </div>
             <span className="ai-text">{aiText}</span>
        </div>
@@ -1611,7 +1611,7 @@ function Main() {
                             <div className="weapon-info">
                                 <div className="weapon-name">{currentPlayerCharacter.weapon.name}</div>
                                 <div className="weapon-damage">DMG: {currentPlayerCharacter.weapon.damage}</div>
-                                <div className="weapon-range">{currentPlayerCharacter.weapon.range == 1 ? "Melee" : currentPlayerCharacter.weapon.range}</div>
+                                <div className="weapon-range">{currentPlayerCharacter.weapon.range == 1 ? "Melee" : "Range: " + currentPlayerCharacter.weapon.range}</div>
                             </div>
                         </div>
                     </div>

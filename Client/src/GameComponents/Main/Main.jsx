@@ -1614,7 +1614,6 @@ function Main() {
                                 <div className="weapon-damage">DMG: {currentPlayerCharacter.weapon.damage}</div>
                                 <div className="weapon-range">{currentPlayerCharacter.weapon.range == 1 ? "Melee" : "Range: " + currentPlayerCharacter.weapon.range}</div>
                             </div>
-                                <div className="weapon-range">{currentPlayerCharacter.weapon.range == 1 ? "Melee" : "Range: " + currentPlayerCharacter.weapon.range}</div></div>
                         </div>
                     </div>
 

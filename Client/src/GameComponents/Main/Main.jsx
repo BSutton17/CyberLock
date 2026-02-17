@@ -1456,6 +1456,7 @@ function Main() {
                         <div key={entry.id} className={`ai-entry ${entry.role}`}>
                             <span className="ai-role">{entry.role === 'user' ? 'You' : 'DM'}</span>
                             <span className="ai-text">{entry.text}</span>
+                            <span className="ai-text">{entry.text}</span>
                         </div>
                     ))
                 )}
@@ -1613,6 +1614,7 @@ function Main() {
                                 <div className="weapon-damage">DMG: {currentPlayerCharacter.weapon.damage}</div>
                                 <div className="weapon-range">{currentPlayerCharacter.weapon.range == 1 ? "Melee" : "Range: " + currentPlayerCharacter.weapon.range}</div>
                             </div>
+                                <div className="weapon-range">{currentPlayerCharacter.weapon.range == 1 ? "Melee" : "Range: " + currentPlayerCharacter.weapon.range}</div></div>
                         </div>
                     </div>
 

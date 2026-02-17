@@ -21,7 +21,7 @@ function Main() {
     const [movementUsed, setMovementUsed] = useState(0);
     const [actionUsed, setActionUsed] = useState(false);
     const [aiLog, setAiLog] = useState([]);
-    const [aiInput, setAiInput] = useState('');
+    // const [aiInput, setAiInput] = useState('');
     const [aiBusy, setAiBusy] = useState(false);
     const [pendingFactionChoice, setPendingFactionChoice] = useState(false);
     const [pendingPostEncounterChoice, setPendingPostEncounterChoice] = useState(false);
@@ -88,15 +88,15 @@ function Main() {
         });
     };
 
-    const handleAiChatSubmit = (event) => {
-        event.preventDefault();
-        const trimmed = aiInput.trim();
-        if (!trimmed) return;
+    // const handleAiChatSubmit = (event) => {
+    //     event.preventDefault();
+    //     const trimmed = aiInput.trim();
+    //     if (!trimmed) return;
 
-        appendAiLog({ role: 'user', text: trimmed, eventType: 'chat' });
-        emitAiEvent('chat', trimmed, { playerName });
-        setAiInput('');
-    };
+    //     appendAiLog({ role: 'user', text: trimmed, eventType: 'chat' });
+    //     emitAiEvent('chat', trimmed, { playerName });
+    //     setAiInput('');
+    // };
 
     const handleFactionChoice = (choice) => {
         if (!canPlayerDecide('politician')) return;
@@ -1443,12 +1443,12 @@ function Main() {
         <div className="AI-script">
             <div className='Response'>
             <div className="ai-header">
-                <h3>AI Log</h3>
+                {/* <h3>AI Log</h3> */}
                 <span className={`ai-status ${aiBusy ? 'busy' : ''}`}>
                     {aiBusy ? 'Thinking...' : 'Ready'}
                 </span>
             </div>
-            <div className="ai-log" ref={aiLogRef}>
+            {/* <div className="ai-log" ref={aiLogRef}>
                 {aiLog.length === 0 ? (
                     <div className="ai-empty">No AI narration yet.</div>
                 ) : (
@@ -1456,10 +1456,11 @@ function Main() {
                         <div key={entry.id} className={`ai-entry ${entry.role}`}>
                             <span className="ai-role">{entry.role === 'user' ? 'You' : 'DM'}</span>
                             <span className="ai-text">{entry.text}</span>
+                            <span className="ai-text">{entry.text}</span>
                         </div>
                     ))
                 )}
-            </div>
+            </div> */}
             {pendingFactionChoice && (
                 <div className="ai-choices">
                     <div className="ai-choice-owner">
@@ -1486,7 +1487,7 @@ function Main() {
                     <button onClick={handleNextEncounter} disabled={!canPlayerDecide('navigator')}>Next Encounter</button>
                 </div>
             )}
-            <form className="ai-chat" onSubmit={handleAiChatSubmit}>
+            {/* <form className="ai-chat" onSubmit={handleAiChatSubmit}>
                 <input
                     type="text"
                     placeholder="Ask the DM about the story or NPCs..."
@@ -1495,9 +1496,9 @@ function Main() {
                     disabled={aiBusy}
                 />
                 <button type="submit" disabled={aiBusy || !aiInput.trim()}>Send</button>
-            </form>
+            </form> */}
             {/* <button onClick={handleStoryComplete}>Combat</button> */}
-            <button className="ai-debug" onClick={handleLevelUp}>Level Up</button>
+            {/* <button className="ai-debug" onClick={handleLevelUp}>Level Up</button> */}
             </div>
             <span className="ai-text">{aiText}</span>
        </div>
@@ -1611,7 +1612,7 @@ function Main() {
                             <div className="weapon-info">
                                 <div className="weapon-name">{currentPlayerCharacter.weapon.name}</div>
                                 <div className="weapon-damage">DMG: {currentPlayerCharacter.weapon.damage}</div>
-                                <div className="weapon-range">{currentPlayerCharacter.weapon.range == 1 ? "Melee" : currentPlayerCharacter.weapon.range}</div>
+                                <div className="weapon-range">{currentPlayerCharacter.weapon.range == 1 ? "Melee" : "Range: " + currentPlayerCharacter.weapon.range}</div>
                             </div>
                         </div>
                     </div>

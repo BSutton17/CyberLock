@@ -177,9 +177,6 @@
     }
 }
 
-.max-attribute-fill{
-
-}
 
 .attribute-item::before {
     content: '';

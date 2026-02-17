@@ -577,7 +577,7 @@ export const ABILITIES = {
     executioners_judgment: {
         id: 'executioners_judgment',
         name: "Executioner's Judgment",
-        description: 'Enemies with equal/lower Max Health are halved. Higher Max Health enemies lose 20%',
+        description: 'Enemies with lower Max Health lose half their HP, enemies with higher Max Health than you lose 20% of their current health',
         role: "tank",
         cooldown: 0, 
         isUltimate: true,

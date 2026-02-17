@@ -277,8 +277,7 @@ h3, h4, p {
     border-radius: 0.75rem;
     padding: 0.875rem;
     font-size: 0.875rem;
-    max-height: 20vh;
-    overflow-y: auto;
+    height: 4vmin;
     gap: 0.5rem;
 }
 
@@ -323,7 +322,6 @@ h3, h4, p {
 
 .ai-log {
     flex: 1;
-    overflow-y: auto;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
@@ -533,13 +531,13 @@ h3, h4, p {
 }
 
 .stat-label {
-    font-size: 0.75vmin;
+    font-size:58%;
     color: #9a9aaa;
     font-weight: 500;
 }
 
 .stat-value {
-    font-size: 1vmin;
+    font-size: 1.15vmin;
     font-weight: 700;
     color: #eaeaf0;
 }
@@ -875,12 +873,10 @@ h3, h4, p {
     align-items: center;
     justify-content: center;
     z-index: 1000;
-    animation: fadeIn 0.3s ease-in;
 }
 
 .you-died-content {
     text-align: center;
-    animation: scaleIn 0.5s ease-out;
 }
 
 .you-died-content h1 {
@@ -921,7 +917,6 @@ h3, h4, p {
     text-align: center;
     max-width: 500px;
     box-shadow: 0 0 30px rgba(255, 68, 68, 0.5);
-    animation: slideUp 0.5s ease-out;
 }
 
 .game-over-screen h1 {

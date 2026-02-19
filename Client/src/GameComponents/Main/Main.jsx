@@ -1498,7 +1498,7 @@ function Main() {
                 <button type="submit" disabled={aiBusy || !aiInput.trim()}>Send</button>
             </form> */}
             {/* <button onClick={handleStoryComplete}>Combat</button> */}
-            {/* <button className="ai-debug" onClick={handleLevelUp}>Level Up</button> */}
+            <button onClick={handleLevelUp}>Level Up</button>
             </div>
             <span className="ai-text">{aiText}</span>
        </div>

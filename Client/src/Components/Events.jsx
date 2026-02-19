@@ -119,6 +119,10 @@ function Events(){
           setScreen("levelup");
         });
 
+        socket.on("level_up_complete", () => {
+          setScreen("chooseAbilities")
+        });
+
         return () => {
           socket.off("updatePlayerList");
           socket.off("gameStarted");
@@ -130,6 +134,8 @@ function Events(){
           socket.off("turn_changed");
           socket.off("attribute_allocations_updated");
           socket.off("player_health_updated");
+          socket.off("level_up");
+          socket.off("level_up_complete");
         };
     }, [room, playerName]); // Added playerName dependency so listeners update when it changes
     

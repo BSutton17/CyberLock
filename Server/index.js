@@ -576,6 +576,10 @@ io.on('connection', (socket) => {
   socket.on("level_up",({room}) => {
     io.to(room).emit('level_up');
   });
+
+  socket.on("level_up_complete",({room}) => {
+    io.to(room).emit('level_up_complete');
+  });
 });
 
 

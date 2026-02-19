@@ -661,7 +661,7 @@ export const ABILITIES = {
     feels_like_home: {
         id: 'feels_like_home',
         name: 'Feels Like Home',
-        description: 'Place a healing field that heals allies +5 for two turns',
+        description: 'Place a healing field that heals allies +10 for two turns',
         role: "support",
         level: 1,
         cooldown: 2,
@@ -680,9 +680,15 @@ export const ABILITIES = {
          */
         execute: ({ caster, targetPosition, playerCharacters, characterPositions }) => {
             const { row, col } = targetPosition;
-            const healing = [];
             const effects = [];
             const allyNames = [];
+
+            effects.push({
+                type: 'healing_field',
+                center: { row, col },
+                radius: 1,
+                duration: 2
+            });
             
             // Find all allies in 3x3 area
             Object.keys(playerCharacters).forEach(playerName => {
@@ -701,24 +707,21 @@ export const ABILITIES = {
                     effects.push({
                         type: 'healing_over_time',
                         target: playerName,
-                        amount: 5,
+                        amount: 10,
                         duration: 2
                     });
                 }
             });
             
-            if (allyNames.length === 0) {
-                return {
-                    success: false,
-                    message: 'No allies in target area!'
-                };
-            }
-            
+            const healingMessage = allyNames.length > 0
+                ? `${allyNames.join(', ')} will heal +10 HP for 2 turns!`
+                : 'No allies are currently in the field.';
+
             return {
                 success: true,
                 effects: effects,
                 aoePosition: targetPosition,
-                message: `${caster.name} places a healing field! ${allyNames.join(', ')} will heal +5 HP for 2 turns!`
+                message: `${caster.name} places a healing field! ${healingMessage}`
             };
         }
     },
@@ -1189,7 +1192,7 @@ export const ABILITIES = {
     selfish_sacrifice: {
         id: 'selfish_sacrifice',
         name: 'Selfish Sacrifice',
-        description: ' Drain your mp and transfer it elsewhere, giving you -10mp but +5 Spd and +5 Str for two turns',
+        description: ' Drain your ta and transfer it elsewhere, giving you -10ta but +10 Spd and +5 Str for two turns',
         role: "dps",
         level: 3,
         cooldown: 4,
@@ -1209,7 +1212,7 @@ export const ABILITIES = {
                     {
                         type: 'stat_debuff',
                         target: playerName,
-                        stat: 'mp',
+                        stat: 'ta',
                         value: -10,
                         duration: 2,
                         stackable: false
@@ -1218,7 +1221,7 @@ export const ABILITIES = {
                         type: 'stat_buff',
                         target: playerName,
                         stat: 'speed',
-                        value: 5,
+                        value: 10,
                         duration: 2,
                         stackable: false
                     },
@@ -1231,7 +1234,7 @@ export const ABILITIES = {
                         stackable: false
                     }
                 ],
-                message: `${caster.name} gains -10 MP but +5 Speed and +5 Strength for 2 turns!`
+                message: `${caster.name} gains -10 TA but +10 Speed and +5 Strength for 2 turns!`
             };
         }
     },

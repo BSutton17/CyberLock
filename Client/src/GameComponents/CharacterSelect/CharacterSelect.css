@@ -5,25 +5,14 @@
     background-attachment: fixed;
     display: flex;
     flex-direction: column;
-    height: 100vh;
-    width: 100vw;
-    padding: 1.5rem;
+    min-height: 100vh;
+    min-width: 100vw;
+    padding: 2vmin;
     box-sizing: border-box;
     font-family: 'Arial', sans-serif;
     color: #ffffff;
     position: relative;
     overflow: hidden;
-}
-
-.character-select-container::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: linear-gradient(135deg, rgba(10, 10, 30, 0.5) 0%, rgba(5, 5, 15, 0.2) 100%);
-    z-index: 0;
 }
 
 .character-select-container > * {
@@ -34,37 +23,36 @@
 /* Header */
 .header {
     text-align: center;
-    padding: 1rem;
-    background: rgba(20, 20, 40, 0.7);
-    backdrop-filter: blur(10px);
-    border-radius: 12px;
-    border: px solid rgba(139, 92, 246, 0.4);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-    margin-bottom: 1.5rem;
-    flex-shrink: 0;
+    padding: 1.5vmin;
+    background: rgba(20, 20, 40, 0.6);
+    backdrop-filter: blur(1.25vmin);
+    border-radius: 1vmin;
+    border: 0.25vmin solid rgba(139, 92, 246, 0.4);
+    box-shadow: 0 0.5vmin 2.5vmin rgba(0, 0, 0, 0.5);
+    margin-bottom: 2vmin;
 }
 
 .header h1 {
     margin: 0;
-    font-size: 2rem;
+    font-size: 3.6vmin;
     font-weight: 900;
     text-transform: uppercase;
-    letter-spacing: 4px;
+    letter-spacing: 0.375vmin;
     background: linear-gradient(90deg, #a78bfa 0%, #60a5fa 100%);
     background-clip: text;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
-    filter: drop-shadow(0 0 5px rgba(139, 92, 246, 0.5));
-    text-shadow: 0 0 10px rgba(139, 92, 246, 0.3); /* fallback/additional glow */
+    background-clip: text;
+    filter: drop-shadow(0 0 1.25vmin rgba(139, 92, 246, 0.5));
 }
 
 .header h2 {
-    margin: 0.5rem 0 0 0;
+    margin: 1vmin 0 0 0;
     color: #d1d5db;
-    font-size: 1rem;
+    font-size: 1.6vmin;
     text-transform: uppercase;
-    letter-spacing: 3px;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+    letter-spacing: 0.25vmin;
+    text-shadow: 0 0.25vmin 0.5vmin rgba(0, 0, 0, 0.8);
 }
 
 /* Main Layout Grid */
@@ -79,28 +67,46 @@
 /* Common Section Styles */
 .left-section, .middle-section, .right-section {
     background: rgba(20, 20, 40, 0.7);
-    backdrop-filter: blur(12px);
-    border: 2px solid rgba(139, 92, 246, 0.3);
-    border-radius: 16px;
-    padding: 1.5rem;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    backdrop-filter: blur(1.5vmin);
+    border: 0.25vmin solid rgba(139, 92, 246, 0.3);
+    border-radius: 1vmin;
+    padding: 1.5vmin;
+    box-shadow: 0 1vmin 4vmin rgba(0, 0, 0, 0.4);
 }
+
+.player-list ul {
+    list-style: none;
+    padding: 0;
+    margin: 1vmin 0 0;
+}
+
+.player-list li {
+    padding: 1vmin;
+    font-size: 1.8vmin;
+    color: #d1d5db;
+    text-shadow: 0 0.125vmin 0.25vmin rgba(0, 0, 0, 0.6);
+}
+
 
 /* Left Section - Team */
 .selected-team {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
+    background: rgba(20, 20, 40, 0.7);
+    backdrop-filter: blur(1.5vmin);
+    border: 0.25vmin solid rgba(139, 92, 246, 0.3);
+    border-radius: 1vmin;
+    padding: 1.5vmin;
+    box-shadow: 0 1vmin 4vmin rgba(0, 0, 0, 0.4);
 }
 
 .selected-team h3 {
-    margin: 0 0 1.25rem 0;
-    font-size: 1.1rem;
+    margin: 0 0 1.5vmin 0;
+    font-size: 1.9vmin;
     text-transform: uppercase;
-    letter-spacing: 2px;
+    letter-spacing: 0.25vmin;
     color: #c4b5fd;
     border-bottom: 2px solid rgba(139, 92, 246, 0.4);
     padding-bottom: 0.75rem;
@@ -183,7 +189,7 @@
     margin: 0 0 1.25rem 0;
     font-size: 1.1rem;
     text-transform: uppercase;
-    letter-spacing: 2px;
+    letter-spacing: 0.25vmin;
     color: #c4b5fd;
     border-bottom: 2px solid rgba(139, 92, 246, 0.4);
     padding-bottom: 0.75rem;
@@ -256,12 +262,12 @@
 
 .character-card h4 {
     margin: 0;
-    font-size: 1rem;
+    font-size: 2vmin;
     color: #f3f4f6;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 1px;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+    letter-spacing: 0.125vmin;
+    text-shadow: 0 0.25vmin 0.5vmin rgba(0, 0, 0, 0.8);
 }
 
 .character-card .role {
@@ -492,3 +498,5 @@
     font-size: 1rem;
     text-shadow: 0 1px 2px rgba(0,0,0,0.8);
 }
+
+

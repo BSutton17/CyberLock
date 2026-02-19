@@ -185,7 +185,17 @@ h3, h4, p {
 
 
 .grid-cell.enemy-cell {
-    border-color: rgba(138, 74, 74, 0.5);
+    border-color: rgba(194, 15, 15, 0.5);
+}
+
+.grid-cell.enemy-corpse-cell {
+    border-color: rgba(120, 120, 120, 0.45);
+}
+
+.grid-cell.healing-field-cell {
+    background: rgba(84, 193, 116, 0.14);
+    border-color: rgba(84, 193, 116, 0.45);
+    box-shadow: inset 0 0 0.6rem rgba(84, 193, 116, 0.2);
 }
 
 .grid-cell.ground-target-range {
@@ -201,14 +211,29 @@ h3, h4, p {
 }
 
 .grid-cell.enemy-cell .grid-character {
-    background: linear-gradient(135deg, #8a4a4a 0%, #4a2a2a 100%);
     border-color: #ca6a6a;
-    box-shadow: 0 0 0.5rem rgba(202, 106, 106, 0.4);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 0.25rem;
+}
+
+.grid-cell.enemy-corpse-cell .grid-character {
+    background: linear-gradient(135deg, #3a3a45 0%, #23232c 100%);
+    border-color: #7d7d8f;
+    box-shadow: 0 0 0.5rem rgba(140, 140, 160, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.enemy-corpse-icon {
+    font-size: 2.2vmin;
+    color: #cfcfe0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .enemy-health {

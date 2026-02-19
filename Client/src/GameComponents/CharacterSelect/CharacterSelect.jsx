@@ -5,7 +5,7 @@ import { enrichAllCharacters } from '../../Utils/characterUtils';
 import './CharacterSelect.css';
 
 function CharacterSelect() {
-    const { players, playerName, playerCharacters, socket, room, readyPlayers } = useGameContext();
+    const { players, playerName, playerCharacters, setPlayerCharacters, socket, room, readyPlayers } = useGameContext();
     const [selectedCharacter, setSelectedCharacter] = useState(null);
     const [displayClassInfo, setDisplayClassInfo] = useState(false);
 
@@ -152,7 +152,7 @@ function CharacterSelect() {
                 >
                     {isPlayerReady ? "Ready! Waiting for others..." : "Ready"}
                 </button>
-                <p className='ready-status'>{readyPlayers}/{players.length}) players ready</p>
+                <p className='ready-status'>{readyPlayers}/{players.length} players ready</p>
             </div>
         </div>
     );

@@ -70,7 +70,7 @@ function CharacterSelect() {
                             {enrichedCharactersData.characters.map((character) => (
                                 <div 
                                     key={character.id} 
-                                    className={`character-card ${selectedCharacter?.id === character.id ? 'selected' : ''}`}
+                                    className={`character-card ${selectedCharacter?.id === character.id ? 'selected' : ''} ${playerCharacters[playerName]?.id === character.id ? 'in-team' : ''}`}
                                     onClick={() => {
                                         handleCharacterClick(character)
                                         setDisplayClassInfo(true);

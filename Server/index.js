@@ -776,9 +776,7 @@ io.on('connection', (socket) => {
     delete playerRooms[socket.id];
   });
 
-  socket.on("level_up",() => {
-    const room = playerRooms[socket.id];
-  
+  socket.on("level_up",({room}) => {
     io.to(room).emit('level_up');
   });
 });

@@ -112,7 +112,10 @@ function CharacterSelect() {
                                 <div className='weapon-detail'>
                                     <h5>Weapon: {selectedCharacter.weapon.name}</h5>
                                     {selectedCharacter.weapon.damage && (
+                                        <>
                                         <p>Damage: {selectedCharacter.weapon.damage}</p>
+                                        <p>{selectedCharacter.weapon.range == 1 ? "Range: Melee" : `Range: ${selectedCharacter.weapon.range}`}</p>
+                                        </>
                                     )}
                                 </div>
 
@@ -152,7 +155,6 @@ function CharacterSelect() {
                 >
                     {isPlayerReady ? "Ready! Waiting for others..." : "Ready"}
                 </button>
-                <p className='ready-status'>{readyPlayers}/{players.length} players ready</p>
             </div>
         </div>
     );

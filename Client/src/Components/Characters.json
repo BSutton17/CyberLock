@@ -5,7 +5,7 @@
       "name": "Offensive Tank #1",
       "role": "Tank",
       "stats": {
-        "health": 95,
+        "health": 55,
         "maxHealth": 95,
         "speed": 20,
         "resistance": 30,
@@ -15,7 +15,7 @@
       "weapon": {
         "range": 1,
         "name": "Hammer",
-        "damage": 108
+        "damage": 8
       },
       "abilities": [
         "ability_boost",

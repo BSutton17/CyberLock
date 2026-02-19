@@ -6,7 +6,6 @@ import './CharacterSelect.css';
 
 function CharacterSelect() {
     const { players, playerName, playerCharacters, setPlayerCharacters, socket, room, readyPlayers } = useGameContext();
-    const [selectedFaction, setSelectedFaction] = useState('');
     const [selectedCharacter, setSelectedCharacter] = useState(null);
     const [displayClassInfo, setDisplayClassInfo] = useState(false);
 
@@ -43,38 +42,7 @@ function CharacterSelect() {
             </div>
 
             <div className='main-content'>
-                <div className='left-section'>
-                    {/* <div className='player-list'>
-                        <h3>Players in game:</h3>
-                        <ul>
-                            {players.map((player, index) => (
-                                <li key={index}>{player}</li>
-                            ))}
-                        </ul>
-                    </div> */}
-
-                    {/* <div className='faction-select'>
-                        <h3>Select Faction:</h3>
-                        <button 
-                            className={selectedFaction === 'Criminal' ? 'active' : ''}
-                            onClick={() => setSelectedFaction('Criminal')}
-                        >
-                            Criminal
-                        </button>
-                        <button 
-                            className={selectedFaction === 'Justice' ? 'active' : ''}
-                            onClick={() => setSelectedFaction('Justice')}
-                        >
-                            Justice
-                        </button>
-                        <button 
-                            className={selectedFaction === 'Neutral' ? 'active' : ''}
-                            onClick={() => setSelectedFaction('Neutral')}
-                        >
-                            Neutral
-                        </button>
-                    </div> */}
-
+                <div className='left-column'>
                     <div className='selected-team'>
                         <h3>Team Selection ({Object.keys(playerCharacters).length}/{players.length})</h3>
                         <div className='team-slots'>
@@ -130,7 +98,7 @@ function CharacterSelect() {
             <div>
                 {selectedCharacter !== "" && displayClassInfo && (
                     <>
-                    <div className='right-section'>
+                    <div className='class-info-panel'>
                         <div className='character-info'>
                             {selectedCharacter ? (
                                 <div className='character-details'>
@@ -188,7 +156,7 @@ function CharacterSelect() {
                 >
                     {isPlayerReady ? "Ready! Waiting for others..." : "Ready"}
                 </button>
-                <p className='ready-status'>{readyPlayers}/{players.length}) players ready</p>
+                <p className='ready-status'>{readyPlayers}/{players.length} players ready</p>
             </div>
         </div>
     );

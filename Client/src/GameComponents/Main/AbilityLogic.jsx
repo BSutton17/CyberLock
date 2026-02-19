@@ -188,7 +188,6 @@ export function tickActiveEffects(activeEffects, playerCharacters, enemies) {
         
         // Skip ticking if effect was applied this turn
         if (updatedEffect.appliedThisTurn) {
-            console.log(`[TICK EFFECTS] Skipping tick - effect was applied this turn`);
             updatedEffect.appliedThisTurn = false;
             updatedEffects.push(updatedEffect);
             return;

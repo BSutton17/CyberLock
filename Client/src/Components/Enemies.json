@@ -16,7 +16,8 @@
       },
       "weapon": {
         "name": "Rusty Dagger",
-        "damage": 8
+        "damage": 8,
+        "range": 1
       }
     },
     {
@@ -34,8 +35,9 @@
         "ta": 10
       },
       "weapon": {
-        "name": "Club",
-        "damage": 10
+        "name": "rock",
+        "damage": 10,
+        "range": 2
       }
     },
     {
@@ -54,7 +56,8 @@
       },
       "weapon": {
         "name": "War Axe",
-        "damage": 12
+        "damage": 12,
+        "range": 1
       }
     },
     {
@@ -69,11 +72,12 @@
         "speed": 25,
         "resistance": 20,
         "strength": 10,
-        "ta": 5
+        "ta": 25
       },
       "weapon": {
         "name": "Dark Staff",
-        "damage": 6
+        "damage": 6,
+        "range": 3
       }
     },
     {
@@ -92,7 +96,8 @@
       },
       "weapon": {
         "name": "Stone Fist",
-        "damage": 15
+        "damage": 15,
+        "range": 1
       }
     }
   ]

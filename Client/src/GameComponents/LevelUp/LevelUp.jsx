@@ -28,6 +28,18 @@ function LevelUp(){
             alert('You must apply all your points before readying up!');
             return;
         }
+        const currentCharacter = playerCharacters[playerName];
+        const stats = playerCharacters[playerName].stats;
+        const updatedCharacter = {
+            ...playerCharacters,
+            [playerName]: {
+                stats: {
+                    ...stats,
+                    health: currentCharacter.stats.maxHealth
+                }
+            }
+        }
+        setPlayerCharacters(updatedCharacter);
 
         socket.emit('level_up_complete', {room});
         setIsReady(true);
@@ -49,7 +61,8 @@ function LevelUp(){
                 [playerName]: {
                     stats: {
                         ...stats,
-                        [attrId]: currentCharacter.stats[attrId] + 1
+                        [attrId]: currentCharacter.stats[attrId] + 1,
+                        
                     }
                 }
             }
@@ -72,7 +85,8 @@ function LevelUp(){
                 [playerName]: {
                     stats: {
                         ...stats,
-                        [attrId]: currentCharacter.stats[attrId] - 1
+                        [attrId]: currentCharacter.stats[attrId] - 1,
+                        health: currentCharacter.stats.maxHealth
                     }
                 }
             }
@@ -116,6 +130,12 @@ function LevelUp(){
                 {(() => {
                     return (
                         <>
+                        <div className="stat-item">
+                            <span className="stat-label">Current Health</span>
+                            <span className="stat-value">
+                                {playerCharacters[playerName].stats.health}
+                            </span>
+                        </div>
                         <div className="stat-item">
                             <span className="stat-label">Max Health</span>
                             <span className="stat-value">

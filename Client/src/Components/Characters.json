@@ -18,11 +18,9 @@
         "damage": 8
       },
       "abilities": [
-        "ability_boost",
-        "binding_chains",
-        "shadow_strike"
+
       ],
-      "ultimate": "executioners_judgment"
+      "ultimate": ""
     },
     {
       "id": "defensive_tank_2",
@@ -42,11 +40,9 @@
         "damage": 8
       },
       "abilities": [
-        "diamond_body",
-        "sword_slash",
-        "charge"
+
       ],
-      "ultimate": "murus_fictilis"
+      "ultimate": ""
     },
     {
       "id": "spellcaster_dps_1",
@@ -66,11 +62,9 @@
         "damage": 10
       },
       "abilities": [
-        "fireball",
-        "flood_of_frost",
-        "poison_apple"
+        
       ],
-      "ultimate": "black_hole"
+      "ultimate": ""
     },
     {
       "id": "aggressive_dps_2",
@@ -90,11 +84,9 @@
         "damage": 10
       },
       "abilities": [
-        "selfish_sacrifice",
-        "flash_step",
-        "iron_sharpens_iron"
+        
       ],
-      "ultimate": "starward_sword"
+      "ultimate": ""
     },
     {
       "id": "traditional_warrior_dps_3",
@@ -114,11 +106,9 @@
         "damage": 10
       },
       "abilities": [
-        "shadow_strike",
-        "fireball",
-        "calm_under_pressure"
+        
       ],
-      "ultimate": "dedicating"
+      "ultimate": ""
     },
     {
       "id": "healing_support_1",
@@ -138,11 +128,9 @@
         "damage": 6
       },
       "abilities": [
-        "blackjack",
-        "humble",
-        "battery_drain"
+        
       ],
-      "ultimate": "love_galore"
+      "ultimate": ""
     },
     {
       "id": "offensive_support_2",
@@ -162,11 +150,9 @@
         "damage": 6
       },
       "abilities": [
-        "hurry_up",
-        "eagle_eye",
-        "feels_like_home"
+        
       ],
-      "ultimate": "here_we_go_again"
+      "ultimate": ""
     },
     {
       "id": "jack_of_all_trades_support_3",
@@ -186,11 +172,9 @@
         "damage": 6
       },
       "abilities": [
-        "diamond_boy",
-        "iron_sharpens_iron",
-        "zen"
+        
       ],
-      "ultimate": "dedicating"
+      "ultimate": ""
     },
     {
       "id": "hacker_support_4",
@@ -210,11 +194,9 @@
         "damage": 6
       },
       "abilities": [
-        "butterfly_effect",
-        "battery_drain",
-        "count_me_out"
+        
       ],
-      "ultimate": "emp"
+      "ultimate": ""
     }
   ]
 }

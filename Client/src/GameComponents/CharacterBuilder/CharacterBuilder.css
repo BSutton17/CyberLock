@@ -49,8 +49,8 @@
     letter-spacing: 3px;
     background: linear-gradient(90deg, #a78bfa 0%, #60a5fa 100%);
     -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
     background-clip: text;
+    -webkit-text-fill-color: transparent;
     filter: drop-shadow(0 0 10px rgba(139, 92, 246, 0.5));
 }
 

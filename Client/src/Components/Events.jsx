@@ -27,7 +27,6 @@ function Events(){
           const storedIsAdmin = localStorage.getItem('isAdmin') === 'true';
           const storedRoom = localStorage.getItem('room');
           
-          // Identify race condition on refresh where server denies admin because old socket persists
           if (!admin && storedIsAdmin && storedRoom === room) {
             isAdmin = true;
           }
@@ -59,13 +58,14 @@ function Events(){
         });
 
         // Game phase transitions
-        socket.on("", ({ enemies, enemyPositions, turnOrder, currentTurn, characterSelections }) => {
+        socket.on("phase_changed_combat", ({ enemies, enemyPositions, turnOrder, currentTurn, characterSelections }) => {
           console.log('Combat Phase Started - Turn Order:', turnOrder);
           console.log('Received enemies:', enemies);
           console.log('Received enemy positions:', enemyPositions);
           console.log('Received character selections:', characterSelections);
+
+          setGamePhase('combat');
           
-          // Update character selections to ensure all players have current data
           if (characterSelections) {
             const normalizedSelections = Object.fromEntries(
               Object.entries(characterSelections).map(([name, character]) => [
@@ -78,7 +78,6 @@ function Events(){
           
           setEnemies(enemies);
           
-          // Store enemy positions in session storage so Main.jsx can use them
           if (enemyPositions) {
             sessionStorage.setItem(`enemyPositions_${room}`, JSON.stringify(enemyPositions));
           }
@@ -105,7 +104,6 @@ function Events(){
         });
 
         socket.on("player_health_updated", ({ playerName: damagedPlayer, newHealth }) => {
-          console.log(`🩹 Player health updated: ${damagedPlayer} -> ${newHealth}`);
           setPlayerCharacters(prev => ({
             ...prev,
             [damagedPlayer]: {
@@ -123,6 +121,15 @@ function Events(){
           setScreen("chooseAbilities")
         });
 
+        socket.on("game_reset", () => {
+          setPlayerCharacters({});
+          setReadyPlayers([]);
+          setEnemies([]);
+          setTurnOrder([]);
+          setAttributeAllocations({});
+          setScreen("waiting");
+        });
+
         return () => {
           socket.off("updatePlayerList");
           socket.off("gameStarted");
@@ -136,8 +143,9 @@ function Events(){
           socket.off("player_health_updated");
           socket.off("level_up");
           socket.off("level_up_complete");
+          socket.off("game_reset");
         };
-    }, [room, playerName]); // Added playerName dependency so listeners update when it changes
+    }, [room, playerName]);
     
     return (
         <>

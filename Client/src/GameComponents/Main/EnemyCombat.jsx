@@ -32,16 +32,14 @@ function canKillTarget(enemy, target, playerCharacters) {
 export function selectAttackTarget(enemy, allies, playerCharacters, enemyPositions, characterPositions) {
     const enemyPos = enemyPositions[enemy.id];
     if (!enemyPos) return null;
+    const weaponRange = enemy.weapon?.range || 1;
     
-    // Get allies in range (adjacent cells)
+    // Get allies in weapon range
     const targetsInRange = allies.filter(allyId => {
         const allyPos = characterPositions[allyId];
         if (!allyPos) return false;
         
-        const rowDiff = Math.abs(enemyPos.row - allyPos.row);
-        const colDiff = Math.abs(enemyPos.col - allyPos.col);
-        const isAdjacent = (rowDiff === 1 && colDiff === 0) || (rowDiff === 0 && colDiff === 1);
-        return isAdjacent;
+        return getDistance(enemyPos, allyPos) <= weaponRange;
     });
     
     if (targetsInRange.length === 0) return null;
@@ -243,19 +241,15 @@ function calculateAggressiveMovement(enemy, allies, characterPositions) {
 }
 
 //defensive behavior type movement logic
-function calculateDefensiveMovement(enemy, alliedEnemies, playerCharacters, characterPositions) {
+function calculateDefensiveMovement(enemy, allies, characterPositions) {
     const enemyPos = characterPositions[enemy.id];
     if (!enemyPos) return null;
-    
-    //Check if already in range of an ally
-    if (isInRangeOfAny(enemyPos, alliedEnemies, characterPositions)) {
-        return null; // Stay in place, but will still attack from current position
-    }
+    const weaponRange = enemy.weapon?.range || 1;
     
     // Calculate max movement based on speed
     const maxMovement = Math.floor(enemy.stats.speed / 10);
 
-    const closest = findClosestTarget(enemyPos, alliedEnemies, characterPositions);
+    const closest = findClosestTarget(enemyPos, allies, characterPositions);
     if (!closest || !closest.targetId) return null;
     
     const targetPos = characterPositions[closest.targetId];
@@ -263,13 +257,41 @@ function calculateDefensiveMovement(enemy, alliedEnemies, playerCharacters, char
     const reachableCells = getReachableCells(enemyPos, maxMovement, characterPositions);
     
     if (reachableCells.length === 0) return null;
+
+    const currentDistance = closest.distance;
+
+    // Already at edge of weapon range, hold position.
+    if (currentDistance === weaponRange) {
+        return null;
+    }
+
+    // Choose cell that gets us closest to desired edge distance.
+    // - If too far: move in until reaching range edge.
+    // - If too close: back up until reaching range edge.
     const bestMove = reachableCells.reduce((best, cell) => {
         const distance = getDistance(cell, targetPos);
-        const bestDistance = getDistance(best, targetPos);
-        return distance < bestDistance ? cell : best;
-    });
+        const distanceDelta = Math.abs(distance - weaponRange);
+
+        if (!best) {
+            return { ...cell, targetDistance: distance, distanceDelta };
+        }
+
+        if (distanceDelta < best.distanceDelta) {
+            return { ...cell, targetDistance: distance, distanceDelta };
+        }
+
+        if (distanceDelta === best.distanceDelta) {
+            // Tie-break toward staying farther when moving inward (hold edge),
+            // and farther when backing up too (maximize spacing safety).
+            if (distance > best.targetDistance) {
+                return { ...cell, targetDistance: distance, distanceDelta };
+            }
+        }
+
+        return best;
+    }, null);
     
-    return bestMove;
+    return bestMove ? { row: bestMove.row, col: bestMove.col } : null;
 }
 
 //supports
@@ -317,7 +339,7 @@ export function calculateEnemyMovement(enemy, allies, alliedEnemies, playerChara
     }
     
     if (behavior === 'defensive') {
-        return calculateDefensiveMovement(enemy, alliedEnemies, playerCharacters, characterPositions);
+        return calculateDefensiveMovement(enemy, allies, characterPositions);
     }
     
     return null;

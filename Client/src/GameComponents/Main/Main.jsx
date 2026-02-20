@@ -5,10 +5,11 @@ import EnemiesData from '../../Components/Enemies.json';
 import { executeEnemyTurn } from './EnemyCombat';
 import { getAbility, executeAbility, applyAbilityEffects, tickCooldowns, tickActiveEffects, calculateTotalStat, getStatBonuses } from './AbilityLogic';
 import { enrichCharacterAbilities } from '../../Utils/characterUtils';
+import { GiDeathSkull } from 'react-icons/gi';
 import './Main.css';
 
 function Main() {
-    const { players, playerCharacters, setPlayerCharacters, playerName, room, socket, attributeAllocations, setGamePhase, isMyTurn, currentTurn, enemies, setEnemies, turnOrder, setTurnOrder, isAdmin } = useGameContext();
+    const { players, playerCharacters, setPlayerCharacters, playerName, room, socket, attributeAllocations, setGamePhase, isMyTurn, currentTurn, enemies, setEnemies, turnOrder, setTurnOrder, isAdmin, setScreen } = useGameContext();
     const [currentPlayerCharacter, setCurrentPlayerCharacter] = useState(null);
     const [ultimateReady, setUltimateReady] = useState(false);
     const [characterPositions, setCharacterPositions] = useState({});
@@ -50,6 +51,33 @@ function Main() {
     const activeEffectsRef = useRef(activeEffects);
     const playerCharactersRef = useRef(playerCharacters);
     const enemiesRef = useRef(enemies);
+    const gameOverRef = useRef(gameOver);
+
+    const isEnemyDeadBody = (enemy) => {
+        return !!enemy && (enemy.isDeadBody || (enemy.stats?.health || 0) <= 0);
+    };
+
+    const normalizeEnemiesState = (enemyList = []) => {
+        return enemyList.map(enemy => {
+            if (isEnemyDeadBody(enemy)) {
+                return {
+                    ...enemy,
+                    isDeadBody: true,
+                    corpseTurnsRemaining: enemy.corpseTurnsRemaining ?? 1,
+                    stats: {
+                        ...enemy.stats,
+                        health: 0
+                    }
+                };
+            }
+
+            return {
+                ...enemy,
+                isDeadBody: false,
+                corpseTurnsRemaining: enemy.corpseTurnsRemaining ?? 0
+            };
+        });
+    };
 
     // Update refs whenever state changes
     useEffect(() => {
@@ -63,6 +91,10 @@ function Main() {
     useEffect(() => {
         enemiesRef.current = enemies;
     }, [enemies]);
+
+    useEffect(() => {
+        gameOverRef.current = gameOver;
+    }, [gameOver]);
 
     const appendAiLog = (entry) => {
         const logEntry = {
@@ -127,18 +159,8 @@ function Main() {
     useEffect(() => {
         if (playerCharacters[playerName]) {
             setCurrentPlayerCharacter(playerCharacters[playerName]);
-            console.log('[CHARACTER LOADED]', playerName, ':', playerCharacters[playerName]?.name);
-        } else {
-            console.warn('[CHARACTER MISSING] No character data for', playerName);
-            console.warn('[CHARACTER MISSING] Available characters:', Object.keys(playerCharacters));
         }
     }, [playerCharacters, playerName]);
-
-    useEffect(() => {
-        if (aiLogRef.current) {
-            aiLogRef.current.scrollTop = aiLogRef.current.scrollHeight;
-        }
-    }, [aiLog]);
 
     useEffect(() => {
         if (aiLog.length > 0) {
@@ -202,7 +224,19 @@ function Main() {
             appendAiLog({ role: 'system', text: `AI error: ${error}`, eventType: 'error' });
         };
 
-        const handleCombatEnded = () => {
+        const handleCombatEnded = ({ result }) => {
+            console.log('[COMBAT ENDED] Received with result:', result);
+            
+            if (result === 'all_dead') {
+                // Stop all combat - clear turn order to prevent further enemy turns
+                setTurnOrder([]);
+                setEnemies([]);
+                setGameOver(true);
+                console.log('[COMBAT ENDED] All players defeated - showing game over screen');
+                return;
+            }
+            
+            // Victory scenario
             if (!isAdmin) return;
             emitAiEvent('encounter_end', 'The encounter has ended.', { room });
         };
@@ -239,18 +273,124 @@ function Main() {
     // Check if current player is alive
     const isPlayerAlive = currentPlayerCharacter && currentPlayerCharacter.stats.health > 0;
 
-    const generateEnemies = () => {
-        const genericEnemies = EnemiesData.enemies.filter(e => e.tier === 'generic');
+    const hasEnhancedVision = activeEffects.some(effect =>
+        effect.type === 'vision_enhanced' &&
+        effect.target === playerName &&
+        effect.turnsRemaining > 0
+    );
+
+    const getEnemySpawnDepth = (enemy) => {
+        const behavior = enemy.behavior || 'aggressive';
+        const role = enemy.role || 'DPS';
+
+        if (role === 'Support') return 0;
+        if (behavior === 'defensive') return 1;
+        if (behavior === 'aggressive') return 2;
+        if (behavior === 'intelligent') return 1;
+        return 1;
+    };
+
+    const generateSpreadColumns = (count, totalCols = 10) => {
+        if (count <= 0) return [];
+        if (count === 1) return [Math.floor(totalCols / 2)];
+
+        const baseColumns = Array.from({ length: count }, (_, index) =>
+            Math.round((index * (totalCols - 1)) / (count - 1))
+        );
+
+        const used = new Set();
+        return baseColumns.map((baseCol) => {
+            if (!used.has(baseCol)) {
+                used.add(baseCol);
+                return baseCol;
+            }
+
+            for (let offset = 1; offset < totalCols; offset++) {
+                const left = baseCol - offset;
+                const right = baseCol + offset;
+
+                if (left >= 0 && !used.has(left)) {
+                    used.add(left);
+                    return left;
+                }
+
+                if (right < totalCols && !used.has(right)) {
+                    used.add(right);
+                    return right;
+                }
+            }
+
+            return baseCol;
+        });
+    };
+
+    const generateEnemyFallbackPositions = (enemyList = []) => {
+        const sortedEnemies = [...enemyList].sort((firstEnemy, secondEnemy) =>
+            getEnemySpawnDepth(secondEnemy) - getEnemySpawnDepth(firstEnemy)
+        );
+
+        const columns = generateSpreadColumns(sortedEnemies.length, 10);
+        const positions = {};
+
+        sortedEnemies.forEach((enemy, index) => {
+            positions[enemy.id] = {
+                row: getEnemySpawnDepth(enemy),
+                col: columns[index] ?? 0
+            };
+        });
+
+        return positions;
+    };
+
+    const createEnemyInstance = (enemyTemplate, instanceNumber, partySize) => {
+        const resistanceMultiplier = partySize / 3;
+
+        return {
+            ...enemyTemplate,
+            stats: {
+                ...enemyTemplate.stats,
+                resistance: enemyTemplate.stats.resistance * resistanceMultiplier
+            },
+            weapon: { ...enemyTemplate.weapon },
+            id: `${enemyTemplate.id}_${instanceNumber + 1}`
+        };
+    };
+
+    const selectEnemiesByTier = (tier, count, partySize) => {
+        const tierEnemies = EnemiesData.enemies.filter(enemy => enemy.tier === tier);
+        if (tierEnemies.length === 0) return [];
+
         const selectedEnemies = [];
-            
-        for (let i = 0; i < 3; i++) {
-            const randomIndex = Math.floor(Math.random() * genericEnemies.length);
-            const enemy = { ...genericEnemies[randomIndex] };
-            enemy.id = `${enemy.id}_${i + 1}`;
-            selectedEnemies.push(enemy);
+        for (let index = 0; index < count; index++) {
+            const randomIndex = Math.floor(Math.random() * tierEnemies.length);
+            selectedEnemies.push(createEnemyInstance(tierEnemies[randomIndex], index, partySize));
         }
-            
+
         return selectedEnemies;
+    };
+
+    const generateEnemies = (spawnType = 'low') => {
+        const partySize = players.length;
+
+        if (spawnType === 'medium') {
+            const mediumCount = partySize <= 3 ? 2 : 3;
+            const mediumEnemies = selectEnemiesByTier('mid-tier', mediumCount, partySize);
+            return mediumEnemies.length > 0 ? mediumEnemies : selectEnemiesByTier('generic', mediumCount, partySize);
+        }
+
+        if (spawnType === 'boss') {
+            const bossEnemies = selectEnemiesByTier('boss', 1, partySize);
+            if (bossEnemies.length > 0) return bossEnemies;
+
+            const fallbackCount = partySize <= 3 ? 2 : 3;
+            const mediumEnemies = selectEnemiesByTier('mid-tier', fallbackCount, partySize);
+            return mediumEnemies.length > 0 ? mediumEnemies : selectEnemiesByTier('generic', fallbackCount, partySize);
+        }
+
+        // Default: low spawn
+        const lowCount = partySize + 2;
+        const genericEnemies = selectEnemiesByTier('generic', lowCount, partySize);
+        return genericEnemies;
     };
 
     // Initialize character positions at bottom of grid
@@ -289,19 +429,40 @@ function Main() {
                 }
             } else {
                 // Fallback to client-side generation (shouldn't happen in multiplayer)
+                const generatedPositions = generateEnemyFallbackPositions(enemies);
                 const enemyPositions = {};
-                const topRow = Math.floor(Math.random() * 2);
-                enemies.forEach((enemy, index) => {
-                    if (!characterPositions[enemy.id]) {
-                        enemyPositions[enemy.id] = { row: topRow, col: index + 3 };
+
+                enemies.forEach((enemy) => {
+                    if (!characterPositions[enemy.id] && generatedPositions[enemy.id]) {
+                        enemyPositions[enemy.id] = generatedPositions[enemy.id];
                     }
                 });
+
                 if (Object.keys(enemyPositions).length > 0) {
                     setCharacterPositions(prev => ({ ...prev, ...enemyPositions }));
                 }
             }
         }
     }, [enemies]);
+
+    useEffect(() => {
+        setCharacterPositions(prev => {
+            const enemyIds = new Set((enemies || []).map(enemy => enemy.id));
+            const validPlayerIds = new Set(players);
+            const nextPositions = { ...prev };
+
+            Object.keys(nextPositions).forEach(id => {
+                const isTrackedPlayer = validPlayerIds.has(id);
+                const isTrackedEnemy = enemyIds.has(id);
+
+                if (!isTrackedPlayer && !isTrackedEnemy) {
+                    delete nextPositions[id];
+                }
+            });
+
+            return nextPositions;
+        });
+    }, [enemies, players]);
 
     // Helper function to calculate path between two positions
     const calculatePath = (start, end) => {
@@ -325,6 +486,12 @@ function Main() {
     // Listen for enemy turn execution
     useEffect(() => {
         const handleExecuteEnemyTurn = ({ enemyId, allies, alliedEnemies }) => {
+            // Check if game is over - don't execute enemy turns
+            if (gameOverRef.current) {
+                console.log('[ENEMY TURN] Game is over, skipping enemy turn');
+                return;
+            }
+            
             console.log('EXECUTE_ENEMY_TURN EVENT RECEIVED');
             console.log('Enemy ID:', enemyId);
             console.log('Player Name:', playerName);
@@ -339,7 +506,7 @@ function Main() {
             console.log('[ENEMY TURN] This player will handle the enemy turn');
             console.log('Allied Enemies:', alliedEnemies);
             
-            const enemy = enemies.find(e => e.id === enemyId);
+            const enemy = enemies.find(e => e.id === enemyId && !isEnemyDeadBody(e));
             if (!enemy) {
                 console.error('Enemy not found:', enemyId);
                 console.log('Available enemies:', enemies.map(e => e.id));
@@ -466,14 +633,6 @@ function Main() {
                         console.log(`Player ${turnAction.target} has died! Removing from turn order.`);
                         setTurnOrder(prevOrder => prevOrder.filter(turn => turn.id !== turnAction.target));
                         
-                        // Show "You Died" screen if this is the current player
-                        if (turnAction.target === playerName) {
-                            setShowYouDiedScreen(true);
-                            setTimeout(() => {
-                                setShowYouDiedScreen(false);
-                            }, 2500); // Show for 2.5 seconds
-                        }
-                        
                         // Check if all players are dead
                         const remainingPlayers = players.filter(p => p !== turnAction.target);
                         const allPlayersDeadCheck = remainingPlayers.every(p => 
@@ -483,6 +642,14 @@ function Main() {
                         if (allPlayersDeadCheck) {
                             console.log('All players defeated! Game Over.');
                             setGameOver(true);
+                        } else {
+                            // Only show "You Died" screen if this is the current player and not all players are dead
+                            if (turnAction.target === playerName) {
+                                setShowYouDiedScreen(true);
+                                setTimeout(() => {
+                                    setShowYouDiedScreen(false);
+                                }, 2500); // Show for 2.5 seconds
+                            }
                         }
                     }
                     
@@ -513,7 +680,7 @@ function Main() {
         const handleEnemiesUpdated = ({ enemies: updatedEnemies }) => {
             console.log('Enemies updated:', updatedEnemies);
             if (updatedEnemies && Array.isArray(updatedEnemies)) {
-                setEnemies(updatedEnemies);
+                setEnemies(normalizeEnemiesState(updatedEnemies));
             } else {
                 console.error('[ENEMIES UPDATED] Received invalid enemies data:', updatedEnemies);
             }
@@ -688,7 +855,7 @@ function Main() {
         
         // Check if clicking on an enemy with weapon selected
         const characterOnCell = Object.entries(characterPositions).find(
-            ([id, pos]) => pos.row === row && pos.col === col
+            ([, pos]) => pos.row === row && pos.col === col
         );
         
         // Handle ability targeting
@@ -705,7 +872,7 @@ function Main() {
             
             // Check if targeting an ally
             const isAlly = playerCharacters[targetId];
-            const enemy = enemies.find(e => e.id === targetId);
+            const enemy = enemies.find(e => e.id === targetId && !isEnemyDeadBody(e));
             
             console.log('[ABILITY TARGET] Target validation:', {
                 isAlly: !!isAlly,
@@ -769,7 +936,7 @@ function Main() {
         
         if (weaponSelected && characterOnCell) {
             const enemyId = characterOnCell[0];
-            const enemy = enemies.find(e => e.id === enemyId);
+            const enemy = enemies.find(e => e.id === enemyId && !isEnemyDeadBody(e));
             
             if (enemy && currentPlayerCharacter) {
                 // Check weapon range
@@ -819,9 +986,11 @@ function Main() {
                 );
                 
                 // Update enemy health
-                const updatedEnemies = enemies.map(e => 
-                    e.id === enemyId ? { ...e, stats: { ...e.stats, health: Math.max(0, newHealth) } } : e
-                ).filter(e => e.stats.health > 0); // Remove dead enemies
+                const updatedEnemies = normalizeEnemiesState(
+                    enemies.map(e => 
+                        e.id === enemyId ? { ...e, stats: { ...e.stats, health: Math.max(0, newHealth) } } : e
+                    )
+                );
                 
                 setEnemies(updatedEnemies);
                 
@@ -905,36 +1074,57 @@ function Main() {
         const grid = [];
         const ROWS = 7;
         const COLS = 10;
+        const activeHealingFields = activeEffects.filter(effect =>
+            effect.type === 'healing_field' &&
+            effect.turnsRemaining > 0 &&
+            effect.center
+        );
         
         for (let row = 0; row < ROWS; row++) {
             for (let col = 0; col < COLS; col++) {
                 const characterOnCell = Object.entries(characterPositions).find(
-                    ([id, pos]) => pos.row === row && pos.col === col
+                    ([, pos]) => pos.row === row && pos.col === col
                 );
                 
-                const isEnemy = enemies.some(e => e.id === characterOnCell?.[0]);
+                const enemyOnCell = characterOnCell ? enemies.find(e => e.id === characterOnCell[0]) : null;
+                const isEnemy = !!enemyOnCell;
+                const isCorpse = isEnemyDeadBody(enemyOnCell);
                 const isPlayerCharacter = characterOnCell && characterOnCell[0] === playerName;
+                const isHealingFieldCell = activeHealingFields.some(field => {
+                    const radius = field.radius ?? 1;
+                    return (
+                        Math.abs(field.center.row - row) <= radius &&
+                        Math.abs(field.center.col - col) <= radius
+                    );
+                });
 
                 grid.push(
                     <div
                         key={`${row}-${col}`}
                         className={`grid-cell ${
                             characterOnCell ? 'occupied' : ''
-                        } ${isPlayerCharacter ? 'player-controlled' : ''} ${isEnemy ? 'enemy-cell' : ''}`}
+                        } ${isPlayerCharacter ? 'player-controlled' : ''} ${isEnemy ? (isCorpse ? 'enemy-corpse-cell' : 'enemy-cell') : ''} ${isHealingFieldCell ? 'healing-field-cell' : ''}`}
                         onClick={() => handleGridClick(row, col)}
                     >
                         {characterOnCell && (
                             <div className="grid-character">
                                 {isEnemy ? (
-                                    <>
-                                        <div className="enemy-health">
-                                            {enemies.find(e => e.id === characterOnCell[0])?.stats.health || 0}
-                                            {enemies.find(e => e.id === characterOnCell[0])?.stats.speed || 0}
+                                    isCorpse ? (
+                                        <div className="enemy-corpse-icon">
+                                            <GiDeathSkull />
                                         </div>
-                                        <div className="enemy-name">
-                                            {enemies.find(e => e.id === characterOnCell[0])?.name || 'E'}
-                                        </div>
-                                    </>
+                                    ) : (
+                                        <>
+                                            {hasEnhancedVision && (
+                                                <div className="enemy-health">
+                                                    {enemyOnCell?.stats.health || 0}
+                                                </div>
+                                            )}
+                                            <div className="enemy-name">
+                                                {enemyOnCell?.name || 'E'}
+                                            </div>
+                                        </>
+                                    )
                                 ) : (
                                     playerCharacters[characterOnCell[0]]?.name || '?'
                                 )}
@@ -947,11 +1137,12 @@ function Main() {
         return grid;
     };
 
-    function handleStoryComplete() {
-        const generatedEnemies = generateEnemies();
-        setEnemies(generatedEnemies);
+    function handleStoryComplete(spawnType = 'low') {
+        const normalizedSpawnType = ['low', 'medium', 'boss'].includes(spawnType) ? spawnType : 'low';
+        const generatedEnemies = generateEnemies(normalizedSpawnType);
+        setEnemies(normalizeEnemiesState(generatedEnemies));
         setGamePhase('combat');
-        socket.emit('start_combat', { room, generatedEnemies });
+        socket.emit('start_combat', { room, generatedEnemies, spawnType: normalizedSpawnType });
     }
 
     function handleLevelUp(){
@@ -1046,7 +1237,7 @@ function Main() {
             activeEffects
         });
         
-        setEnemies(updates.enemies);
+        setEnemies(normalizeEnemiesState(updates.enemies));
         setPlayerCharacters(updates.playerCharacters);
         setActiveEffects(updates.activeEffects);
         
@@ -1162,7 +1353,7 @@ function Main() {
             activeEffects
         });
         
-        setEnemies(updates.enemies);
+        setEnemies(normalizeEnemiesState(updates.enemies));
         setPlayerCharacters(updates.playerCharacters);
         setActiveEffects(updates.activeEffects);
         
@@ -1252,7 +1443,7 @@ function Main() {
             activeEffects
         });
         
-        setEnemies(updates.enemies);
+        setEnemies(normalizeEnemiesState(updates.enemies));
         setPlayerCharacters(updates.playerCharacters);
         setActiveEffects(updates.activeEffects);
         
@@ -1323,7 +1514,7 @@ function Main() {
         
         setActiveEffects(updatedEffects);
         setPlayerCharacters(updatedCharacters);
-        setEnemies(updatedEnemies);
+        setEnemies(normalizeEnemiesState(updatedEnemies));
         
         // Emit updated enemy states to server to maintain sync
         socket.emit('end_turn', { room, playerName, updatedEnemies });
@@ -1365,7 +1556,23 @@ function Main() {
                         <button 
                             className="game-over-button"
                             onClick={() => {
-                                setGamePhase('character-select');
+                                console.log('[NEW GAME] Resetting game...');
+                                // Reset local state
+                                setGameOver(false);
+                                setShowYouDiedScreen(false);
+                                setEnemies([]);
+                                setTurnOrder([]);
+                                setActiveEffects([]);
+                                setCooldowns({});
+                                setActionUsed(false);
+                                setMovementUsed(0);
+                                setSelectedAbility(null);
+                                setSelectedTargets([]);
+                                setWeaponSelected(false);
+                                setCharacterPositions({});
+                                
+                                // Request server to reset game state for all players
+                                socket.emit('reset_game', { room });
                             }}
                         >
                             New Game
@@ -1373,7 +1580,20 @@ function Main() {
                         <button 
                             className="game-over-button"
                             onClick={() => {
-                                setGamePhase('home');
+                                // Reset game state
+                                setGameOver(false);
+                                setShowYouDiedScreen(false);
+                                setEnemies([]);
+                                setTurnOrder([]);
+                                setActiveEffects([]);
+                                setCooldowns({});
+                                
+                                // Leave the room
+                                socket.emit('leave_room', { room, playerName });
+                                localStorage.removeItem("name");
+                                localStorage.removeItem("room");
+                                localStorage.removeItem("isAdmin");
+                                window.location.reload();
                             }}
                         >
                             Quit
@@ -1443,24 +1663,10 @@ function Main() {
         <div className="AI-script">
             <div className='Response'>
             <div className="ai-header">
-                {/* <h3>AI Log</h3> */}
                 <span className={`ai-status ${aiBusy ? 'busy' : ''}`}>
                     {aiBusy ? 'Thinking...' : 'Ready'}
                 </span>
             </div>
-            {/* <div className="ai-log" ref={aiLogRef}>
-                {aiLog.length === 0 ? (
-                    <div className="ai-empty">No AI narration yet.</div>
-                ) : (
-                    aiLog.map(entry => (
-                        <div key={entry.id} className={`ai-entry ${entry.role}`}>
-                            <span className="ai-role">{entry.role === 'user' ? 'You' : 'DM'}</span>
-                            <span className="ai-text">{entry.text}</span>
-                            <span className="ai-text">{entry.text}</span>
-                        </div>
-                    ))
-                )}
-            </div> */}
             {pendingFactionChoice && (
                 <div className="ai-choices">
                     <div className="ai-choice-owner">
@@ -1624,7 +1830,7 @@ function Main() {
                                 const currentCooldown = cooldowns[ability.id] || 0;
                                 const isOnCooldown = currentCooldown > 0;
                                 const isSelected = selectedAbility === ability.id;
-                                const range = ability.range === 1 ? "Melee" : ability.range;  
+                                const range = ability.range === 1 ? "Melee" : ability.range === undefined ? "" : "Range: " + ability.range;
                                 
                                 return (
                                     <button 

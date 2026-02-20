@@ -15,6 +15,7 @@ import LevelUp from "./LevelUp/LevelUp.jsx"
 import ChooseAbilities from "./ChooseAbilities/ChooseAbilities.jsx"
 
 function HomeScreen() {       
+  const [joinError, setJoinError] = useState('');
   const [isJoining, setIsJoining] = useState(() => {
     const savedName = localStorage.getItem('name');
     const savedRoom = localStorage.getItem('room');
@@ -28,6 +29,20 @@ function HomeScreen() {
     const savedRoom = localStorage.getItem('room');
     return (savedName && savedRoom) ? savedName : user?.username;
   });
+
+  useEffect(() => {
+    const handleRoomFull = () => {
+      setIsJoining(false);
+      setJoinError("This room is full.");
+      localStorage.removeItem('room');
+    };
+
+    socket.on('room_full', handleRoomFull);
+
+    return () => {
+      socket.off('room_full', handleRoomFull);
+    };
+  }, [socket]);
 
   useEffect(() => {
     const savedName = localStorage.getItem('name');
@@ -47,6 +62,7 @@ function HomeScreen() {
 
   const joinRoom = () => {
     if (room !== '' && name !== '') {
+      setJoinError('');
       localStorage.setItem('name', name);
       localStorage.setItem('room', room);
       if (setPlayerName) setPlayerName(name);
@@ -59,6 +75,7 @@ function HomeScreen() {
   };
 
   const startRoom = () => {
+    setJoinError('');
 
     // Generate random 4-digit room ID
     const newRoom = Math.floor(Math.random() * (9999 - 1000 + 1) + 1000);
@@ -115,6 +132,7 @@ function HomeScreen() {
               value={room}
               onChange={(event) => setRoom(event.target.value)}
             />
+            {joinError && <div className="error-message">{joinError}</div>}
             <button onClick={joinRoom}>Join Room</button>
             <button onClick={startRoom}>Start Room</button>
           </div>

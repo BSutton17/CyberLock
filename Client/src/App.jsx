@@ -7,7 +7,6 @@ import Login from './Components/Login';
 import ProtectedRoute from './Components/ProtectedRoute';
 import HomeScreen from './GameComponents/HomeScreen';
 
-// Root route that redirects based on authentication
 const RootRoute = () => {
   const { isAuthenticated, loading } = useAuth();
 

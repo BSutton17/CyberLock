@@ -345,17 +345,52 @@ export function calculateEnemyMovement(enemy, allies, alliedEnemies, playerChara
     return null;
 }
 
+function calculatePullMovementToCenter(enemy, center, characterPositions) {
+    const enemyPos = characterPositions[enemy.id];
+    if (!enemyPos || !center) return null;
+
+    const maxMovement = Math.floor(enemy.stats.speed / 10);
+    if (maxMovement <= 0) return null;
+
+    const reachableCells = getReachableCells(enemyPos, maxMovement, characterPositions);
+    if (reachableCells.length === 0) return null;
+
+    const currentDistance = getDistance(enemyPos, center);
+    const closerCells = reachableCells.filter(cell => getDistance(cell, center) < currentDistance);
+
+    if (closerCells.length === 0) {
+        return null;
+    }
+
+    const bestMove = closerCells.reduce((best, cell) => {
+        const distance = getDistance(cell, center);
+        const bestDistance = getDistance(best, center);
+        return distance < bestDistance ? cell : best;
+    });
+
+    return { row: bestMove.row, col: bestMove.col };
+}
+
 
 export function executeEnemyTurn(enemy, allies, alliedEnemies, playerCharacters, characterPositions, activeEffects = []) {
     // Check for status effects on this enemy
     const enemyEffects = activeEffects.filter(effect => effect.target === enemy.id);
-    const isImmobilized = enemyEffects.some(effect => 
+    const blackHolePullEffect = enemyEffects.find(effect =>
+        effect.type === 'status_effect' &&
+        effect.status === 'black_hole_pull' &&
+        effect.turnsRemaining > 0 &&
+        effect.center
+    );
+    const immobilizeEffects = enemyEffects.filter(effect =>
         effect.type === 'status_effect' && 
         effect.status === 'immobilized' && 
         effect.turnsRemaining > 0
     );
+    const isImmobilized = immobilizeEffects.length > 0;
+    const movementPrevented = immobilizeEffects.some(effect => effect.preventMovement !== false);
+    const actionsPrevented = immobilizeEffects.some(effect => effect.preventActions === true);
     
-    if (isImmobilized) {
+    if (isImmobilized && actionsPrevented) {
         return {
             enemyId: enemy.id,
             movement: null,
@@ -369,7 +404,11 @@ export function executeEnemyTurn(enemy, allies, alliedEnemies, playerCharacters,
     const role = enemy.role || 'DPS';
     
     // Calculate movement
-    const newPosition = calculateEnemyMovement(enemy, allies, alliedEnemies, playerCharacters, characterPositions);
+    const newPosition = movementPrevented
+        ? null
+        : blackHolePullEffect
+            ? calculatePullMovementToCenter(enemy, blackHolePullEffect.center, characterPositions)
+            : calculateEnemyMovement(enemy, allies, alliedEnemies, playerCharacters, characterPositions);
     
     // Create updated positions to check attack range AFTER moving
     const updatedPositions = newPosition ? {
@@ -384,6 +423,7 @@ export function executeEnemyTurn(enemy, allies, alliedEnemies, playerCharacters,
         enemyId: enemy.id,
         movement: newPosition,
         target: target,
-        useWeapon: target ? true : false
+        useWeapon: target ? true : false,
+        immobilized: movementPrevented
     };
 }

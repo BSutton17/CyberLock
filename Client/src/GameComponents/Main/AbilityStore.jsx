@@ -3,7 +3,7 @@ export const ABILITIES = {
         id: 'ability_boost',
         name: 'Ability Boost',
         description: 'Grants yourself +5 Speed and +5 Bonus Health for 2 turns',
-        role: "tank",
+        role: "Tank",
         level: 1,
         cooldown: 3,
         targetType: 'self',
@@ -45,7 +45,7 @@ export const ABILITIES = {
         id: 'binding_chains',
         name: 'Binding Chains',
         description: 'Use energy chains to temporarily immobilize 2 enemies for 1 turn',
-        role: "tank",
+        role: "Tank",
         level: 3,
         cooldown: 2,
         targetType: 'multi-enemy', 
@@ -83,7 +83,7 @@ export const ABILITIES = {
         id: 'battery_drain',
         name: 'Battery Drain',
         description: 'Drain energy from an enemy. 25% of damage dealt heals the weakest ally',
-        role: "support",
+        role: "Support",
         level: 1,
         cooldown: 2,
         targetType: 'single-enemy',
@@ -147,7 +147,7 @@ export const ABILITIES = {
         id: 'blackjack',
         name: 'Blackjack',
         description: '50% chance to restore one ally 50% HP. Every 5 TA above 30 grants +1% chance',
-        role: "support",
+        role: "Support",
         level: 5,
         cooldown: 3,
         targetType: 'ally',
@@ -197,8 +197,8 @@ export const ABILITIES = {
     black_hole: {
         id: 'black_hole',
         name: 'Black Hole',
-        description: 'Click on a square, all enemies in a 5x5 area are sucked in and cannot move for 1 turn',
-        role: "dps",
+        description: 'Click on a square, all enemies in a 5x5 area are sucked in and cannot move for 2 turns',
+        role: "DPS",
         cooldown: 0,
         isUltimate: true,
         targetType: 'ground-target',
@@ -218,8 +218,14 @@ export const ABILITIES = {
             const { row, col } = targetPosition;
             const effects = [];
             const affectedEnemies = [];
+            const forcedMovement = [];
+            const occupied = new Set(
+                Object.values(characterPositions || {}).map(pos => `${pos.row},${pos.col}`)
+            );
+            const withinBounds = (r, c) => r >= 0 && r < 7 && c >= 0 && c < 10;
             
             // Find all enemies in 5x5 area (2 squares in each direction)
+            const enemiesInArea = [];
             enemies.forEach(enemy => {
                 const enemyPos = characterPositions[enemy.id];
                 if (!enemyPos) return;
@@ -230,10 +236,79 @@ export const ABILITIES = {
                 // Within 2 squares in any direction (5x5 grid)
                 if (rowDiff <= 2 && colDiff <= 2) {
                     affectedEnemies.push(enemy.name);
+                    enemiesInArea.push({ enemy, enemyPos });
                     effects.push({
-                        type: 'movement_disabled',
+                        type: 'status_effect',
                         target: enemy.id,
-                        duration: 1
+                        status: 'black_hole_pull',
+                        center: { row, col },
+                        duration: 2,
+                        preventMovement: false,
+                        preventActions: false
+                    });
+                }
+            });
+
+            effects.push({
+                type: 'black_hole_zone',
+                center: { row, col },
+                radius: 2,
+                duration: 2
+            });
+
+            // Pull enemies toward center, up to 2 cells, without passing through occupied cells
+            const sortedTargets = enemiesInArea.sort((a, b) => {
+                const distA = Math.abs(a.enemyPos.row - row) + Math.abs(a.enemyPos.col - col);
+                const distB = Math.abs(b.enemyPos.row - row) + Math.abs(b.enemyPos.col - col);
+                return distB - distA;
+            });
+
+            sortedTargets.forEach(({ enemy, enemyPos }) => {
+                let current = { ...enemyPos };
+                const path = [];
+                occupied.delete(`${enemyPos.row},${enemyPos.col}`);
+
+                for (let step = 0; step < 2; step++) {
+                    const currentDistance = Math.abs(current.row - row) + Math.abs(current.col - col);
+                    if (currentDistance === 0) break;
+
+                    const candidateMoves = [
+                        { row: current.row - 1, col: current.col },
+                        { row: current.row + 1, col: current.col },
+                        { row: current.row, col: current.col - 1 },
+                        { row: current.row, col: current.col + 1 }
+                    ].filter(next => {
+                        if (!withinBounds(next.row, next.col)) return false;
+                        const key = `${next.row},${next.col}`;
+                        if (occupied.has(key)) return false;
+                        const nextDistance = Math.abs(next.row - row) + Math.abs(next.col - col);
+                        return nextDistance < currentDistance;
+                    });
+
+                    if (candidateMoves.length === 0) break;
+
+                    candidateMoves.sort((first, second) => {
+                        const firstDistance = Math.abs(first.row - row) + Math.abs(first.col - col);
+                        const secondDistance = Math.abs(second.row - row) + Math.abs(second.col - col);
+                        if (firstDistance !== secondDistance) return firstDistance - secondDistance;
+                        const firstRowDelta = Math.abs(first.row - row);
+                        const secondRowDelta = Math.abs(second.row - row);
+                        if (firstRowDelta !== secondRowDelta) return firstRowDelta - secondRowDelta;
+                        return Math.abs(first.col - col) - Math.abs(second.col - col);
+                    });
+
+                    const nextCell = candidateMoves[0];
+                    path.push(nextCell);
+                    current = nextCell;
+                }
+
+                occupied.add(`${current.row},${current.col}`);
+
+                if (path.length > 0) {
+                    forcedMovement.push({
+                        enemyId: enemy.id,
+                        path,
+                        to: current
                     });
                 }
             });
@@ -248,8 +323,9 @@ export const ABILITIES = {
             return {
                 success: true,
                 effects: effects,
+                forcedMovement,
                 aoePosition: targetPosition,
-                message: `${caster.name} creates a Black Hole! ${affectedEnemies.join(', ')} cannot move for 1 turn!`
+                message: `${caster.name} creates a Black Hole! ${affectedEnemies.join(', ')} are pulled inward and cannot move for 2 turns!`
             };
         }
     },
@@ -257,7 +333,7 @@ export const ABILITIES = {
         id: 'butterfly_effect',
         name: 'Butterfly Effect',
         description: 'Add one turn of cooldown to enemies abilities',
-        role: "support",
+        role: "Support",
         level: 3,
         cooldown: 2,
         targetType: 'all-enemies',
@@ -294,7 +370,7 @@ export const ABILITIES = {
         id: 'calm_under_pressure',
         name: 'Calm Under Pressure',
         description: 'Heal yourself for 15 hp',
-        role: "dps",
+        role: "DPS",
         level: 3,
         cooldown: 3,
         targetType: 'self',
@@ -327,7 +403,7 @@ export const ABILITIES = {
         id: 'charge',
         name: "Charge!",
         description: 'A move that completely takes down an enemy with a lower strength stat',
-        role: "tank",
+        role: "Tank",
         level: 5,
         cooldown: 3, 
         targetType: 'single-enemy',
@@ -378,7 +454,7 @@ export const ABILITIES = {
         id: 'count_me_out',
         name: 'Count me Out',
         description: 'Remove one turn of CD for one of your allies',
-        role: "support",
+        role: "Support",
         level: 3,
         cooldown: 3,
         targetType: 'ally',
@@ -413,7 +489,7 @@ export const ABILITIES = {
         id: 'dedicating',
         name: 'Dedicating Everything to You',
         description: 'One ally gains +15 bonus in all stats for one turn',
-        role: "support",
+        role: "Support",
         cooldown: 0,
         isUltimate: true,
         targetType: 'ally',
@@ -502,7 +578,7 @@ export const ABILITIES = {
         id: 'diamond_body',
         name: 'Diamond Body',
         description: 'Tanks in your party receive +5 resistance for 1 turn',
-        role: "support",
+        role: "Support",
         level: 1,
         cooldown: 1,
         targetType: 'all-allies',
@@ -550,7 +626,7 @@ export const ABILITIES = {
         id: 'eagle_eye',
         name: 'Eagle Eye',
         description: 'See the health of all enemies for one turn',
-        role: "support",
+        role: "Support",
         level: 5,
         cooldown: 2,
         targetType: 'self',
@@ -578,7 +654,7 @@ export const ABILITIES = {
         id: 'executioners_judgment',
         name: "Executioner's Judgment",
         description: 'Enemies with lower Max Health lose half their HP, enemies with higher Max Health than you lose 20% of their current health',
-        role: "tank",
+        role: "Tank",
         cooldown: 0, 
         isUltimate: true,
         targetType: 'all-enemies',
@@ -626,7 +702,7 @@ export const ABILITIES = {
         id: 'emp',
         name: 'EMP',
         description: 'Remove all abilities from enemies for two turn',
-        role: "support",
+        role: "Support",
         isUltimate: true,
         cooldown: 4,
         targetType: 'all-enemies',
@@ -662,7 +738,7 @@ export const ABILITIES = {
         id: 'feels_like_home',
         name: 'Feels Like Home',
         description: 'Place a healing field that heals allies +10 for two turns',
-        role: "support",
+        role: "Support",
         level: 1,
         cooldown: 2,
         targetType: 'ground-target',
@@ -729,7 +805,7 @@ export const ABILITIES = {
         id: 'flood_of_frost',
         name: 'Flood of Frost',
         description: 'A spell that freezes an enemy, cutting their speed in half for 2 turns and does light damage',
-        role: "support",
+        role: "Support",
         level: 3,
         cooldown: 2,
         targetType: 'single-enemy', 
@@ -779,7 +855,7 @@ export const ABILITIES = {
         id: 'flash_step',
         name: 'Flash Step',
         description: 'Double your speed for one turn',
-        role: "dps",
+        role: "DPS",
         level: 1,
         cooldown: 3,
         targetType: 'self',
@@ -811,7 +887,7 @@ export const ABILITIES = {
         id: 'fireball',
         name: 'Fireball',
         description: 'A move that does AOE damage with 20% chance to burn',
-        role: "dps",
+        role: "DPS",
         level: 5,
         cooldown: 1,
         targetType: 'ground-target',
@@ -854,12 +930,20 @@ export const ABILITIES = {
             
             // Calculate total damage and divide equally
             const totalDamage = Math.max(1, Math.round(
-                (caster.stats.ta / 10) * 15
+                (caster.stats.ta / 10) * 10  - (affectedEnemies.reduce((maxRes, enemy) => Math.max(maxRes, enemy.stats.resistance), 0) / 10)
             ));
             const damagePerEnemy = Math.floor(totalDamage / affectedEnemies.length);
             
             const damageResults = [];
-            const effects = [];
+            const effects = [
+                {
+                    type: 'fireball_zone',
+                    center: { row, col },
+                    radius: 1,
+                    duration: 1,
+                    tickOnCastTurn: true
+                }
+            ];
             
             affectedEnemies.forEach(enemy => {
                 // Apply damage
@@ -897,7 +981,7 @@ export const ABILITIES = {
         id: 'humble',
         name: 'Humble',
         description: 'Grants yourself +10 ta for 1 turn',
-        role: "support",
+        role: "Support",
         level: 1,
         cooldown: 1,
         targetType: 'self',
@@ -931,7 +1015,7 @@ export const ABILITIES = {
         id: 'here_we_go_again',
         name: 'Here We Go Again',
         description: 'All allies have all of their cooldowns set to 0',
-        role: "support",
+        role: "Support",
         isUltimate: true,
         cooldown: 5,
         targetType: 'all-allies',
@@ -968,7 +1052,7 @@ export const ABILITIES = {
         id: 'hurry_up',
         name: 'Hurry Up!',
         description: 'Add +10 speed to one ally for 1 turns',
-        role: "support",
+        role: "Support",
         level: 1,
         cooldown: 2,
         targetType: 'ally',
@@ -1023,7 +1107,7 @@ export const ABILITIES = {
         id: 'iron_sharpens_iron',
         name: 'Iron Sharpens Iron',
         description: 'DPS in your party receive +5 Strength for 1 turn',
-        role: "support",
+        role: "Support",
         level: 3,
         cooldown: 1,
         targetType: 'all-allies',
@@ -1071,7 +1155,7 @@ export const ABILITIES = {
         id: 'love_galore',
         name: "Love Galore",
         description: 'All party members are restore 50% hp',
-        role: "support",
+        role: "Support",
         cooldown: 0, 
         isUltimate: true,
         targetType: 'all-allies',
@@ -1109,7 +1193,7 @@ export const ABILITIES = {
         id: 'murus_fictilis',
         name: "Murus Fictilis",
         description: 'Grants all members of the party +25 Bonus Health and +20 Res for 2 turns',
-        role: "tank",
+        role: "Tank",
         cooldown: 0, 
         isUltimate: true,
         targetType: 'all-allies',
@@ -1158,7 +1242,7 @@ export const ABILITIES = {
         id: 'poison_apple',
         name: 'Poison Apple',
         description: 'A spell that prevents enemies from healing for 1 turn',
-        role: "dps",
+        role: "DPS",
         level: 5,
         cooldown: 2,
         targetType: 'single-enemy',
@@ -1193,7 +1277,7 @@ export const ABILITIES = {
         id: 'selfish_sacrifice',
         name: 'Selfish Sacrifice',
         description: ' Drain your ta and transfer it elsewhere, giving you -10ta but +10 Spd and +5 Str for two turns',
-        role: "dps",
+        role: "DPS",
         level: 3,
         cooldown: 4,
         targetType: 'self',
@@ -1242,7 +1326,7 @@ export const ABILITIES = {
         id: 'shadow_strike',
         name: 'Shadow Strike',
         description: 'A devastating strike that deals damage to a single enemy',
-        role: "dps",
+        role: "DPS",
         level: 1,
         cooldown: 1,
         targetType: 'single-enemy',
@@ -1285,7 +1369,7 @@ export const ABILITIES = {
         id: 'starward_sword',
         name: 'Starward Sword',
         description: 'Allows you to use your weapon 3 times in one turn',
-        role: "tank",
+        role: "Tank",
         cooldown: 0,
         isUltimate: true,
         targetType: 'self',
@@ -1314,7 +1398,7 @@ export const ABILITIES = {
         id: 'sword_slash',
         name: 'Sword Slash',
         description: 'Deal high AOE damage to enemies in front and to the sides',
-        role: "dps",
+        role: "DPS",
         level: 3,
         cooldown: 1,
         targetType: 'ground-target',
@@ -1407,7 +1491,7 @@ export const ABILITIES = {
         id: 'zen',
         name: 'Zen',
         description: 'All support receive +10 ta for one turn',
-        role: "support",
+        role: "Support",
         level: 3,
         cooldown: 2,
         targetType: 'all-allies',

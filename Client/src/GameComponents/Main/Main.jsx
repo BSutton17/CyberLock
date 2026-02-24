@@ -284,8 +284,8 @@ function Main() {
         const role = enemy.role || 'DPS';
 
         if (role === 'Support') return 0;
-        if (behavior === 'defensive') return 1;
-        if (behavior === 'aggressive') return 2;
+        if (behavior === 'defensive') return 0;
+        if (behavior === 'aggressive') return 1;
         if (behavior === 'intelligent') return 1;
         return 1;
     };
@@ -331,12 +331,51 @@ function Main() {
 
         const columns = generateSpreadColumns(sortedEnemies.length, 10);
         const positions = {};
+        const usedCells = new Set();
+
+        const findOpenCell = (preferredRow, preferredCol) => {
+            const withinBounds = (row, col) => row >= 0 && row < 7 && col >= 0 && col < 10;
+            const isOpen = (row, col) => !usedCells.has(`${row},${col}`);
+
+            if (withinBounds(preferredRow, preferredCol) && isOpen(preferredRow, preferredCol)) {
+                return { row: preferredRow, col: preferredCol };
+            }
+
+            for (let radius = 1; radius <= 10; radius++) {
+                for (let rowOffset = -radius; rowOffset <= radius; rowOffset++) {
+                    const colOffset = radius - Math.abs(rowOffset);
+                    const candidates = [
+                        { row: preferredRow + rowOffset, col: preferredCol + colOffset },
+                        { row: preferredRow + rowOffset, col: preferredCol - colOffset }
+                    ];
+
+                    for (const candidate of candidates) {
+                        if (!withinBounds(candidate.row, candidate.col)) continue;
+                        if (isOpen(candidate.row, candidate.col)) {
+                            return candidate;
+                        }
+                    }
+                }
+            }
+
+            for (let row = 0; row < 7; row++) {
+                for (let col = 0; col < 10; col++) {
+                    if (isOpen(row, col)) {
+                        return { row, col };
+                    }
+                }
+            }
+
+            return { row: preferredRow, col: preferredCol };
+        };
 
         sortedEnemies.forEach((enemy, index) => {
-            positions[enemy.id] = {
-                row: getEnemySpawnDepth(enemy),
-                col: columns[index] ?? 0
-            };
+            const preferredRow = getEnemySpawnDepth(enemy);
+            const preferredCol = columns[index] ?? 0;
+            const spawnCell = findOpenCell(preferredRow, preferredCol);
+
+            positions[enemy.id] = spawnCell;
+            usedCells.add(`${spawnCell.row},${spawnCell.col}`);
         });
 
         return positions;
@@ -1079,6 +1118,16 @@ function Main() {
             effect.turnsRemaining > 0 &&
             effect.center
         );
+        const activeFireballZones = activeEffects.filter(effect =>
+            effect.type === 'fireball_zone' &&
+            effect.turnsRemaining > 0 &&
+            effect.center
+        );
+        const activeBlackHoleZones = activeEffects.filter(effect =>
+            effect.type === 'black_hole_zone' &&
+            effect.turnsRemaining > 0 &&
+            effect.center
+        );
         
         for (let row = 0; row < ROWS; row++) {
             for (let col = 0; col < COLS; col++) {
@@ -1097,13 +1146,27 @@ function Main() {
                         Math.abs(field.center.col - col) <= radius
                     );
                 });
+                const isFireballZoneCell = activeFireballZones.some(zone => {
+                    const radius = zone.radius ?? 1;
+                    return (
+                        Math.abs(zone.center.row - row) <= radius &&
+                        Math.abs(zone.center.col - col) <= radius
+                    );
+                });
+                const isBlackHoleZoneCell = activeBlackHoleZones.some(zone => {
+                    const radius = zone.radius ?? 2;
+                    return (
+                        Math.abs(zone.center.row - row) <= radius &&
+                        Math.abs(zone.center.col - col) <= radius
+                    );
+                });
 
                 grid.push(
                     <div
                         key={`${row}-${col}`}
                         className={`grid-cell ${
                             characterOnCell ? 'occupied' : ''
-                        } ${isPlayerCharacter ? 'player-controlled' : ''} ${isEnemy ? (isCorpse ? 'enemy-corpse-cell' : 'enemy-cell') : ''} ${isHealingFieldCell ? 'healing-field-cell' : ''}`}
+                        } ${isPlayerCharacter ? 'player-controlled' : ''} ${isEnemy ? (isCorpse ? 'enemy-corpse-cell' : 'enemy-cell') : ''} ${isHealingFieldCell ? 'healing-field-cell' : ''} ${isFireballZoneCell ? 'fireball-zone-cell' : ''} ${isBlackHoleZoneCell ? 'black-hole-zone-cell' : ''}`}
                         onClick={() => handleGridClick(row, col)}
                     >
                         {characterOnCell && (
@@ -1240,6 +1303,20 @@ function Main() {
         setEnemies(normalizeEnemiesState(updates.enemies));
         setPlayerCharacters(updates.playerCharacters);
         setActiveEffects(updates.activeEffects);
+
+        if (result.forcedMovement && result.forcedMovement.length > 0) {
+            result.forcedMovement.forEach(({ enemyId, path, to }) => {
+                const movementPath = path && path.length > 0 ? path : (to ? [to] : []);
+                if (movementPath.length === 0) return;
+
+                socket.emit('enemy_moved', {
+                    room,
+                    enemyId,
+                    path: movementPath,
+                    stepDelay: 120
+                });
+            });
+        }
         
         console.log('[ABILITY COMPLETE] Updated enemies:', updates.enemies);
         console.log('[ABILITY COMPLETE] Updated playerCharacters:', updates.playerCharacters);
@@ -1516,8 +1593,14 @@ function Main() {
         setPlayerCharacters(updatedCharacters);
         setEnemies(normalizeEnemiesState(updatedEnemies));
         
-        // Emit updated enemy states to server to maintain sync
-        socket.emit('end_turn', { room, playerName, updatedEnemies });
+        // Emit updated game state to server to maintain sync across all clients
+        socket.emit('end_turn', {
+            room,
+            playerName,
+            updatedEnemies,
+            updatedPlayerCharacters: updatedCharacters,
+            updatedActiveEffects: updatedEffects
+        });
 
         if (!actionUsed && turnStartPosition && characterPositions[playerName]) {
             const endPos = characterPositions[playerName];
@@ -1703,8 +1786,10 @@ function Main() {
                 />
                 <button type="submit" disabled={aiBusy || !aiInput.trim()}>Send</button>
             </form> */}
-            {/* <button onClick={handleStoryComplete}>Combat</button> */}
-            <button onClick={handleLevelUp}>Level Up</button>
+            <div>
+                <button style={{ width: '150px' }} onClick={() => handleStoryComplete()}>Combat</button>
+                <button style={{ width: '150px' }} onClick={handleLevelUp}>Level Up</button>
+            </div>
             </div>
             <span className="ai-text">{aiText}</span>
        </div>
@@ -1826,11 +1911,12 @@ function Main() {
                     <div className="abilities-section">
                         <h4>Abilities</h4>
                         <div className="abilities-grid">
-                            {currentPlayerCharacter.abilities.map((ability, index) => {
+                            {(Array.isArray(currentPlayerCharacter.abilities) ? currentPlayerCharacter.abilities : []).map((ability, index) => {
                                 const currentCooldown = cooldowns[ability.id] || 0;
                                 const isOnCooldown = currentCooldown > 0;
                                 const isSelected = selectedAbility === ability.id;
                                 const range = ability.range === 1 ? "Melee" : ability.range === undefined ? "" : "Range: " + ability.range;
+                                console.log(`[ABILITY RENDER] Rendering ability: ${ability}`)
                                 
                                 return (
                                     <button 

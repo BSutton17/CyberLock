@@ -111,7 +111,7 @@ export function applyAbilityEffects(result, gameState) {
             const newEffect = {
                 ...effect,
                 turnsRemaining: effect.duration,
-                appliedThisTurn: true // Mark so we don't tick it down immediately
+                appliedThisTurn: !effect.tickOnCastTurn // Most effects skip first tick; some visuals should expire on caster end-turn
             };
             updates.activeEffects.push(newEffect);
             console.log('[APPLY EFFECTS] Added to activeEffects:', newEffect);

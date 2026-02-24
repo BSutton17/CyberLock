@@ -118,7 +118,11 @@ function Events(){
         });
 
         socket.on("level_up_complete", () => {
-          setScreen("chooseAbilities")
+          setScreen("chooseAbilities");
+        });
+
+        socket.on("ability_select_complete",() => {
+          setScreen("main");
         });
 
         socket.on("game_reset", () => {

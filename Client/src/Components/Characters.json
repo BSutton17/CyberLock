@@ -4,6 +4,7 @@
       "id": "offensive_tank_1",
       "name": "Offensive Tank #1",
       "role": "Tank",
+      "level": 5,
       "stats": {
         "health": 95,
         "maxHealth": 95,
@@ -26,6 +27,7 @@
       "id": "defensive_tank_2",
       "name": "Defensive Tank #2",
       "role": "Tank",
+      "level": 1,
       "stats": {
         "health": 110,
         "maxHealth": 110,
@@ -48,6 +50,7 @@
       "id": "spellcaster_dps_1",
       "name": "Spell Caster DPS #1",
       "role": "DPS",
+      "level": 1,
       "stats": {
         "health": 75,
         "maxHealth": 75,
@@ -70,6 +73,7 @@
       "id": "aggressive_dps_2",
       "name": "Aggressive DPS #2",
       "role": "DPS",
+      "level": 1,
       "stats": {
         "health": 80,
         "maxHealth": 80,
@@ -92,6 +96,7 @@
       "id": "traditional_warrior_dps_3",
       "name": "Traditional Warrior DPS #3",
       "role": "DPS",
+      "level": 1,
       "stats": {
         "health": 80,
         "maxHealth": 80,
@@ -114,6 +119,7 @@
       "id": "healing_support_1",
       "name": "Patchwork",
       "role": "Support",
+      "level": 1,
       "stats": {
         "health": 60,
         "maxHealth": 60,
@@ -136,6 +142,7 @@
       "id": "offensive_support_2",
       "name": "Livewire",
       "role": "Support",
+      "level": 1,
       "stats": {
         "health": 70,
         "maxHealth": 70,
@@ -158,6 +165,7 @@
       "id": "jack_of_all_trades_support_3",
       "name": "True North",
       "role": "Support",
+      "level": 1,
       "stats": {
         "health": 65,
         "maxHealth": 65,
@@ -180,6 +188,7 @@
       "id": "hacker_support_4",
       "name": "Root Null",
       "role": "Support",
+      "level": 1,
       "stats": {
         "health": 65,
         "maxHealth": 65,

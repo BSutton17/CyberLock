@@ -29,10 +29,12 @@ function LevelUp(){
             return;
         }
         const currentCharacter = playerCharacters[playerName];
-        const stats = playerCharacters[playerName].stats;
+        const playerInfo = currentCharacter;
+        const stats = currentCharacter.stats;
         const updatedCharacter = {
             ...playerCharacters,
             [playerName]: {
+                ...playerInfo,
                 stats: {
                     ...stats,
                     health: currentCharacter.stats.maxHealth
@@ -54,15 +56,17 @@ function LevelUp(){
         if (canIncrement()) {
             const newPoints = { ...levelPoints, [attrId]: levelPoints[attrId] + 1 };
             setLevelPoints(newPoints);
+
             const currentCharacter = playerCharacters[playerName];
-            const stats = playerCharacters[playerName].stats;
+            const playerInfo = currentCharacter;
+            const stats = currentCharacter.stats;
             const updatedCharacter = {
                 ...playerCharacters,
                 [playerName]: {
+                    ...playerInfo,
                     stats: {
                         ...stats,
                         [attrId]: currentCharacter.stats[attrId] + 1,
-                        
                     }
                 }
             }
@@ -78,19 +82,22 @@ function LevelUp(){
         if (canDecrement(attrId)) {
             const newPoints = { ...levelPoints, [attrId]: levelPoints[attrId] - 1 };
             setLevelPoints(newPoints);
+
             const currentCharacter = playerCharacters[playerName];
-            const stats = playerCharacters[playerName].stats;
+            const playerInfo = currentCharacter;
+            const stats = currentCharacter.stats;
             const updatedCharacter = {
                 ...playerCharacters,
                 [playerName]: {
+                    ...playerInfo,
                     stats: {
                         ...stats,
                         [attrId]: currentCharacter.stats[attrId] - 1,
-                        health: currentCharacter.stats.maxHealth
                     }
                 }
             }
             setPlayerCharacters(updatedCharacter);
+            console.log(playerCharacters);
         }
     };
 

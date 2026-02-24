@@ -783,6 +783,10 @@ io.on('connection', (socket) => {
   socket.on("level_up_complete",({room}) => {
     io.to(room).emit('level_up_complete');
   });
+
+  socket.on("ability_select_complete", ({room}) =>{
+    io.to(room).emit('ability_select_complete');
+  });
 });
 
 

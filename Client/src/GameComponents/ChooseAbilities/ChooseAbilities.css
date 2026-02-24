@@ -1,0 +1,5 @@
+.container {
+    display: flex;
+    justify-content: center; /* Centers horizontally */
+    border: 1px solid black;
+}

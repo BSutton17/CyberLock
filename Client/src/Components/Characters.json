@@ -4,7 +4,7 @@
       "id": "offensive_tank_1",
       "name": "Offensive Tank #1",
       "role": "Tank",
-      "level": 5,
+      "level": 1,
       "stats": {
         "health": 95,
         "maxHealth": 95,
@@ -118,7 +118,7 @@
       "id": "healing_support_1",
       "name": "Patchwork",
       "role": "Support",
-      "level": 5,
+      "level": 1,
       "stats": {
         "health": 60,
         "maxHealth": 60,

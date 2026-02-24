@@ -1786,8 +1786,10 @@ function Main() {
                 />
                 <button type="submit" disabled={aiBusy || !aiInput.trim()}>Send</button>
             </form> */}
-        {/* <button style={{ width: '150px' }} onClick={() => handleStoryComplete()}>Combat</button> */}
-        <button onClick={handleLevelUp}>Level Up</button>
+            <div>
+                <button style={{ width: '150px' }} onClick={() => handleStoryComplete()}>Combat</button>
+                <button style={{ width: '150px' }} onClick={handleLevelUp}>Level Up</button>
+            </div>
             </div>
             <span className="ai-text">{aiText}</span>
        </div>

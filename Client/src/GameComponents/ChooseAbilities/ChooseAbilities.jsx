@@ -9,7 +9,7 @@ function ChooseAbilities(){
     const [isReady, setIsReady] = useState(false);
     const [readyPlayers, setReadyPlayers] = useState([]);
     const playerLevel = playerCharacters[playerName].level;
-    const playerRole = "support"
+    const playerRole = playerCharacters[playerName].role;
 
     const handleReady = () => {
         socket.emit('ability_select_complete', {room});
@@ -68,7 +68,6 @@ function ChooseAbilities(){
 
     return (
         <div>
-            <button onClick = {() => console.log(playerCharacters[playerName].abilities.length)}>Testing</button>
             <div className="ability-grid">
                 {(() => {
                     return (

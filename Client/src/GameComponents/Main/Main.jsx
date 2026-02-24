@@ -1909,11 +1909,12 @@ function Main() {
                     <div className="abilities-section">
                         <h4>Abilities</h4>
                         <div className="abilities-grid">
-                            {currentPlayerCharacter.abilities.map((ability, index) => {
+                            {(Array.isArray(currentPlayerCharacter.abilities) ? currentPlayerCharacter.abilities : []).map((ability, index) => {
                                 const currentCooldown = cooldowns[ability.id] || 0;
                                 const isOnCooldown = currentCooldown > 0;
                                 const isSelected = selectedAbility === ability.id;
                                 const range = ability.range === 1 ? "Melee" : ability.range === undefined ? "" : "Range: " + ability.range;
+                                console.log(`[ABILITY RENDER] Rendering ability: ${ability}`)
                                 
                                 return (
                                     <button 

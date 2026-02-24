@@ -36,14 +36,13 @@ function ChooseAbilities(){
     const assignAbility = (name, index) => {
         const playerInfo = playerCharacters[playerName];
         const abilities = playerCharacters[playerName].abilities;
+        const updateAbilities = Array.isArray(abilities) ? [...abilities] : [];
+        updateAbilities[index] = name;
         const updatedCharacter = {
             ...playerCharacters,
             [playerName]: {
                 ...playerInfo,
-                abilities: {
-                    ...abilities,
-                    [index]: name
-                }
+                abilities: updateAbilities
             }
         }
         
@@ -78,7 +77,7 @@ function ChooseAbilities(){
                             {Object.entries(ABILITIES)
                                 .filter(([key, ability]) => (ability.isUltimate && ability.role === playerRole))
                                 .map(([key, ability]) => (
-                                    <button onClick={() => assignUltimate(ability.name)} key={ability.name} disabled= {playerLevel < 5}>
+                                    <button onClick={() => assignUltimate(ability)} key={ability.name} disabled= {playerLevel < 5}>
                                         {ability.name}
                                     </button>
                             ))}
@@ -87,7 +86,7 @@ function ChooseAbilities(){
                             {Object.entries(ABILITIES)
                                 .filter(([key, ability]) => (ability.level === 5 && ability.role === playerRole))
                                 .map(([key, ability]) => (
-                                    <button onClick={() => assignAbility(ability.name, 2)} key={ability.name} disabled= {playerLevel < 5}>
+                                    <button onClick={() => assignAbility(ability, 2)} key={ability.name} disabled= {playerLevel < 5}>
                                         {ability.name}
                                     </button>
                             ))}
@@ -96,7 +95,7 @@ function ChooseAbilities(){
                             {Object.entries(ABILITIES)
                                 .filter(([key, ability]) => (ability.level === 3 && ability.role === playerRole))
                                 .map(([key, ability]) => (
-                                    <button onClick={() => assignAbility(ability.name, 1)} key={ability.name} disabled= {playerLevel < 3}>
+                                    <button onClick={() => assignAbility(ability, 1)} key={ability.name} disabled= {playerLevel < 3}>
                                         {ability.name}
                                     </button>
                             ))}
@@ -105,7 +104,7 @@ function ChooseAbilities(){
                             {Object.entries(ABILITIES)
                                 .filter(([key, ability]) => (ability.level === 1 && ability.role === playerRole))
                                 .map(([key, ability]) => (
-                                    <button onClick={() => assignAbility(ability.name, 0)} key={ability.name} disabled= {playerLevel < 1}>
+                                    <button onClick={() => assignAbility(ability, 0)} key={ability.name} disabled= {playerLevel < 1}>
                                         {ability.name}
                                     </button>
                             ))}

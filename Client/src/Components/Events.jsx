@@ -117,6 +117,14 @@ function Events(){
           setScreen("levelup");
         });
 
+        socket.on("level_up_complete", () => {
+          setScreen("chooseAbilities");
+        });
+
+        socket.on("ability_select_complete",() => {
+          setScreen("main");
+        });
+
         socket.on("game_reset", () => {
           setPlayerCharacters({});
           setReadyPlayers([]);
@@ -138,6 +146,7 @@ function Events(){
           socket.off("attribute_allocations_updated");
           socket.off("player_health_updated");
           socket.off("level_up");
+          socket.off("level_up_complete");
           socket.off("game_reset");
         };
     }, [room, playerName]);

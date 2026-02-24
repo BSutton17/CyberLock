@@ -197,7 +197,7 @@ export const ABILITIES = {
     black_hole: {
         id: 'black_hole',
         name: 'Black Hole',
-        description: 'Click on a square, all enemies in a 5x5 area are sucked in and cannot move for 1 turn',
+        description: 'Click on a square, all enemies in a 5x5 area are sucked in and cannot move for 2 turns',
         role: "dps",
         cooldown: 0,
         isUltimate: true,
@@ -218,8 +218,14 @@ export const ABILITIES = {
             const { row, col } = targetPosition;
             const effects = [];
             const affectedEnemies = [];
+            const forcedMovement = [];
+            const occupied = new Set(
+                Object.values(characterPositions || {}).map(pos => `${pos.row},${pos.col}`)
+            );
+            const withinBounds = (r, c) => r >= 0 && r < 7 && c >= 0 && c < 10;
             
             // Find all enemies in 5x5 area (2 squares in each direction)
+            const enemiesInArea = [];
             enemies.forEach(enemy => {
                 const enemyPos = characterPositions[enemy.id];
                 if (!enemyPos) return;
@@ -230,10 +236,79 @@ export const ABILITIES = {
                 // Within 2 squares in any direction (5x5 grid)
                 if (rowDiff <= 2 && colDiff <= 2) {
                     affectedEnemies.push(enemy.name);
+                    enemiesInArea.push({ enemy, enemyPos });
                     effects.push({
-                        type: 'movement_disabled',
+                        type: 'status_effect',
                         target: enemy.id,
-                        duration: 1
+                        status: 'black_hole_pull',
+                        center: { row, col },
+                        duration: 2,
+                        preventMovement: false,
+                        preventActions: false
+                    });
+                }
+            });
+
+            effects.push({
+                type: 'black_hole_zone',
+                center: { row, col },
+                radius: 2,
+                duration: 2
+            });
+
+            // Pull enemies toward center, up to 2 cells, without passing through occupied cells
+            const sortedTargets = enemiesInArea.sort((a, b) => {
+                const distA = Math.abs(a.enemyPos.row - row) + Math.abs(a.enemyPos.col - col);
+                const distB = Math.abs(b.enemyPos.row - row) + Math.abs(b.enemyPos.col - col);
+                return distB - distA;
+            });
+
+            sortedTargets.forEach(({ enemy, enemyPos }) => {
+                let current = { ...enemyPos };
+                const path = [];
+                occupied.delete(`${enemyPos.row},${enemyPos.col}`);
+
+                for (let step = 0; step < 2; step++) {
+                    const currentDistance = Math.abs(current.row - row) + Math.abs(current.col - col);
+                    if (currentDistance === 0) break;
+
+                    const candidateMoves = [
+                        { row: current.row - 1, col: current.col },
+                        { row: current.row + 1, col: current.col },
+                        { row: current.row, col: current.col - 1 },
+                        { row: current.row, col: current.col + 1 }
+                    ].filter(next => {
+                        if (!withinBounds(next.row, next.col)) return false;
+                        const key = `${next.row},${next.col}`;
+                        if (occupied.has(key)) return false;
+                        const nextDistance = Math.abs(next.row - row) + Math.abs(next.col - col);
+                        return nextDistance < currentDistance;
+                    });
+
+                    if (candidateMoves.length === 0) break;
+
+                    candidateMoves.sort((first, second) => {
+                        const firstDistance = Math.abs(first.row - row) + Math.abs(first.col - col);
+                        const secondDistance = Math.abs(second.row - row) + Math.abs(second.col - col);
+                        if (firstDistance !== secondDistance) return firstDistance - secondDistance;
+                        const firstRowDelta = Math.abs(first.row - row);
+                        const secondRowDelta = Math.abs(second.row - row);
+                        if (firstRowDelta !== secondRowDelta) return firstRowDelta - secondRowDelta;
+                        return Math.abs(first.col - col) - Math.abs(second.col - col);
+                    });
+
+                    const nextCell = candidateMoves[0];
+                    path.push(nextCell);
+                    current = nextCell;
+                }
+
+                occupied.add(`${current.row},${current.col}`);
+
+                if (path.length > 0) {
+                    forcedMovement.push({
+                        enemyId: enemy.id,
+                        path,
+                        to: current
                     });
                 }
             });
@@ -248,8 +323,9 @@ export const ABILITIES = {
             return {
                 success: true,
                 effects: effects,
+                forcedMovement,
                 aoePosition: targetPosition,
-                message: `${caster.name} creates a Black Hole! ${affectedEnemies.join(', ')} cannot move for 1 turn!`
+                message: `${caster.name} creates a Black Hole! ${affectedEnemies.join(', ')} are pulled inward and cannot move for 2 turns!`
             };
         }
     },
@@ -854,12 +930,20 @@ export const ABILITIES = {
             
             // Calculate total damage and divide equally
             const totalDamage = Math.max(1, Math.round(
-                (caster.stats.ta / 10) * 15
+                (caster.stats.ta / 10) * 10  - (affectedEnemies.reduce((maxRes, enemy) => Math.max(maxRes, enemy.stats.resistance), 0) / 10)
             ));
             const damagePerEnemy = Math.floor(totalDamage / affectedEnemies.length);
             
             const damageResults = [];
-            const effects = [];
+            const effects = [
+                {
+                    type: 'fireball_zone',
+                    center: { row, col },
+                    radius: 1,
+                    duration: 1,
+                    tickOnCastTurn: true
+                }
+            ];
             
             affectedEnemies.forEach(enemy => {
                 // Apply damage

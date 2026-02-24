@@ -12,6 +12,7 @@ import Events from "../Components/Events";
 import { useGameContext } from "../Components/Context";
 import CharacterBuilder from "./CharacterBuilder/CharacterBuilder";
 import LevelUp from "./LevelUp/LevelUp.jsx"
+import ChooseAbilities from "./ChooseAbilities/ChooseAbilities.jsx"
 
 function HomeScreen() {       
   const [joinError, setJoinError] = useState('');
@@ -144,7 +145,7 @@ function HomeScreen() {
           {screen === "main" && <Main />}
           {screen !== "main" && <button className="leave" onClick={leaveGame}>Leave Game</button>}
           {screen === "levelup" && <LevelUp />}
-          
+          {screen === "chooseAbilities" && <ChooseAbilities />}
         </div>
       )}
     </div>

@@ -160,10 +160,6 @@ function LevelUp(){
                     <h3>{currentCharacter.name}</h3>
                     <div className="levelup-preview-grid">
                         <div className="levelup-preview-item">
-                            <span className="levelup-preview-label">Current Health</span>
-                            <span className="levelup-preview-value">{currentCharacter.stats.health}</span>
-                        </div>
-                        <div className="levelup-preview-item">
                             <span className="levelup-preview-label">Max Health</span>
                             <span className="levelup-preview-value">{currentCharacter.stats.maxHealth}</span>
                         </div>

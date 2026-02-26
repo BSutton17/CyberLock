@@ -7,35 +7,37 @@ import './ChooseAbilities.css';
 function ChooseAbilities(){
     const {players, playerCharacters, setPlayerCharacters, playerName, room, socket } = useGameContext();
     const [isReady, setIsReady] = useState(false);
+    const [hasSubmittedReady, setHasSubmittedReady] = useState(false);
     const [readyPlayers, setReadyPlayers] = useState([]);
     const [expandedCategory, setExpandedCategory] = useState(null);
     const playerLevel = playerCharacters[playerName].level;
     const playerRole = playerCharacters[playerName].role;
 
     const handleReady = () => {
+        if (!isReady || hasSubmittedReady) return;
         const latestCharacter = playerCharacters[playerName];
         if (latestCharacter) {
             socket.emit("character_selected", { room, playerName, character: latestCharacter });
         }
-        socket.emit('ability_select_complete', {room});
-        setIsReady(true);
+        socket.emit('ability_ready', { room, playerName });
+        setHasSubmittedReady(true);
     }
 
     const checkReady = () => {
-        const abilityCount = Object.keys(playerCharacters[playerName].abilities).length;
-        if(playerLevel < 3){
-            if(abilityCount == 1){
-                setIsReady(true);
-            }
-        }else if(playerLevel < 5){
-            if(abilityCount == 2){
-                setIsReady(true);
-            }
-        }else if(playerLevel >= 5){
-            if(abilityCount == 3 && playerCharacters[playerName].ultimate != ""){
-                setIsReady(true);
-            }
+        const character = playerCharacters[playerName];
+        if (!character) {
+            setIsReady(false);
+            return;
         }
+
+        const selectedAbilities = Array.isArray(character.abilities)
+            ? character.abilities.filter(Boolean).length
+            : 0;
+
+        const requiredAbilityCount = playerLevel < 3 ? 1 : (playerLevel < 5 ? 2 : 3);
+        const hasUltimate = playerLevel < 5 || (character.ultimate && typeof character.ultimate === 'object' && !!character.ultimate.id);
+
+        setIsReady(selectedAbilities >= requiredAbilityCount && hasUltimate);
     }
 
     const assignAbility = (name, index) => {
@@ -72,6 +74,24 @@ function ChooseAbilities(){
         checkReady();
         console.log(playerCharacters);
     }, [playerCharacters]);
+
+    useEffect(() => {
+        const handleAbilityReadyStatus = (readyList) => {
+            setReadyPlayers(Array.isArray(readyList) ? readyList : []);
+        };
+
+        const handleGameStart = () => {
+            setHasSubmittedReady(true);
+        };
+
+        socket.on('ability_ready_status', handleAbilityReadyStatus);
+        socket.on('start_game', handleGameStart);
+
+        return () => {
+            socket.off('ability_ready_status', handleAbilityReadyStatus);
+            socket.off('start_game', handleGameStart);
+        };
+    }, [socket]);
 
     return (
         <div className="choose-abilities-wrapper">
@@ -279,9 +299,9 @@ function ChooseAbilities(){
                 <button 
                     className="ready-button" 
                     onClick={handleReady}
-                    disabled={!isReady}
+                    disabled={!isReady || hasSubmittedReady}
                 >
-                    {!isReady ? 'Waiting for others...' : 'Ready'}
+                    {!isReady ? 'Select Required Abilities' : (hasSubmittedReady ? 'Waiting for others...' : 'Ready')}
                 </button>
                 <p className="ready-status">{readyPlayers.length}/{players.length} players ready</p>
             </div>

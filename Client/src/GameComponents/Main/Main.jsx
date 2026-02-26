@@ -599,32 +599,54 @@ function Main() {
             // Handle enemy ability usage - execute the ability if one is selected
             if (turnAction.abilityToUse && !turnAction.immobilized) {
                 console.log(`[ENEMY ABILITY] ${enemy.name} using ability: ${turnAction.abilityToUse.name}`);
-                
-                const abilityResult = executeAbility(turnAction.abilityToUse.id, {
+
+                const enemyAbilityTargets = Object.entries(playerCharacters).map(([id, character]) => ({
+                    ...character,
+                    id
+                }));
+                const enemyAbilityDef = getAbility(turnAction.abilityToUse.id);
+                const enemyTargetPosition = turnAction.target ? characterPositions[turnAction.target] : null;
+
+                const enemyAbilityParams = {
                     caster: enemy,
                     playerName: enemy.id,
                     target: turnAction.target,
-                    enemies,
+                    enemies: enemyAbilityTargets,
                     playerCharacters,
                     characterPositions,
                     cooldowns: enemy.cooldowns
-                });
+                };
+
+                if (enemyAbilityDef?.targetType === 'ground-target') {
+                    enemyAbilityParams.targetPosition = enemyTargetPosition;
+                }
+
+                if (enemyAbilityDef?.targetType === 'multi-enemy' && turnAction.target) {
+                    enemyAbilityParams.targets = [turnAction.target];
+                }
+                
+                let abilityResult;
+                if (enemyAbilityDef?.targetType === 'ground-target' && !enemyTargetPosition) {
+                    console.warn(`[ENEMY ABILITY] ${enemy.name} cannot use ${turnAction.abilityToUse.name}: missing targetPosition for target ${turnAction.target}`);
+                    abilityResult = { success: false, message: 'Missing target position for ground-target ability' };
+                } else {
+                    abilityResult = executeAbility(turnAction.abilityToUse.id, enemyAbilityParams);
+                }
                 
                 if (abilityResult.success) {
                     console.log(`[ENEMY ABILITY] ${enemy.name} successfully used ${turnAction.abilityToUse.name}! Effects:`, abilityResult.effects);
                     console.log(`[ENEMY ABILITY] New cooldown for ${turnAction.abilityToUse.name}: ${abilityResult.newCooldown}`);
+                    console.log(`[ENEMY ABILITY] Message from ability result: ${abilityResult.message || '(no message returned)'}`);
                     
                     // Apply ability effects
-                    const { updatedEffects, updatedPlayers, updatedEnemies } = applyAbilityEffects(
-                        abilityResult.effects,
-                        activeEffects,
-                        playerCharacters,
+                    const updates = applyAbilityEffects(abilityResult, {
                         enemies,
-                        turnAction.target
-                    );
+                        playerCharacters,
+                        activeEffects
+                    });
                     
                     // Handle special effects for enemy abilities (cooldown_increase, etc)
-                    let finalUpdatedEnemies = updatedEnemies;
+                    let finalUpdatedEnemies = updates.enemies;
                     if (abilityResult.effects) {
                         abilityResult.effects.forEach(effect => {
                             if (effect.type === 'cooldown_increase') {
@@ -662,10 +684,8 @@ function Main() {
                     });
                     
                     // Update state
-                    setActiveEffects(updatedEffects);
-                    if (Object.keys(updatedPlayers).length > 0) {
-                        setPlayerCharacters(prev => ({ ...prev, ...updatedPlayers }));
-                    }
+                    setActiveEffects(updates.activeEffects);
+                    setPlayerCharacters(updates.playerCharacters);
                     setEnemies(normalizeEnemiesState(updatedEnemies2));
                     
                     // Emit ability usage to server
@@ -679,7 +699,7 @@ function Main() {
                     
                     emitAiEvent(
                         'turn_action',
-                        `${enemy.name} uses ${turnAction.abilityToUse.name}!`,
+                        abilityResult.message || `${enemy.name} uses ${turnAction.abilityToUse.name}!`,
                         {
                             actor: enemy.name,
                             actionType: 'enemy_ability',
@@ -1375,6 +1395,11 @@ function Main() {
             effect.turnsRemaining > 0 &&
             effect.center
         );
+        const activeToxicMistFields = activeEffects.filter(effect =>
+            effect.type === 'toxic_mist_field' &&
+            effect.turnsRemaining > 0 &&
+            effect.center
+        );
         
         for (let row = 0; row < ROWS; row++) {
             for (let col = 0; col < COLS; col++) {
@@ -1414,13 +1439,26 @@ function Main() {
                         Math.abs(field.center.col - col) <= radius
                     );
                 });
+                const isToxicMistCell = activeToxicMistFields.some(field => {
+                    const radius = field.radius ?? 1;
+                    return (
+                        Math.abs(field.center.row - row) <= radius &&
+                        Math.abs(field.center.col - col) <= radius
+                    );
+                });
+                const isWhitePhospherusEnemy = isEnemy && enemyOnCell && activeEffects.some(effect =>
+                    effect.type === 'damage_over_time' &&
+                    effect.source === 'white_phospherus' &&
+                    effect.target === enemyOnCell.id &&
+                    effect.turnsRemaining > 0
+                );
 
                 grid.push(
                     <div
                         key={`${row}-${col}`}
                         className={`grid-cell ${
                             characterOnCell ? 'occupied' : ''
-                        } ${isPlayerCharacter ? 'player-controlled' : ''} ${isEnemy ? (isCorpse ? 'enemy-corpse-cell' : 'enemy-cell') : ''} ${isHealingFieldCell ? 'healing-field-cell' : ''} ${isFireballZoneCell ? 'fireball-zone-cell' : ''} ${isBlackHoleZoneCell ? 'black-hole-zone-cell' : ''} ${isBlizzardFieldCell ? 'blizzard-field-cell' : ''}`}
+                        } ${isPlayerCharacter ? 'player-controlled' : ''} ${isEnemy ? (isCorpse ? 'enemy-corpse-cell' : 'enemy-cell') : ''} ${isHealingFieldCell ? 'healing-field-cell' : ''} ${isFireballZoneCell ? 'fireball-zone-cell' : ''} ${isBlackHoleZoneCell ? 'black-hole-zone-cell' : ''} ${isBlizzardFieldCell ? 'blizzard-field-cell' : ''} ${isToxicMistCell ? 'toxic-mist-cell' : ''} ${isWhitePhospherusEnemy ? 'white-phospherus-glow' : ''}`}
                         onClick={() => handleGridClick(row, col)}
                     >
                         {characterOnCell && (
@@ -2049,7 +2087,7 @@ function Main() {
                 <button type="submit" disabled={aiBusy || !aiInput.trim()}>Send</button>
             </form> */}
             
-        {/* <button style={{ width: '150px' }} onClick={handleLevelUp}>Level Up</button> */}
+        <button style={{ width: '150px' }} onClick={handleLevelUp}>Level Up</button>
         <button style={{ width: '150px' }} onClick={() => handleStoryComplete()}>Combat</button>
             </div>
             <span className="ai-text">{aiText}</span>

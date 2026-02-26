@@ -101,6 +101,10 @@ function Events(){
           setScreen("chooseAbilities");
         });
 
+        socket.on("start_game", () => {
+          setScreen("main");
+        });
+
         // Game phase transitions
         socket.on("phase_changed_combat", ({ enemies, enemyPositions, turnOrder, currentTurn, characterSelections }) => {
           console.log('Combat Phase Started - Turn Order:', turnOrder);
@@ -171,10 +175,6 @@ function Events(){
           setScreen("chooseAbilities");
         });
 
-        socket.on("ability_select_complete",() => {
-          setScreen("main");
-        });
-
         socket.on("game_reset", () => {
           setPlayerCharacters({});
           setReadyPlayers([]);
@@ -191,6 +191,7 @@ function Events(){
           socket.off("update_character_selections");
           socket.off("update_ready_status");
           socket.off("start_main_game");
+          socket.off("start_game");
           socket.off("phase_changed_combat");
           socket.off("turn_changed");
           socket.off("attribute_allocations_updated");

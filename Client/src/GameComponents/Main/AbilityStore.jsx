@@ -723,9 +723,9 @@ export const ABILITIES = {
         }
     },
     greater_ability_boost: {
-        id: ' greater_ability_boost',
+        id: 'greater_ability_boost',
         name: 'Greater Ability Boost',
-        description: 'Grants yourself +15 Speed and +15 Bonus Health for 2 turns',
+        description: 'Grants yourself +15 Speed, +15 Bonus Health, and +10 Strength for 2 turns',
         role: "Tank",
         level: 5,
         cooldown: 3,
@@ -757,6 +757,14 @@ export const ABILITIES = {
                         value: 15,
                         duration: 2,
                         stackable: false
+                    },
+                    {
+                        type: 'stat_buff',
+                        target: playerName,
+                        stat: 'strength',
+                        value: 10,
+                        duration: 2,
+                        stackable: false
                     }
                 ],
                 message: `${caster.name} gains +5 Speed and +5 Health for 2 turns!`
@@ -767,7 +775,7 @@ export const ABILITIES = {
     guarded_breath: {
         id: 'guarded_breath',
         name: 'Guarded Breath',
-        description: 'Steady yourself to gain +10 Resistance for 1 turn',
+        description: 'Gain +10 Resistance for 1 turn',
         role: "Tank",
         level: 1,
         cooldown: 1,
@@ -1013,6 +1021,68 @@ export const ABILITIES = {
                 effects: effects,
                 aoePosition: targetPosition,
                 message: `${caster.name} places a healing field! ${healingMessage}`
+            };
+        }
+    },
+    toxic_mist: {
+        id: 'toxic_mist',
+        name: 'Toxic Mist',
+        description: 'Place a toxic field that deals 10 damage to enemies inside it for 2 turns',
+        role: "Tank",
+        level: 3,
+        cooldown: 2,
+        targetType: 'ground-target',
+        type: 'damage',
+        range: 3,
+        aoeSize: 3,
+
+        /**
+         * @param {Object} params
+         * @param {Object} params.caster - Character using ability
+         * @param {Object} params.targetPosition - {row, col} of clicked square
+         * @param {Array} params.enemies - Enemy list for the caster's perspective
+         * @param {Object} params.characterPositions - Positions of all characters
+         * @returns {Object} Effect data
+         */
+        execute: ({ caster, targetPosition, enemies, characterPositions }) => {
+            const { row, col } = targetPosition;
+            const effects = [];
+            const affectedNames = [];
+
+            effects.push({
+                type: 'toxic_mist_field',
+                center: { row, col },
+                radius: 1,
+                duration: 2
+            });
+
+            enemies.forEach(enemy => {
+                const enemyPos = characterPositions?.[enemy.id];
+                if (!enemyPos) return;
+
+                const rowDiff = Math.abs(enemyPos.row - row);
+                const colDiff = Math.abs(enemyPos.col - col);
+
+                if (rowDiff <= 1 && colDiff <= 1) {
+                    affectedNames.push(enemy.name);
+                    effects.push({
+                        type: 'damage_over_time',
+                        target: enemy.id,
+                        amount: 10,
+                        duration: 2
+                    });
+                }
+            });
+
+            const damageMessage = affectedNames.length > 0
+                ? `${affectedNames.join(', ')} will take 10 damage for 2 turns!`
+                : 'No enemies are currently in the toxic field.';
+
+            return {
+                success: true,
+                effects,
+                aoePosition: targetPosition,
+                message: `${caster.name} releases Toxic Mist! ${damageMessage}`
             };
         }
     },
@@ -1641,7 +1711,7 @@ export const ABILITIES = {
             ));
 
             // Halve enemy's strength for 1 turn
-            const strengthDebuff = -(Math.floor(enemy.stats.strength * 0.75));
+            const strengthDebuff = -(Math.floor(enemy.stats.strength * 0.25));
 
             return {
                 success: true,
@@ -1664,7 +1734,7 @@ export const ABILITIES = {
     rallying_guard: {
         id: 'rallying_guard',
         name: 'Rallying Guard',
-        description: 'Bolster yourself with +5 Speed and +5 Resistance for 1 turn',
+        description: 'Gain +5 Speed and +5 Resistance for 1 turn',
         role: "Tank",
         level: 1,
         cooldown: 2,
@@ -1932,7 +2002,7 @@ export const ABILITIES = {
         type: 'damage',
         damageType: 'physical',
         damageScaling: 'strength',
-        abilityDamage: 20, // 1.25x multiplier applied
+        abilityDamage: 10, 
         range: 1,
         
         /**
@@ -2045,6 +2115,46 @@ export const ABILITIES = {
                     amount: 10
                 }],
                 message: `${caster.name} casts The Show Must Go On! ${ally.name} is healed for 10 HP!`
+            };
+        }
+    },
+    white_phospherus: {
+        id: 'white_phospherus',
+        name: 'White Phospherus',
+        description: 'Ultimate: Burns all enemies for 10 damage per turn over 5 turns',
+        role: "Tank",
+        cooldown: 0,
+        isUltimate: true,
+        targetType: 'all-enemies',
+        type: 'damage',
+
+        /**
+         * @param {Object} params
+         * @param {Object} params.caster - Character using ultimate
+         * @param {Array} params.enemies - All current enemies
+         * @returns {Object} Effect data
+         */
+        execute: ({ caster, enemies }) => {
+            const effects = [];
+            const affectedNames = [];
+
+            enemies.forEach(enemy => {
+                if (enemy.isDefeated) return;
+
+                affectedNames.push(enemy.name);
+                effects.push({
+                    type: 'damage_over_time',
+                    target: enemy.id,
+                    amount: 10,
+                    duration: 5,
+                    source: 'white_phospherus'
+                });
+            });
+
+            return {
+                success: true,
+                effects,
+                message: `${caster.name} unleashes White Phospherus! ${affectedNames.join(', ')} will take 10 damage for 5 turns!`
             };
         }
     },

@@ -188,6 +188,11 @@ h3, h4, p {
     border-color: rgba(194, 15, 15, 0.5);
 }
 
+.grid-cell.enemy-cell.white-phospherus-glow {
+    border-color: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 0 0.9rem rgba(255, 255, 255, 0.7), inset 0 0 0.5rem rgba(255, 255, 255, 0.35);
+}
+
 .grid-cell.enemy-corpse-cell {
     border-color: rgba(120, 120, 120, 0.45);
 }
@@ -214,6 +219,12 @@ h3, h4, p {
     background: rgba(135, 206, 250, 0.14);
     border-color: rgba(135, 206, 250, 0.5);
     box-shadow: inset 0 0 0.6rem rgba(135, 206, 250, 0.25);
+}
+
+.grid-cell.toxic-mist-cell {
+    background: rgba(20, 90, 20, 0.22);
+    border-color: rgba(34, 139, 34, 0.7);
+    box-shadow: inset 0 0 0.7rem rgba(20, 90, 20, 0.35);
 }
 
 .grid-cell.ground-target-range {

@@ -14,6 +14,8 @@ const STATS = [
 function LevelUp(){
     const {players, playerCharacters, setPlayerCharacters, playerName, room, socket } = useGameContext();
     const [isReady, setIsReady] = useState(false);
+    const [hasSubmittedReady, setHasSubmittedReady] = useState(false);
+    const [readyPlayers, setReadyPlayers] = useState([]);
     const [levelPoints, setLevelPoints] = useState(
         STATS.reduce((acc, attr) => ({ ...acc, [attr.id]: 0}), {})
     );
@@ -25,10 +27,29 @@ function LevelUp(){
         setLevelPoints(STATS.reduce((acc, attr) => ({ ...acc, [attr.id]: 0}), {}));
     }, [currentCharacter?.id]);
 
+    useEffect(() => {
+        const handleLevelReadyStatus = (readyList) => {
+            setReadyPlayers(Array.isArray(readyList) ? readyList : []);
+        };
+
+        const handleLevelComplete = () => {
+            setHasSubmittedReady(true);
+        };
+
+        socket.on('level_up_ready_status', handleLevelReadyStatus);
+        socket.on('level_up_complete', handleLevelComplete);
+
+        return () => {
+            socket.off('level_up_ready_status', handleLevelReadyStatus);
+            socket.off('level_up_complete', handleLevelComplete);
+        };
+    }, [socket]);
+
     const totalPointsUsed = Object.values(levelPoints).reduce((sum, val) => sum + val, 0);
     const remainingPoints = TOTAL_POINTS - totalPointsUsed;
 
     const handleReady = () => {
+        if (hasSubmittedReady) return;
         // Check if applied all points
         if(remainingPoints != 0){
             alert('You must apply all your points before readying up!');
@@ -48,8 +69,13 @@ function LevelUp(){
         }
         setPlayerCharacters(updatedCharacter);
 
-        socket.emit('level_up_complete', {room});
+        socket.emit('level_up_ready', {
+            room,
+            playerName,
+            updatedCharacter: updatedCharacter[playerName]
+        });
         setIsReady(true);
+        setHasSubmittedReady(true);
     }
 
     const canIncrement = () => {
@@ -139,14 +165,14 @@ function LevelUp(){
                                     <button
                                         className="levelup-control-btn"
                                         onClick={() => handleDecrement(stat.id)}
-                                        disabled={isReady || !canDecrement(stat.id)}
+                                        disabled={hasSubmittedReady || !canDecrement(stat.id)}
                                     >
                                         -
                                     </button>
                                     <button
                                         className="levelup-control-btn"
                                         onClick={() => handleIncrement(stat.id)}
-                                        disabled={isReady || !canIncrement()}
+                                        disabled={hasSubmittedReady || !canIncrement()}
                                     >
                                         +
                                     </button>
@@ -187,11 +213,11 @@ function LevelUp(){
                 <button 
                     className="levelup-ready-button" 
                     onClick={handleReady}
-                    disabled={isReady || remainingPoints !== 0}
+                    disabled={hasSubmittedReady || remainingPoints !== 0}
                 >
-                    {isReady ? 'Waiting for others...' : 'Ready'}
+                    {hasSubmittedReady ? 'Waiting for others...' : 'Ready'}
                 </button>
-                <p className="levelup-status">Players in party: {players.length}</p>
+                <p className="levelup-status">{readyPlayers.length}/{players.length} players ready</p>
             </div>
         </div>
     )

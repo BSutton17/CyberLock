@@ -127,6 +127,20 @@ export function applyAbilityEffects(result, gameState) {
                         finalDamage
                     });
                 }
+            } else if (target in updates.playerCharacters) {
+                const incomingDamage = Math.max(0, amount || 0);
+                const finalDamage = applyDamageKeywords(incomingDamage, updates.activeEffects, target, { minimumDamage: 1 });
+                const character = updates.playerCharacters[target];
+                const currentHealth = character.stats.health;
+                const newHealth = Math.max(0, currentHealth - finalDamage);
+
+                updates.playerCharacters[target] = {
+                    ...character,
+                    stats: {
+                        ...character.stats,
+                        health: newHealth
+                    }
+                };
             }
         });
     }
@@ -167,8 +181,8 @@ export function applyAbilityEffects(result, gameState) {
             updates.activeEffects.push(newEffect);
             console.log('[APPLY EFFECTS] Added to activeEffects:', newEffect);
 
-            // Stat buffs are tracked in activeEffects only - NOT applied to base stats
-            // Base stats remain unchanged, bonuses are calculated dynamically from activeEffects
+            // Stat buffs for players are tracked in activeEffects only - NOT applied to base stats
+            // Base player stats remain unchanged, bonuses are calculated dynamically from activeEffects
             if (effect.type === 'stat_buff' && effect.stat !== 'health' && effect.target in updates.playerCharacters) {
                 const character = updates.playerCharacters[effect.target];
                 console.log('[APPLY EFFECTS] Stat buff tracked in activeEffects (not modifying base stat):', {
@@ -179,7 +193,29 @@ export function applyAbilityEffects(result, gameState) {
                     buffAmount: effect.value,
                     duration: effect.duration
                 });
-            } 
+            }
+            // Apply stat buffs immediately to enemies
+            else if (effect.type === 'stat_buff' && effect.stat !== 'health') {
+                const enemyIndex = updates.enemies.findIndex(e => e.id === effect.target);
+                if (enemyIndex !== -1) {
+                    const enemy = updates.enemies[enemyIndex];
+                    const oldValue = enemy.stats[effect.stat] || 0;
+                    const newValue = oldValue + effect.value;
+                    updates.enemies[enemyIndex] = {
+                        ...enemy,
+                        stats: {
+                            ...enemy.stats,
+                            [effect.stat]: newValue
+                        }
+                    };
+                    console.log(`[BUFF APPLIED] ${enemy.name} (${effect.target}):`);
+                    console.log(`  - Stat: ${effect.stat}`);
+                    console.log(`  - Old value: ${oldValue}`);
+                    console.log(`  - Buff amount: ${effect.value}`);
+                    console.log(`  - New value: ${newValue}`);
+                    console.log(`  - Duration: ${effect.duration} turns`);
+                }
+            }
             // Apply stat debuffs immediately to enemies
             else if (effect.type === 'stat_debuff') {
                 const enemyIndex = updates.enemies.findIndex(e => e.id === effect.target);
@@ -288,6 +324,55 @@ export function tickActiveEffects(activeEffects, playerCharacters, enemies) {
                 }
             }
         }
+
+        // Apply fixed damage over time before decrementing
+        if (effect.type === 'damage_over_time') {
+            if (effect.target in updatedCharacters) {
+                const character = updatedCharacters[effect.target];
+                if ((character.stats.health || 0) <= 0) {
+                    console.log(`[DAMAGE OVER TIME] Removing expired DoT on dead character target ${effect.target}`);
+                    updatedEffect.turnsRemaining = 0;
+                } else {
+                const oldHealth = character.stats.health;
+                const dotDamage = applyDamageKeywords(effect.amount || 0, activeEffects, effect.target, { minimumDamage: 1 });
+                const newHealth = Math.max(0, oldHealth - dotDamage);
+                updatedCharacters[effect.target] = {
+                    ...character,
+                    stats: {
+                        ...character.stats,
+                        health: newHealth
+                    }
+                };
+                console.log(`[DAMAGE OVER TIME] ${character.name} took ${dotDamage} damage (${oldHealth} -> ${newHealth})`);
+                }
+            } else if (enemies) {
+                const enemyIndex = updatedEnemies.findIndex(e => e.id === effect.target);
+                if (enemyIndex !== -1) {
+                    const enemy = updatedEnemies[enemyIndex];
+                    if (enemy.isDeadBody || (enemy.stats.health || 0) <= 0) {
+                        console.log(`[DAMAGE OVER TIME] Removing expired DoT on dead enemy target ${effect.target}`);
+                        updatedEffect.turnsRemaining = 0;
+                    } else {
+                        const oldHealth = enemy.stats.health;
+                        const dotDamage = applyDamageKeywords(effect.amount || 0, activeEffects, effect.target, { minimumDamage: 1 });
+                        const newHealth = Math.max(0, oldHealth - dotDamage);
+                        updatedEnemies[enemyIndex] = {
+                            ...enemy,
+                            stats: {
+                                ...enemy.stats,
+                                health: newHealth
+                            }
+                        };
+                        console.log(`[DAMAGE OVER TIME] ${enemy.name} took ${dotDamage} damage (${oldHealth} -> ${newHealth})`);
+                    }
+                } else {
+                    console.log(`[DAMAGE OVER TIME] Removing orphaned DoT effect for missing target ${effect.target}`);
+                    updatedEffect.turnsRemaining = 0;
+                }
+            } else {
+                updatedEffect.turnsRemaining = 0;
+            }
+        }
         
         updatedEffect.turnsRemaining--;
         console.log(`[TICK EFFECTS] Ticked down to ${updatedEffect.turnsRemaining} turns remaining`);
@@ -295,9 +380,9 @@ export function tickActiveEffects(activeEffects, playerCharacters, enemies) {
         // If effect expires, bonuses are automatically removed (they were never added to base stats)
         if (updatedEffect.turnsRemaining <= 0) {
             console.log(`[TICK EFFECTS] Effect expired - removing from activeEffects`);
-            // Stat buffs don't need to be removed from stats since they were never added to base stats
-            // Debuffs on enemies DO need to be removed since they modify enemy stats directly
-            if (effect.type === 'stat_debuff' && enemies) {
+            // Player stat buffs don't need to be removed from stats since they were never added to base stats
+            // Enemy stat buffs/debuffs DO need to be removed since they modify enemy stats directly
+            if ((effect.type === 'stat_debuff' || (effect.type === 'stat_buff' && effect.stat !== 'health')) && enemies) {
                 const enemyIndex = updatedEnemies.findIndex(e => e.id === effect.target);
                 if (enemyIndex !== -1) {
                     const enemy = updatedEnemies[enemyIndex];
@@ -310,10 +395,11 @@ export function tickActiveEffects(activeEffects, playerCharacters, enemies) {
                             [effect.stat]: newValue
                         }
                     };
-                    console.log(`[DEBUFF EXPIRED] ${enemy.name} (${effect.target}):`);
+                    const effectLabel = effect.type === 'stat_debuff' ? 'DEBUFF' : 'BUFF';
+                    console.log(`[${effectLabel} EXPIRED] ${enemy.name} (${effect.target}):`);
                     console.log(`  - Stat: ${effect.stat}`);
                     console.log(`  - Old value: ${oldValue}`);
-                    console.log(`  - Debuff amount removed: ${effect.value}`);
+                    console.log(`  - Effect amount removed: ${effect.value}`);
                     console.log(`  - New value: ${newValue}`);
                     console.log(`  - Effect lasted: ${effect.duration} turns`);
                 }

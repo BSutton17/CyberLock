@@ -16,7 +16,7 @@
       "weapon": {
         "range": 1,
         "name": "Hammer",
-        "damage": 108
+        "damage": 10
       },
       "abilities": [
 
@@ -105,7 +105,7 @@
         "ta": 5
       },
       "weapon": {
-        "range": 1,
+        "range": 2,
         "name": "Rail Cannon",
         "damage": 10
       },

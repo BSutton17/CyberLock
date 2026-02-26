@@ -485,10 +485,11 @@ export function executeEnemyTurn(enemy, allies, alliedEnemies, playerCharacters,
     
     // Check if enemy should use an ability instead of weapon
     let abilityToUse = null;
+    let abilityRequiresTarget = false;
     if (!abilitiesDisabled && enemy.abilities && enemy.abilities.length > 0 && enemy.cooldowns) {
-        console.log(`[ENEMY ABILITIES] ${enemy.name} checking abilities...`);
+        console.log(`[ENEMY ABILITIES] ${enemy.name} (${enemy.id}) checking abilities...`);
         
-        // Find all abilities that are off cooldown and have a valid target in range
+        // Find all abilities that are off cooldown and currently usable
         const availableAbilities = enemy.abilities.filter(ability => {
             const currentCooldown = enemy.cooldowns[ability.id] || 0;
             if (currentCooldown !== 0) {
@@ -496,10 +497,23 @@ export function executeEnemyTurn(enemy, allies, alliedEnemies, playerCharacters,
                 return false;
             }
             
-            // Check if ability has a target in range
             const abilityDef = ABILITIES[ability.id];
+            const abilityType = abilityDef?.type;
+            const targetType = abilityDef?.targetType;
             const abilityRange = abilityDef?.range || 1;
-            const enemyPos = updatedPositions[enemy.id];
+            const enemyPos = characterPositions[enemy.id];
+
+            // Non-damage abilities should be used immediately when ready
+            if (abilityType !== 'damage') {
+                console.log(`[ENEMY ABILITIES]   - ${ability.name} (level ${ability.level}): cooldown ${currentCooldown}, non-damage ready=true`);
+                return true;
+            }
+
+            // Damage abilities that don't need a direct target are immediately usable
+            if (targetType === 'self' || targetType === 'all-enemies' || targetType === 'all-allies') {
+                console.log(`[ENEMY ABILITIES]   - ${ability.name} (level ${ability.level}): cooldown ${currentCooldown}, no direct target required`);
+                return true;
+            }
             
             // Check if any valid target is in ability range
             const targetInRange = allies.some(allyId => {
@@ -517,12 +531,22 @@ export function executeEnemyTurn(enemy, allies, alliedEnemies, playerCharacters,
             return targetInRange;
         });
         
-        // Pick the highest level ability from available ones
+        // If there is a ready non-damage ability, use it immediately (highest level among them)
         if (availableAbilities.length > 0) {
-            abilityToUse = availableAbilities.reduce((best, current) => {
+            const nonDamageAbilities = availableAbilities.filter(ability => {
+                const abilityDef = ABILITIES[ability.id];
+                return abilityDef?.type !== 'damage';
+            });
+
+            const abilityPool = nonDamageAbilities.length > 0 ? nonDamageAbilities : availableAbilities;
+            abilityToUse = abilityPool.reduce((best, current) => {
                 return (current.level || 1) > (best.level || 1) ? current : best;
             });
-            console.log(`[ENEMY ABILITIES] ${enemy.name} will use ${abilityToUse.name} (level ${abilityToUse.level || 1})!`);
+            console.log(`[ENEMY ABILITIES] ${enemy.name} (${enemy.id}) will use ${abilityToUse.name} (level ${abilityToUse.level || 1})!`);
+
+            const selectedAbilityDef = ABILITIES[abilityToUse.id];
+            const selectedTargetType = selectedAbilityDef?.targetType;
+            abilityRequiresTarget = !['self', 'all-enemies', 'all-allies'].includes(selectedTargetType);
         }
     }
     
@@ -531,8 +555,14 @@ export function executeEnemyTurn(enemy, allies, alliedEnemies, playerCharacters,
     if (abilityToUse) {
         // For abilities, find the closest valid target in ability range
         const abilityDef = ABILITIES[abilityToUse.id];
+        const targetType = abilityDef?.targetType;
+
+        if (targetType === 'self' || targetType === 'all-enemies' || targetType === 'all-allies') {
+            target = null;
+            console.log(`[ENEMY ABILITIES] ${abilityToUse.name} does not require a direct target.`);
+        } else {
         const abilityRange = abilityDef?.range || 1;
-        const enemyPos = updatedPositions[enemy.id];
+        const enemyPos = characterPositions[enemy.id];
         
         const validTargets = allies.filter(allyId => {
             const allyChar = playerCharacters[allyId];
@@ -555,16 +585,17 @@ export function executeEnemyTurn(enemy, allies, alliedEnemies, playerCharacters,
                 return allyDistance < closestDistance ? allyId : closest;
             });
         }
+        }
         
-        console.log(`[ENEMY ABILITIES] Target for ${abilityToUse.name}:`, target);
+        console.log(`[ENEMY ABILITIES] Target for ${abilityToUse.name} by ${enemy.name} (${enemy.id}):`, target);
     } else {
         // For weapon attacks, use normal range-based targeting
         target = selectAttackTarget(enemy, allies, playerCharacters, updatedPositions, updatedPositions);
     }
     
-    // Fallback: if ability was selected but no target found, use weapon attack instead
-    if (abilityToUse && !target) {
-        console.log(`[ENEMY ABILITIES] ${enemy.name} selected ${abilityToUse.name} but no target in range - falling back to weapon attack`);
+    // Fallback: if ability needs a target but none found, use weapon attack instead
+    if (abilityToUse && abilityRequiresTarget && !target) {
+        console.log(`[ENEMY ABILITIES] ${enemy.name} (${enemy.id}) selected ${abilityToUse.name} but no target in range - falling back to weapon attack`);
         abilityToUse = null;
         target = selectAttackTarget(enemy, allies, playerCharacters, updatedPositions, updatedPositions);
     }

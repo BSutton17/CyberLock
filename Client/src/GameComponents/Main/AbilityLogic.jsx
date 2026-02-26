@@ -51,11 +51,15 @@ export function tickCooldowns(cooldowns) {
     return newCooldowns;
 }
 
+function isEffectActiveNow(effect) {
+    return effect?.turnsRemaining > 0 && !effect?.appliedThisTurn;
+}
+
 export function hasDamageImmunity(activeEffects = [], targetId) {
     return activeEffects.some(effect =>
         effect.type === 'damage_immunity' &&
         effect.target === targetId &&
-        effect.turnsRemaining > 0
+        isEffectActiveNow(effect)
     );
 }
 
@@ -64,7 +68,7 @@ export function getDamageTakenMultiplier(activeEffects = [], targetId) {
         .filter(effect =>
             effect.type === 'damage_taken_multiplier' &&
             effect.target === targetId &&
-            effect.turnsRemaining > 0
+            isEffectActiveNow(effect)
         )
         .map(effect => effect.value || 1);
 
@@ -75,7 +79,7 @@ export function hasDamageReflection(activeEffects = [], targetId) {
     return activeEffects.some(effect =>
         effect.type === 'damage_reflection' &&
         effect.target === targetId &&
-        effect.turnsRemaining > 0
+        isEffectActiveNow(effect)
     );
 }
 
@@ -94,7 +98,7 @@ export function applyDamageKeywords(amount, activeEffects = [], targetId, { mini
  * This is called by Main.jsx to actually modify health, stats, etc.
  */
 export function applyAbilityEffects(result, gameState) {
-    const { enemies, playerCharacters, activeEffects } = gameState;
+    const { enemies, playerCharacters, activeEffects, effectOwnerTurnId } = gameState;
     const updates = {
         enemies: [...enemies],
         playerCharacters: { ...playerCharacters },
@@ -176,7 +180,8 @@ export function applyAbilityEffects(result, gameState) {
             const newEffect = {
                 ...effect,
                 turnsRemaining: effect.duration,
-                appliedThisTurn: !effect.tickOnCastTurn // Most effects skip first tick; some visuals should expire on caster end-turn
+                appliedThisTurn: !effect.tickOnCastTurn, // Most effects skip first tick; some visuals should expire on caster end-turn
+                ownerTurnId: effect.ownerTurnId ?? effectOwnerTurnId ?? result.ownerTurnId ?? result.casterId ?? null
             };
             updates.activeEffects.push(newEffect);
             console.log('[APPLY EFFECTS] Added to activeEffects:', newEffect);
@@ -194,49 +199,23 @@ export function applyAbilityEffects(result, gameState) {
                     duration: effect.duration
                 });
             }
-            // Apply stat buffs immediately to enemies
+            // Enemy stat buffs/debuffs are applied on owner turn end when appliedThisTurn flips
             else if (effect.type === 'stat_buff' && effect.stat !== 'health') {
-                const enemyIndex = updates.enemies.findIndex(e => e.id === effect.target);
-                if (enemyIndex !== -1) {
-                    const enemy = updates.enemies[enemyIndex];
-                    const oldValue = enemy.stats[effect.stat] || 0;
-                    const newValue = oldValue + effect.value;
-                    updates.enemies[enemyIndex] = {
-                        ...enemy,
-                        stats: {
-                            ...enemy.stats,
-                            [effect.stat]: newValue
-                        }
-                    };
-                    console.log(`[BUFF APPLIED] ${enemy.name} (${effect.target}):`);
-                    console.log(`  - Stat: ${effect.stat}`);
-                    console.log(`  - Old value: ${oldValue}`);
-                    console.log(`  - Buff amount: ${effect.value}`);
-                    console.log(`  - New value: ${newValue}`);
-                    console.log(`  - Duration: ${effect.duration} turns`);
-                }
+                console.log('[APPLY EFFECTS] Enemy stat buff queued for owner turn-end activation:', {
+                    target: effect.target,
+                    stat: effect.stat,
+                    value: effect.value,
+                    duration: effect.duration
+                });
             }
-            // Apply stat debuffs immediately to enemies
+            // Enemy stat buffs/debuffs are applied on owner turn end when appliedThisTurn flips
             else if (effect.type === 'stat_debuff') {
-                const enemyIndex = updates.enemies.findIndex(e => e.id === effect.target);
-                if (enemyIndex !== -1) {
-                    const enemy = updates.enemies[enemyIndex];
-                    const oldValue = enemy.stats[effect.stat];
-                    const newValue = oldValue + effect.value;
-                    updates.enemies[enemyIndex] = {
-                        ...enemy,
-                        stats: {
-                            ...enemy.stats,
-                            [effect.stat]: newValue
-                        }
-                    };
-                    console.log(`[DEBUFF APPLIED] ${enemy.name} (${effect.target}):`);
-                    console.log(`  - Stat: ${effect.stat}`);
-                    console.log(`  - Old value: ${oldValue}`);
-                    console.log(`  - Debuff amount: ${effect.value}`);
-                    console.log(`  - New value: ${newValue}`);
-                    console.log(`  - Duration: ${effect.duration} turns`);
-                }
+                console.log('[APPLY EFFECTS] Enemy stat debuff queued for owner turn-end activation:', {
+                    target: effect.target,
+                    stat: effect.stat,
+                    value: effect.value,
+                    duration: effect.duration
+                });
             }
             else {
                 console.log('[APPLY EFFECTS] Skipping immediate application:', {
@@ -253,7 +232,7 @@ export function applyAbilityEffects(result, gameState) {
     return updates;
 }
 
-export function tickActiveEffects(activeEffects, playerCharacters, enemies) {
+export function tickActiveEffects(activeEffects, playerCharacters, enemies, endingTurnOwnerId = null) {
     const updatedEffects = [];
     const updatedCharacters = { ...playerCharacters };
     const updatedEnemies = enemies ? [...enemies] : [];
@@ -270,11 +249,40 @@ export function tickActiveEffects(activeEffects, playerCharacters, enemies) {
             stat: effect.stat,
             value: effect.value,
             turnsRemaining: effect.turnsRemaining,
-            appliedThisTurn: effect.appliedThisTurn
+            appliedThisTurn: effect.appliedThisTurn,
+            ownerTurnId: effect.ownerTurnId,
+            endingTurnOwnerId
         });
+
+        const shouldTickThisTurn = !endingTurnOwnerId || !effect.ownerTurnId || effect.ownerTurnId === endingTurnOwnerId;
+        if (!shouldTickThisTurn) {
+            updatedEffects.push(updatedEffect);
+            return;
+        }
         
         // Skip ticking if effect was applied this turn
         if (updatedEffect.appliedThisTurn) {
+            if ((effect.type === 'stat_debuff' || (effect.type === 'stat_buff' && effect.stat !== 'health')) && enemies) {
+                const enemyIndex = updatedEnemies.findIndex(e => e.id === effect.target);
+                if (enemyIndex !== -1) {
+                    const enemy = updatedEnemies[enemyIndex];
+                    const oldValue = enemy.stats[effect.stat] || 0;
+                    const newValue = oldValue + effect.value;
+                    updatedEnemies[enemyIndex] = {
+                        ...enemy,
+                        stats: {
+                            ...enemy.stats,
+                            [effect.stat]: newValue
+                        }
+                    };
+                    const effectLabel = effect.type === 'stat_debuff' ? 'DEBUFF' : 'BUFF';
+                    console.log(`[${effectLabel} APPLIED] ${enemy.name} (${effect.target}):`);
+                    console.log(`  - Stat: ${effect.stat}`);
+                    console.log(`  - Old value: ${oldValue}`);
+                    console.log(`  - Effect amount: ${effect.value}`);
+                    console.log(`  - New value: ${newValue}`);
+                }
+            }
             updatedEffect.appliedThisTurn = false;
             updatedEffects.push(updatedEffect);
             return;
@@ -434,7 +442,7 @@ export function calculateTotalStat(character, playerName, statName, activeEffect
     
     // Add bonuses from active effects
     activeEffects.forEach(effect => {
-        if (effect.target === playerName && effect.stat === statName) {
+        if (effect.target === playerName && effect.stat === statName && !effect.appliedThisTurn) {
             if (effect.type === 'stat_buff') {
                 total += effect.value;
             } else if (effect.type === 'stat_debuff') {
@@ -456,7 +464,7 @@ export function getStatBonuses(playerName, activeEffects) {
     const bonuses = {};
     
     activeEffects.forEach(effect => {
-        if (effect.target === playerName && (effect.type === 'stat_buff' || effect.type === 'stat_debuff')) {
+        if (effect.target === playerName && (effect.type === 'stat_buff' || effect.type === 'stat_debuff') && !effect.appliedThisTurn) {
             const statName = effect.stat;
             bonuses[statName] = (bonuses[statName] || 0) + effect.value;
         }

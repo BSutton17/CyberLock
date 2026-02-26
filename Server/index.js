@@ -641,9 +641,27 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on("enemy_turn_complete", ({ room }) => {
+  socket.on("enemy_turn_complete", ({ room, updatedEnemies, updatedPlayerCharacters, updatedActiveEffects }) => {
     const combat = combatSessions[room];
     if (!combat) return;
+
+    if (updatedEnemies && Array.isArray(updatedEnemies)) {
+      combat.enemies = normalizeEnemiesForCombat(updatedEnemies, combat.enemies || []);
+      removeDeadEnemiesFromTurnOrder(combat);
+      io.to(room).emit("enemies_updated", { enemies: combat.enemies });
+    }
+
+    if (rooms[room] && updatedPlayerCharacters) {
+      rooms[room].characterSelections = {
+        ...rooms[room].characterSelections,
+        ...updatedPlayerCharacters
+      };
+      io.to(room).emit("characters_updated", updatedPlayerCharacters);
+    }
+
+    if (updatedActiveEffects) {
+      io.to(room).emit("active_effects_updated", updatedActiveEffects);
+    }
 
     combat.currentTurnIndex++;
     if(combat.currentTurnIndex >= combat.turnOrder.length) {

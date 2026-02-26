@@ -268,7 +268,7 @@ export const ABILITIES = {
     black_hole: {
         id: 'black_hole',
         name: 'Black Hole',
-        description: 'Click on a square, all enemies in a 5x5 area are sucked in and cannot move for 2 turns',
+        description: 'Click on a square to instantly teleport enemies in a 5x5 area into the center spiral and immobilize them for 2 turns',
         role: "DPS",
         cooldown: 0,
         isUltimate: true,
@@ -294,6 +294,49 @@ export const ABILITIES = {
                 Object.values(characterPositions || {}).map(pos => `${pos.row},${pos.col}`)
             );
             const withinBounds = (r, c) => r >= 0 && r < 7 && c >= 0 && c < 10;
+
+            const buildSpiralPositions = (centerRow, centerCol, maxCells = 70) => {
+                const positions = [];
+                const seen = new Set();
+
+                const pushIfValid = (r, c) => {
+                    if (!withinBounds(r, c)) return;
+                    const key = `${r},${c}`;
+                    if (seen.has(key)) return;
+                    seen.add(key);
+                    positions.push({ row: r, col: c });
+                };
+
+                pushIfValid(centerRow, centerCol);
+
+                let currentRow = centerRow;
+                let currentCol = centerCol;
+                let stepLength = 1;
+                const directions = [
+                    { row: -1, col: 0 }, // up
+                    { row: 0, col: -1 }, // left
+                    { row: 1, col: 0 },  // down
+                    { row: 0, col: 1 }   // right
+                ];
+
+                while (positions.length < maxCells && stepLength < 20) {
+                    for (let directionIndex = 0; directionIndex < directions.length; directionIndex++) {
+                        const direction = directions[directionIndex];
+                        for (let step = 0; step < stepLength; step++) {
+                            currentRow += direction.row;
+                            currentCol += direction.col;
+                            pushIfValid(currentRow, currentCol);
+                            if (positions.length >= maxCells) break;
+                        }
+                        if (positions.length >= maxCells) break;
+                        if (directionIndex % 2 === 1) {
+                            stepLength++;
+                        }
+                    }
+                }
+
+                return positions;
+            };
             
             // Find all enemies in 5x5 area (2 squares in each direction)
             const enemiesInArea = [];
@@ -308,15 +351,6 @@ export const ABILITIES = {
                 if (rowDiff <= 2 && colDiff <= 2) {
                     affectedEnemies.push(enemy.name);
                     enemiesInArea.push({ enemy, enemyPos });
-                    effects.push({
-                        type: 'status_effect',
-                        target: enemy.id,
-                        status: 'black_hole_pull',
-                        center: { row, col },
-                        duration: 2,
-                        preventMovement: false,
-                        preventActions: false
-                    });
                 }
             });
 
@@ -327,61 +361,59 @@ export const ABILITIES = {
                 duration: 2
             });
 
-            // Pull enemies toward center, up to 2 cells, without passing through occupied cells
+            // Remove affected enemies from occupied map so they can be reassigned into the spiral
+            enemiesInArea.forEach(({ enemyPos }) => {
+                occupied.delete(`${enemyPos.row},${enemyPos.col}`);
+            });
+
+            // Deterministic enemy ordering for tie-breaks
             const sortedTargets = enemiesInArea.sort((a, b) => {
                 const distA = Math.abs(a.enemyPos.row - row) + Math.abs(a.enemyPos.col - col);
                 const distB = Math.abs(b.enemyPos.row - row) + Math.abs(b.enemyPos.col - col);
-                return distB - distA;
+                if (distA !== distB) return distB - distA;
+                return a.enemy.id.localeCompare(b.enemy.id);
             });
 
-            sortedTargets.forEach(({ enemy, enemyPos }) => {
-                let current = { ...enemyPos };
-                const path = [];
-                occupied.delete(`${enemyPos.row},${enemyPos.col}`);
+            const spiralSlots = buildSpiralPositions(row, col).filter(pos => {
+                const key = `${pos.row},${pos.col}`;
+                return !occupied.has(key);
+            });
 
-                for (let step = 0; step < 2; step++) {
-                    const currentDistance = Math.abs(current.row - row) + Math.abs(current.col - col);
-                    if (currentDistance === 0) break;
+            sortedTargets.forEach(({ enemy }, index) => {
+                const destination = spiralSlots[index];
+                if (!destination) return;
 
-                    const candidateMoves = [
-                        { row: current.row - 1, col: current.col },
-                        { row: current.row + 1, col: current.col },
-                        { row: current.row, col: current.col - 1 },
-                        { row: current.row, col: current.col + 1 }
-                    ].filter(next => {
-                        if (!withinBounds(next.row, next.col)) return false;
-                        const key = `${next.row},${next.col}`;
-                        if (occupied.has(key)) return false;
-                        const nextDistance = Math.abs(next.row - row) + Math.abs(next.col - col);
-                        return nextDistance < currentDistance;
-                    });
+                const source = characterPositions?.[enemy.id] || null;
+                console.log('[BLACK HOLE TELEPORT] Before teleport:', {
+                    enemyId: enemy.id,
+                    enemyName: enemy.name,
+                    from: source,
+                    to: destination
+                });
 
-                    if (candidateMoves.length === 0) break;
+                occupied.add(`${destination.row},${destination.col}`);
+                effects.push({
+                    type: 'status_effect',
+                    target: enemy.id,
+                    status: 'immobilized',
+                    duration: 2,
+                    preventMovement: true,
+                    preventActions: false
+                });
 
-                    candidateMoves.sort((first, second) => {
-                        const firstDistance = Math.abs(first.row - row) + Math.abs(first.col - col);
-                        const secondDistance = Math.abs(second.row - row) + Math.abs(second.col - col);
-                        if (firstDistance !== secondDistance) return firstDistance - secondDistance;
-                        const firstRowDelta = Math.abs(first.row - row);
-                        const secondRowDelta = Math.abs(second.row - row);
-                        if (firstRowDelta !== secondRowDelta) return firstRowDelta - secondRowDelta;
-                        return Math.abs(first.col - col) - Math.abs(second.col - col);
-                    });
-
-                    const nextCell = candidateMoves[0];
-                    path.push(nextCell);
-                    current = nextCell;
-                }
-
-                occupied.add(`${current.row},${current.col}`);
-
-                if (path.length > 0) {
+                if (characterPositions?.[enemy.id]) {
                     forcedMovement.push({
                         enemyId: enemy.id,
-                        path,
-                        to: current
+                        path: [destination],
+                        to: destination
                     });
                 }
+
+                console.log('[BLACK HOLE TELEPORT] After teleport assignment:', {
+                    enemyId: enemy.id,
+                    enemyName: enemy.name,
+                    finalTile: destination
+                });
             });
             
             if (affectedEnemies.length === 0) {
@@ -396,7 +428,7 @@ export const ABILITIES = {
                 effects: effects,
                 forcedMovement,
                 aoePosition: targetPosition,
-                message: `${caster.name} creates a Black Hole! ${affectedEnemies.join(', ')} are pulled inward and cannot move for 2 turns!`
+                message: `${caster.name} creates a Black Hole! ${affectedEnemies.join(', ')} are teleported into the center spiral and immobilized for 2 turns!`
             };
         }
     },

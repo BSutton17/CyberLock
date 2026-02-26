@@ -76,6 +76,10 @@
 	min-height: 0;
 }
 
+.ability-description{
+	font-size: 0.9vmin;
+}
+
 .character-section,
 .current-abilities-section {
 	background: rgba(20, 20, 40, 0.72);

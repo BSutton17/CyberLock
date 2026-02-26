@@ -553,9 +553,64 @@ function Main() {
         return path;
     };
 
+    const findShortestWalkablePath = (start, end, allPositions, movingCharacterId) => {
+        const ROWS = 7;
+        const COLS = 10;
+
+        if (!start || !end) return null;
+        if (start.row === end.row && start.col === end.col) return [];
+
+        const occupied = new Set(
+            Object.entries(allPositions)
+                .filter(([id]) => id !== movingCharacterId)
+                .map(([, pos]) => `${pos.row},${pos.col}`)
+        );
+
+        const endKey = `${end.row},${end.col}`;
+        if (occupied.has(endKey)) return null;
+
+        const startKey = `${start.row},${start.col}`;
+        const queue = [{ row: start.row, col: start.col, path: [] }];
+        const visited = new Set([startKey]);
+        const directions = [
+            { row: 1, col: 0 },
+            { row: -1, col: 0 },
+            { row: 0, col: 1 },
+            { row: 0, col: -1 }
+        ];
+
+        while (queue.length > 0) {
+            const current = queue.shift();
+
+            for (const direction of directions) {
+                const nextRow = current.row + direction.row;
+                const nextCol = current.col + direction.col;
+
+                if (nextRow < 0 || nextRow >= ROWS || nextCol < 0 || nextCol >= COLS) continue;
+
+                const nextKey = `${nextRow},${nextCol}`;
+                if (visited.has(nextKey) || occupied.has(nextKey)) continue;
+
+                const nextPath = [...current.path, { row: nextRow, col: nextCol }];
+                if (nextRow === end.row && nextCol === end.col) {
+                    return nextPath;
+                }
+
+                visited.add(nextKey);
+                queue.push({ row: nextRow, col: nextCol, path: nextPath });
+            }
+        }
+
+        return null;
+    };
+
     // Listen for enemy turn execution
     useEffect(() => {
         const handleExecuteEnemyTurn = ({ enemyId, allies, alliedEnemies }) => {
+            const latestEnemies = enemiesRef.current;
+            const latestPlayerCharacters = playerCharactersRef.current;
+            const latestActiveEffects = activeEffectsRef.current;
+
             // Check if game is over - don't execute enemy turns
             if (gameOverRef.current) {
                 console.log('[ENEMY TURN] Game is over, skipping enemy turn');
@@ -576,10 +631,10 @@ function Main() {
             console.log('[ENEMY TURN] This player will handle the enemy turn');
             console.log('Allied Enemies:', alliedEnemies);
             
-            const enemy = enemies.find(e => e.id === enemyId && !isEnemyDeadBody(e));
+            const enemy = latestEnemies.find(e => e.id === enemyId && !isEnemyDeadBody(e));
             if (!enemy) {
                 console.error('Enemy not found:', enemyId);
-                console.log('Available enemies:', enemies.map(e => e.id));
+                console.log('Available enemies:', latestEnemies.map(e => e.id));
                 return;
             }
 
@@ -589,9 +644,9 @@ function Main() {
                 enemy,
                 allies,
                 alliedEnemies,
-                playerCharacters,
+                latestPlayerCharacters,
                 characterPositions,
-                activeEffects
+                latestActiveEffects
             );
 
             console.log('Turn Action:', turnAction);
@@ -600,7 +655,7 @@ function Main() {
             if (turnAction.abilityToUse && !turnAction.immobilized) {
                 console.log(`[ENEMY ABILITY] ${enemy.name} using ability: ${turnAction.abilityToUse.name}`);
 
-                const enemyAbilityTargets = Object.entries(playerCharacters).map(([id, character]) => ({
+                const enemyAbilityTargets = Object.entries(latestPlayerCharacters).map(([id, character]) => ({
                     ...character,
                     id
                 }));
@@ -612,7 +667,7 @@ function Main() {
                     playerName: enemy.id,
                     target: turnAction.target,
                     enemies: enemyAbilityTargets,
-                    playerCharacters,
+                    playerCharacters: latestPlayerCharacters,
                     characterPositions,
                     cooldowns: enemy.cooldowns
                 };
@@ -640,9 +695,10 @@ function Main() {
                     
                     // Apply ability effects
                     const updates = applyAbilityEffects(abilityResult, {
-                        enemies,
-                        playerCharacters,
-                        activeEffects
+                        enemies: latestEnemies,
+                        playerCharacters: latestPlayerCharacters,
+                        activeEffects: latestActiveEffects,
+                        effectOwnerTurnId: enemy.id
                     });
                     
                     // Handle special effects for enemy abilities (cooldown_increase, etc)
@@ -916,9 +972,23 @@ function Main() {
                         cooldowns: newCooldowns
                     };
                 });
+
+                const tickResult = tickActiveEffects(
+                    activeEffectsRef.current,
+                    playerCharactersRef.current,
+                    updatedEnemies,
+                    enemyId
+                );
                 
-                setEnemies(updatedEnemies);
-                socket.emit('enemy_turn_complete', { room, updatedEnemies });
+                setActiveEffects(tickResult.updatedEffects);
+                setPlayerCharacters(tickResult.updatedCharacters);
+                setEnemies(normalizeEnemiesState(tickResult.updatedEnemies));
+                socket.emit('enemy_turn_complete', {
+                    room,
+                    updatedEnemies: tickResult.updatedEnemies,
+                    updatedPlayerCharacters: tickResult.updatedCharacters,
+                    updatedActiveEffects: tickResult.updatedEffects
+                });
             }, totalDelay);
         };
 
@@ -997,6 +1067,15 @@ function Main() {
 
         const handleEnemyMoved = ({ enemyId, path, stepDelay }) => {
             if (!path || path.length === 0) return;
+            const startingPosition = characterPositions[enemyId] || null;
+            const finalPosition = path[path.length - 1] || null;
+
+            console.log('[BLACK HOLE TELEPORT] Before enemy_moved apply:', {
+                enemyId,
+                from: startingPosition,
+                path,
+                to: finalPosition
+            });
             
             // Animate through each step in the path
             path.forEach((position, index) => {
@@ -1023,6 +1102,12 @@ function Main() {
                     socket.emit('active_effects_updated', { room, effects: updatedEffects });
                     socket.emit('enemies_updated', { room, enemies: updatedEnemies });
                 }
+
+                console.log('[BLACK HOLE TELEPORT] After enemy_moved apply:', {
+                    enemyId,
+                    from: startingPosition,
+                    to: finalPosition
+                });
             }, stepDelay * path.length + 50); // Small delay after final position update
         };
 
@@ -1326,15 +1411,30 @@ function Main() {
             maxMovement
         });
         
-        // Calculate distance from current position to target
-        const movementThisStep = Math.abs(row - currentPos.row) + Math.abs(col - currentPos.col);
+        const pathToTarget = findShortestWalkablePath(
+            currentPos,
+            { row, col },
+            characterPositions,
+            playerName
+        );
+
+        // Movement cost is based on actual walkable path length (blocked if null)
+        const movementThisStep = pathToTarget ? pathToTarget.length : Infinity;
         
         // Check if we have enough movement remaining
         const movementRemaining = maxMovement - movementUsed;
 
-        const isOccupied = Object.values(characterPositions).some(
-            pos => pos.row === row && pos.col === col
+        const isOccupied = Object.entries(characterPositions).some(
+            ([id, pos]) => id !== playerName && pos.row === row && pos.col === col
         );
+
+        if (!pathToTarget) {
+            console.log('Movement blocked by occupied cells:', {
+                from: currentPos,
+                to: { row, col }
+            });
+            return;
+        }
 
         if (movementThisStep <= movementRemaining && movementThisStep > 0 && !isOccupied) {
             console.log('Movement:', {
@@ -1589,7 +1689,8 @@ function Main() {
         const updates = applyAbilityEffects(result, {
             enemies,
             playerCharacters,
-            activeEffects
+            activeEffects,
+            effectOwnerTurnId: playerName
         });
         
         setEnemies(normalizeEnemiesState(updates.enemies));
@@ -1605,11 +1706,11 @@ function Main() {
                     room,
                     enemyId,
                     path: movementPath,
-                    stepDelay: 120
+                    stepDelay: 1
                 });
             });
         }
-        
+
         console.log('[ABILITY COMPLETE] Updated enemies:', updates.enemies);
         console.log('[ABILITY COMPLETE] Updated playerCharacters:', updates.playerCharacters);
         
@@ -1727,12 +1828,33 @@ function Main() {
         const updates = applyAbilityEffects(result, {
             enemies,
             playerCharacters,
-            activeEffects
+            activeEffects,
+            effectOwnerTurnId: playerName
         });
         
         setEnemies(normalizeEnemiesState(updates.enemies));
         setPlayerCharacters(updates.playerCharacters);
         setActiveEffects(updates.activeEffects);
+
+        if (result.forcedMovement && result.forcedMovement.length > 0) {
+            result.forcedMovement.forEach(({ enemyId, path, to }) => {
+                const movementPath = path && path.length > 0 ? path : (to ? [to] : []);
+                if (movementPath.length === 0) return;
+
+                console.log('[BLACK HOLE TELEPORT] Emitting enemy_moved (multi-target path):', {
+                    enemyId,
+                    from: characterPositions[enemyId] || null,
+                    to: movementPath[movementPath.length - 1]
+                });
+
+                socket.emit('enemy_moved', {
+                    room,
+                    enemyId,
+                    path: movementPath,
+                    stepDelay: 1
+                });
+            });
+        }
         
         // Update cooldowns
         if (result.newCooldown) {
@@ -1817,12 +1939,33 @@ function Main() {
         const updates = applyAbilityEffects(result, {
             enemies,
             playerCharacters,
-            activeEffects
+            activeEffects,
+            effectOwnerTurnId: playerName
         });
         
         setEnemies(normalizeEnemiesState(updates.enemies));
         setPlayerCharacters(updates.playerCharacters);
         setActiveEffects(updates.activeEffects);
+
+        if (result.forcedMovement && result.forcedMovement.length > 0) {
+            result.forcedMovement.forEach(({ enemyId, path, to }) => {
+                const movementPath = path && path.length > 0 ? path : (to ? [to] : []);
+                if (movementPath.length === 0) return;
+
+                console.log('[BLACK HOLE TELEPORT] Emitting enemy_moved (ground-target path):', {
+                    enemyId,
+                    from: characterPositions[enemyId] || null,
+                    to: movementPath[movementPath.length - 1]
+                });
+
+                socket.emit('enemy_moved', {
+                    room,
+                    enemyId,
+                    path: movementPath,
+                    stepDelay: 1
+                });
+            });
+        }
         
         console.log('[GROUND TARGET COMPLETE] Updated enemies:', updates.enemies);
         console.log('[GROUND TARGET COMPLETE] Updated playerCharacters:', updates.playerCharacters);
@@ -1881,7 +2024,8 @@ function Main() {
         const { updatedEffects, updatedCharacters, updatedEnemies } = tickActiveEffects(
             activeEffectsRef.current, 
             playerCharactersRef.current, 
-            enemiesRef.current
+            enemiesRef.current,
+            playerName
         );
         
         console.log('Effects ticked:', {
@@ -2087,7 +2231,7 @@ function Main() {
                 <button type="submit" disabled={aiBusy || !aiInput.trim()}>Send</button>
             </form> */}
             
-        <button style={{ width: '150px' }} onClick={handleLevelUp}>Level Up</button>
+        {/* <button style={{ width: '150px' }} onClick={handleLevelUp}>Level Up</button> */}
         <button style={{ width: '150px' }} onClick={() => handleStoryComplete()}>Combat</button>
             </div>
             <span className="ai-text">{aiText}</span>

@@ -22,7 +22,7 @@ function WaitingRoom() {
       </div>
 
       <div className="player-list-section">
-        <h3>Players: {players.length}/6</h3>
+        <h1>Players: {players.length}/6</h1>
         <ul>
           {players.map((player, index) => (
             <li className="player-card" key={index}>{player}</li>

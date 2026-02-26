@@ -64,6 +64,204 @@ let rooms = {};
 let playerNames = {};
 let playerRooms = {};
 let combatSessions = {};
+const MAX_PARTY_SIZE = 6;
+
+function isEnemyAlive(enemy) {
+  return enemy && !enemy.isDeadBody && (enemy.stats?.health || 0) > 0;
+}
+
+function markEnemyAsCorpse(enemy) {
+  if (!enemy) return enemy;
+  return {
+    ...enemy,
+    isDeadBody: true,
+    corpseTurnsRemaining: 1,
+    stats: {
+      ...enemy.stats,
+      health: 0
+    }
+  };
+}
+
+function tickEnemyCorpses(combat) {
+  if (!combat?.enemies?.length) return false;
+
+  const previousLength = combat.enemies.length;
+  combat.enemies = combat.enemies
+    .map(enemy => {
+      if (!enemy?.isDeadBody) return enemy;
+      const turnsRemaining = (enemy.corpseTurnsRemaining ?? 1) - 1;
+      if (turnsRemaining <= 0) return null;
+      return {
+        ...enemy,
+        corpseTurnsRemaining: turnsRemaining
+      };
+    })
+    .filter(Boolean);
+
+  return combat.enemies.length !== previousLength;
+}
+
+function normalizeEnemiesForCombat(incomingEnemies = [], existingEnemies = []) {
+  return incomingEnemies.map(incomingEnemy => {
+    const existingEnemy = existingEnemies.find(enemy => enemy.id === incomingEnemy.id);
+    const alreadyCorpse = existingEnemy?.isDeadBody;
+
+    if (alreadyCorpse) {
+      return {
+        ...incomingEnemy,
+        isDeadBody: true,
+        corpseTurnsRemaining: existingEnemy.corpseTurnsRemaining ?? 1,
+        stats: {
+          ...incomingEnemy.stats,
+          health: 0
+        }
+      };
+    }
+
+    if ((incomingEnemy.stats?.health || 0) <= 0) {
+      return markEnemyAsCorpse(incomingEnemy);
+    }
+
+    return {
+      ...incomingEnemy,
+      isDeadBody: false,
+      corpseTurnsRemaining: 0
+    };
+  });
+}
+
+function removeDeadEnemiesFromTurnOrder(combat) {
+  if (!combat?.turnOrder) return;
+  const currentTurn = combat.turnOrder[combat.currentTurnIndex];
+  const aliveEnemyIds = new Set((combat.enemies || []).filter(isEnemyAlive).map(enemy => enemy.id));
+  combat.turnOrder = combat.turnOrder.filter(turn => turn.type !== 'enemy' || aliveEnemyIds.has(turn.id));
+
+  if (combat.turnOrder.length === 0) {
+    combat.currentTurnIndex = 0;
+    return;
+  }
+
+  if (currentTurn) {
+    const preservedIndex = combat.turnOrder.findIndex(turn => turn.type === currentTurn.type && turn.id === currentTurn.id);
+    if (preservedIndex !== -1) {
+      combat.currentTurnIndex = preservedIndex;
+      return;
+    }
+  }
+
+  if (combat.currentTurnIndex >= combat.turnOrder.length) {
+    combat.currentTurnIndex = 0;
+  }
+}
+
+function getAlliedEnemyIds(combat, actingEnemyId) {
+  return (combat.enemies || [])
+    .filter(isEnemyAlive)
+    .map(enemy => enemy.id)
+    .filter(id => id !== actingEnemyId);
+}
+
+function getEnemySpawnDepth(enemy) {
+  const behavior = enemy?.behavior || 'aggressive';
+  const role = enemy?.role || 'DPS';
+
+  if (role === 'Support') return 0;
+  if (behavior === 'defensive') return 0;
+  if (behavior === 'aggressive') return 1;
+  if (behavior === 'intelligent') return 1;
+  return 1;
+}
+
+function generateSpreadColumns(count, totalCols = 10) {
+  if (count <= 0) return [];
+  if (count === 1) return [Math.floor(totalCols / 2)];
+
+  const baseColumns = Array.from({ length: count }, (_, index) =>
+    Math.round((index * (totalCols - 1)) / (count - 1))
+  );
+
+  const used = new Set();
+  return baseColumns.map((baseCol) => {
+    if (!used.has(baseCol)) {
+      used.add(baseCol);
+      return baseCol;
+    }
+
+    for (let offset = 1; offset < totalCols; offset++) {
+      const left = baseCol - offset;
+      const right = baseCol + offset;
+
+      if (left >= 0 && !used.has(left)) {
+        used.add(left);
+        return left;
+      }
+
+      if (right < totalCols && !used.has(right)) {
+        used.add(right);
+        return right;
+      }
+    }
+
+    return baseCol;
+  });
+}
+
+function generateEnemySpawnPositions(enemies = []) {
+  const sortedEnemies = [...enemies].sort((firstEnemy, secondEnemy) =>
+    getEnemySpawnDepth(secondEnemy) - getEnemySpawnDepth(firstEnemy)
+  );
+
+  const columns = generateSpreadColumns(sortedEnemies.length, 10);
+  const positions = {};
+  const usedCells = new Set();
+
+  const findOpenCell = (preferredRow, preferredCol) => {
+    const withinBounds = (row, col) => row >= 0 && row < 7 && col >= 0 && col < 10;
+    const isOpen = (row, col) => !usedCells.has(`${row},${col}`);
+
+    if (withinBounds(preferredRow, preferredCol) && isOpen(preferredRow, preferredCol)) {
+      return { row: preferredRow, col: preferredCol };
+    }
+
+    for (let radius = 1; radius <= 10; radius++) {
+      for (let rowOffset = -radius; rowOffset <= radius; rowOffset++) {
+        const colOffset = radius - Math.abs(rowOffset);
+        const candidates = [
+          { row: preferredRow + rowOffset, col: preferredCol + colOffset },
+          { row: preferredRow + rowOffset, col: preferredCol - colOffset }
+        ];
+
+        for (const candidate of candidates) {
+          if (!withinBounds(candidate.row, candidate.col)) continue;
+          if (isOpen(candidate.row, candidate.col)) {
+            return candidate;
+          }
+        }
+      }
+    }
+
+    for (let row = 0; row < 7; row++) {
+      for (let col = 0; col < 10; col++) {
+        if (isOpen(row, col)) {
+          return { row, col };
+        }
+      }
+    }
+
+    return { row: preferredRow, col: preferredCol };
+  };
+
+  sortedEnemies.forEach((enemy, index) => {
+    const preferredRow = getEnemySpawnDepth(enemy);
+    const preferredCol = columns[index] ?? 0;
+    const spawnCell = findOpenCell(preferredRow, preferredCol);
+    positions[enemy.id] = spawnCell;
+    usedCells.add(`${spawnCell.row},${spawnCell.col}`);
+  });
+
+  return positions;
+}
 
 async function requestAiNarration(payload) {
   if (!AI_API_URL) {
@@ -89,7 +287,7 @@ async function requestAiNarration(payload) {
 
 function calculateTurnOrder(room) {
   const players = rooms[room]?.players || [];
-  const enemies = combatSessions[room]?.enemies || [];
+  const enemies = (combatSessions[room]?.enemies || []).filter(isEnemyAlive);
 
   let characters = [];
 
@@ -144,6 +342,30 @@ io.on('connection', (socket) => {
 
   socket.on("startGame", (room) => {
     io.to(room).emit("gameStarted", { room, players: rooms[room]?.players || [] });
+  });
+
+  socket.on("reset_game", ({ room }) => {
+    console.log(`[RESET] Resetting game for room: ${room}`);
+    if (rooms[room]) {
+      // Clear all game-related data but keep the room and players
+      rooms[room].characterSelections = {};
+      rooms[room].readyPlayers = [];
+      rooms[room].abilitySelections = {};
+      rooms[room].abilityReadyPlayers = [];
+      rooms[room].levelUpReadyPlayers = [];
+      rooms[room].attributePoints = {};
+      rooms[room].attributeReadyPlayers = [];
+      rooms[room].sortedAttributeAllocations = {};
+      
+      // Clear combat session
+      if (combatSessions[room]) {
+        delete combatSessions[room];
+      }
+      
+      // Notify all clients to reset
+      io.to(room).emit("game_reset");
+      console.log(`[RESET] Game reset complete for room: ${room}`);
+    }
   });
 
   socket.on("character_selected", ({ room, playerName, character }) => {
@@ -254,6 +476,8 @@ io.on('connection', (socket) => {
                                 );
       
       if (allAttributeReady) {
+        rooms[room].abilityReadyPlayers = [];
+        io.to(room).emit("ability_ready_status", []);
         io.to(room).emit("start_main_game");
       }
     }
@@ -268,11 +492,7 @@ io.on('connection', (socket) => {
     combatSessions[room].enemies = generatedEnemies;
 
     // Generate enemy positions (server decides so all clients see same positions)
-    const topRow = Math.floor(Math.random() * 2);
-    const enemyPositions = {};
-    generatedEnemies.forEach((enemy, index) => {
-      enemyPositions[enemy.id] = { row: topRow, col: index + 3 };
-    });
+    const enemyPositions = generateEnemySpawnPositions(generatedEnemies);
     combatSessions[room].enemyPositions = enemyPositions;
 
     const turnOrder = calculateTurnOrder(room);
@@ -301,7 +521,7 @@ io.on('connection', (socket) => {
         io.to(room).emit("execute_enemy_turn", { 
           enemyId: firstTurn.id,
           allies: rooms[room]?.players || [],
-          alliedEnemies: combat.enemies.map(e => e.id).filter(id => id !== firstTurn.id)
+          alliedEnemies: getAlliedEnemyIds(combat, firstTurn.id)
         });
       }, 500);
     }
@@ -322,11 +542,12 @@ io.on('connection', (socket) => {
     // Update enemies with new stats (for debuffs/buffs)
     if (rooms[room] && updatedEnemies) {
       if (combatSessions[room]) {
-        combatSessions[room].enemies = updatedEnemies;
+        combatSessions[room].enemies = normalizeEnemiesForCombat(updatedEnemies, combatSessions[room].enemies || []);
+        removeDeadEnemiesFromTurnOrder(combatSessions[room]);
         console.log('[SERVER] Updated enemies in combatSession:', updatedEnemies.map(e => ({ id: e.id, speed: e.stats.speed })));
       }
       
-      io.to(room).emit("enemies_updated", { enemies: updatedEnemies });
+      io.to(room).emit("enemies_updated", { enemies: combatSessions[room]?.enemies || updatedEnemies });
     }
     
     // Broadcast active effects so all players see buff/debuff indicators
@@ -335,15 +556,28 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on("end_turn", ({ room, playerName, updatedEnemies }) => {
+  socket.on("end_turn", ({ room, playerName, updatedEnemies, updatedPlayerCharacters, updatedActiveEffects }) => {
     const combat = combatSessions[room];
     
     if (!combat) return;
 
     // Update enemies with any debuffs/buffs that were ticked
     if (updatedEnemies && Array.isArray(updatedEnemies)) {
-      combat.enemies = updatedEnemies;
+      combat.enemies = normalizeEnemiesForCombat(updatedEnemies, combat.enemies || []);
+      removeDeadEnemiesFromTurnOrder(combat);
       console.log('[SERVER] Updated enemies on end_turn:', updatedEnemies.map(e => ({ id: e.id, speed: e.stats.speed, health: e.stats.health })));
+    }
+
+    if (rooms[room] && updatedPlayerCharacters) {
+      rooms[room].characterSelections = {
+        ...rooms[room].characterSelections,
+        ...updatedPlayerCharacters
+      };
+      io.to(room).emit("characters_updated", updatedPlayerCharacters);
+    }
+
+    if (updatedActiveEffects) {
+      io.to(room).emit("active_effects_updated", updatedActiveEffects);
     }
 
     const currentTurn = combat?.turnOrder[combat.currentTurnIndex];
@@ -361,18 +595,30 @@ io.on('connection', (socket) => {
         io.to(room).emit("execute_enemy_turn", { 
           enemyId: firstTurn.id,
           allies: rooms[room]?.players || [],
-          alliedEnemies: combat.enemies.map(e => e.id).filter(id => id !== firstTurn.id)
+          alliedEnemies: getAlliedEnemyIds(combat, firstTurn.id)
         });
       }
       return;
     }
     
-    if (currentTurn.id !== playerName) return;
+    if (currentTurn.id !== playerName) {
+      io.to(room).emit("turn_changed", { currentTurn });
+      if (currentTurn.type === 'enemy') {
+        io.to(room).emit("execute_enemy_turn", {
+          enemyId: currentTurn.id,
+          allies: rooms[room]?.players || [],
+          alliedEnemies: getAlliedEnemyIds(combat, currentTurn.id)
+        });
+      }
+      return;
+    }
 
     combat.currentTurnIndex++;
     if(combat.currentTurnIndex >= combat.turnOrder.length) {
       combat.currentTurnIndex = 0;
     }
+
+    const removedCorpses = tickEnemyCorpses(combat);
     
     if (combat.turnOrder.length === 0) {
       io.to(room).emit('combat_ended', { result: 'all_dead' });
@@ -381,13 +627,16 @@ io.on('connection', (socket) => {
 
     const nextTurn = combat.turnOrder[combat.currentTurnIndex];
     io.to(room).emit("turn_changed", { currentTurn: nextTurn });
+    if (removedCorpses) {
+      io.to(room).emit("enemies_updated", { enemies: combat.enemies });
+    }
     
     // If next turn is an enemy, trigger enemy AI
     if (nextTurn.type === 'enemy') {
       io.to(room).emit("execute_enemy_turn", { 
         enemyId: nextTurn.id,
         allies: rooms[room]?.players || [],
-        alliedEnemies: combat.enemies.map(e => e.id).filter(id => id !== nextTurn.id)
+        alliedEnemies: getAlliedEnemyIds(combat, nextTurn.id)
       });
     }
   });
@@ -400,6 +649,8 @@ io.on('connection', (socket) => {
     if(combat.currentTurnIndex >= combat.turnOrder.length) {
       combat.currentTurnIndex = 0;
     }
+
+    const removedCorpses = tickEnemyCorpses(combat);
     
     if (combat.turnOrder.length === 0) {
       io.to(room).emit('combat_ended', { result: 'all_dead' });
@@ -408,13 +659,16 @@ io.on('connection', (socket) => {
 
     const nextTurn = combat.turnOrder[combat.currentTurnIndex];
     io.to(room).emit("turn_changed", { currentTurn: nextTurn });
+    if (removedCorpses) {
+      io.to(room).emit("enemies_updated", { enemies: combat.enemies });
+    }
     
     // Chain enemy turns if needed
     if (nextTurn.type === 'enemy') {
       io.to(room).emit("execute_enemy_turn", { 
         enemyId: nextTurn.id,
         allies: rooms[room]?.players || [],
-        alliedEnemies: combat.enemies.map(e => e.id).filter(id => id !== nextTurn.id)
+        alliedEnemies: getAlliedEnemyIds(combat, nextTurn.id)
       });
     }
   });
@@ -442,16 +696,23 @@ io.on('connection', (socket) => {
     if (!combat) return;
 
     // Update enemy health in combat session
-    combat.enemies = combat.enemies.map(e => 
-      e.id === enemyId ? { ...e, stats: { ...e.stats, health: newHealth } } : e
-    ).filter(e => e.stats.health > 0);
+    combat.enemies = combat.enemies.map(e => {
+      if (e.id !== enemyId) return e;
+      if (newHealth <= 0) return markEnemyAsCorpse(e);
+      return {
+        ...e,
+        stats: { ...e.stats, health: newHealth },
+        isDeadBody: false,
+        corpseTurnsRemaining: 0
+      };
+    });
 
     // Remove dead enemy from turn order
     if (newHealth <= 0) {
       const currentTurn = combat.turnOrder[combat.currentTurnIndex];
       const wasCurrentTurn = currentTurn && currentTurn.id === enemyId;
-      
-      combat.turnOrder = combat.turnOrder.filter(turn => turn.id !== enemyId);
+
+      removeDeadEnemiesFromTurnOrder(combat);
       console.log(`Enemy ${enemyId} defeated`);
       
       // If the dead enemy was the current turn, advance immediately
@@ -474,7 +735,7 @@ io.on('connection', (socket) => {
           io.to(room).emit("execute_enemy_turn", { 
             enemyId: nextTurn.id,
             allies: rooms[room]?.players || [],
-            alliedEnemies: combat.enemies.map(e => e.id).filter(id => id !== nextTurn.id)
+            alliedEnemies: getAlliedEnemyIds(combat, nextTurn.id)
           });
         }
       }
@@ -493,6 +754,14 @@ io.on('connection', (socket) => {
       // Remove dead player from turn order
       combat.turnOrder = combat.turnOrder.filter(turn => turn.id !== playerName);
       console.log(`Player ${playerName} died`);
+      
+      // Check if all players are dead (no ally turns left)
+      const allyTurnsRemaining = combat.turnOrder.filter(turn => turn.type === 'ally').length;
+      if (allyTurnsRemaining === 0) {
+        console.log('[SERVER] All players dead - ending combat');
+        io.to(room).emit('combat_ended', { result: 'all_dead' });
+        return;
+      }
       
       // If the dead player was the current turn, advance immediately
       if (wasCurrentTurn) {
@@ -514,7 +783,7 @@ io.on('connection', (socket) => {
           io.to(room).emit("execute_enemy_turn", { 
             enemyId: nextTurn.id,
             allies: rooms[room]?.players || [],
-            alliedEnemies: combat.enemies.map(e => e.id).filter(id => id !== nextTurn.id)
+            alliedEnemies: getAlliedEnemyIds(combat, nextTurn.id)
           });
         }
       }
@@ -532,11 +801,22 @@ io.on('connection', (socket) => {
 
 
   socket.on("join_room", (room, name) => {
-    socket.join(room);
-
     if (!rooms[room]) {
       rooms[room] = { players: [] };
     }
+
+    const playerAlreadyInRoom = rooms[room].players.includes(name);
+    const roomIsFull = rooms[room].players.length >= MAX_PARTY_SIZE;
+
+    if (roomIsFull && !playerAlreadyInRoom) {
+      socket.emit("room_full", {
+        room,
+        maxPlayers: MAX_PARTY_SIZE,
+      });
+      return;
+    }
+
+    socket.join(room);
 
     const isAdmin = rooms[room].players.length === 0;
     socket.emit("setAdmin", isAdmin);
@@ -573,10 +853,43 @@ io.on('connection', (socket) => {
     delete playerRooms[socket.id];
   });
 
-  socket.on("level_up",() => {
-    const room = playerRooms[socket.id];
-  
+  socket.on("level_up",({room}) => {
+    if (rooms[room]) {
+      rooms[room].levelUpReadyPlayers = [];
+      io.to(room).emit('level_up_ready_status', []);
+    }
     io.to(room).emit('level_up');
+  });
+
+  socket.on("level_up_ready", ({ room, playerName, updatedCharacter }) => {
+    if (!rooms[room]) return;
+
+    if (!rooms[room].levelUpReadyPlayers) {
+      rooms[room].levelUpReadyPlayers = [];
+    }
+
+    if (updatedCharacter) {
+      if (!rooms[room].characterSelections) {
+        rooms[room].characterSelections = {};
+      }
+      rooms[room].characterSelections[playerName] = updatedCharacter;
+      io.to(room).emit("characters_updated", { [playerName]: updatedCharacter });
+    }
+
+    if (!rooms[room].levelUpReadyPlayers.includes(playerName)) {
+      rooms[room].levelUpReadyPlayers.push(playerName);
+    }
+
+    io.to(room).emit('level_up_ready_status', rooms[room].levelUpReadyPlayers);
+
+    const allLevelReady = rooms[room].players.length > 0 &&
+      rooms[room].players.every(player => rooms[room].levelUpReadyPlayers.includes(player));
+
+    if (allLevelReady) {
+      rooms[room].abilityReadyPlayers = [];
+      io.to(room).emit('ability_ready_status', []);
+      io.to(room).emit('level_up_complete');
+    }
   });
 });
 

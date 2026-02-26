@@ -103,7 +103,7 @@ h3, h4, p {
 }
 
 .character-name {
-    font-size: 1.5vmin;
+    font-size: 1.5vmin !important;
     font-weight: 600;
     color: #eaeaf0;
     overflow: hidden;
@@ -185,7 +185,46 @@ h3, h4, p {
 
 
 .grid-cell.enemy-cell {
-    border-color: rgba(138, 74, 74, 0.5);
+    border-color: rgba(194, 15, 15, 0.5);
+}
+
+.grid-cell.enemy-cell.white-phospherus-glow {
+    border-color: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 0 0.9rem rgba(255, 255, 255, 0.7), inset 0 0 0.5rem rgba(255, 255, 255, 0.35);
+}
+
+.grid-cell.enemy-corpse-cell {
+    border-color: rgba(120, 120, 120, 0.45);
+}
+
+.grid-cell.healing-field-cell {
+    background: rgba(84, 193, 116, 0.14);
+    border-color: rgba(84, 193, 116, 0.45);
+    box-shadow: inset 0 0 0.6rem rgba(84, 193, 116, 0.2);
+}
+
+.grid-cell.fireball-zone-cell {
+    background: rgba(255, 140, 0, 0.14);
+    border-color: rgba(255, 140, 0, 0.5);
+    box-shadow: inset 0 0 0.6rem rgba(255, 140, 0, 0.24);
+}
+
+.grid-cell.black-hole-zone-cell {
+    background: rgba(132, 92, 255, 0.16);
+    border-color: rgba(132, 92, 255, 0.55);
+    box-shadow: inset 0 0 0.7rem rgba(132, 92, 255, 0.3);
+}
+
+.grid-cell.blizzard-field-cell {
+    background: rgba(135, 206, 250, 0.14);
+    border-color: rgba(135, 206, 250, 0.5);
+    box-shadow: inset 0 0 0.6rem rgba(135, 206, 250, 0.25);
+}
+
+.grid-cell.toxic-mist-cell {
+    background: rgba(20, 90, 20, 0.22);
+    border-color: rgba(34, 139, 34, 0.7);
+    box-shadow: inset 0 0 0.7rem rgba(20, 90, 20, 0.35);
 }
 
 .grid-cell.ground-target-range {
@@ -201,14 +240,29 @@ h3, h4, p {
 }
 
 .grid-cell.enemy-cell .grid-character {
-    background: linear-gradient(135deg, #8a4a4a 0%, #4a2a2a 100%);
     border-color: #ca6a6a;
-    box-shadow: 0 0 0.5rem rgba(202, 106, 106, 0.4);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 0.25rem;
+}
+
+.grid-cell.enemy-corpse-cell .grid-character {
+    background: linear-gradient(135deg, #3a3a45 0%, #23232c 100%);
+    border-color: #7d7d8f;
+    box-shadow: 0 0 0.5rem rgba(140, 140, 160, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.enemy-corpse-icon {
+    font-size: 2.2vmin;
+    color: #cfcfe0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .enemy-health {
@@ -277,8 +331,7 @@ h3, h4, p {
     border-radius: 0.75rem;
     padding: 0.875rem;
     font-size: 0.875rem;
-    max-height: 20vh;
-    overflow-y: auto;
+    height: 4vmin;
     gap: 0.5rem;
 }
 
@@ -323,7 +376,6 @@ h3, h4, p {
 
 .ai-log {
     flex: 1;
-    overflow-y: auto;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
@@ -533,13 +585,13 @@ h3, h4, p {
 }
 
 .stat-label {
-    font-size: 0.75vmin;
+    font-size:58%;
     color: #9a9aaa;
     font-weight: 500;
 }
 
 .stat-value {
-    font-size: 1vmin;
+    font-size: 1.15vmin;
     font-weight: 700;
     color: #eaeaf0;
 }
@@ -875,12 +927,10 @@ h3, h4, p {
     align-items: center;
     justify-content: center;
     z-index: 1000;
-    animation: fadeIn 0.3s ease-in;
 }
 
 .you-died-content {
     text-align: center;
-    animation: scaleIn 0.5s ease-out;
 }
 
 .you-died-content h1 {
@@ -921,7 +971,6 @@ h3, h4, p {
     text-align: center;
     max-width: 500px;
     box-shadow: 0 0 30px rgba(255, 68, 68, 0.5);
-    animation: slideUp 0.5s ease-out;
 }
 
 .game-over-screen h1 {

@@ -4,6 +4,7 @@
       "id": "offensive_tank_1",
       "name": "Offensive Tank #1",
       "role": "Tank",
+      "level": 1,
       "stats": {
         "health": 55,
         "maxHealth": 95,
@@ -15,19 +16,18 @@
       "weapon": {
         "range": 1,
         "name": "Hammer",
-        "damage": 8
+        "damage": 10
       },
       "abilities": [
-        "ability_boost",
-        "binding_chains",
-        "shadow_strike"
+
       ],
-      "ultimate": "executioners_judgment"
+      "ultimate": ""
     },
     {
       "id": "defensive_tank_2",
       "name": "Defensive Tank #2",
       "role": "Tank",
+      "level": 1,
       "stats": {
         "health": 110,
         "maxHealth": 110,
@@ -42,16 +42,15 @@
         "damage": 8
       },
       "abilities": [
-        "diamond_boy",
-        "sword_slash",
-        "charge"
+
       ],
-      "ultimate": "murus_fictilis"
+      "ultimate": ""
     },
     {
       "id": "spellcaster_dps_1",
       "name": "Spell Caster DPS #1",
       "role": "DPS",
+      "level": 1,
       "stats": {
         "health": 75,
         "maxHealth": 75,
@@ -66,16 +65,14 @@
         "damage": 10
       },
       "abilities": [
-        "fireball",
-        "flood_of_frost",
-        "poison_apple"
       ],
-      "ultimate": "black_hole"
+      "ultimate": ""
     },
     {
       "id": "aggressive_dps_2",
       "name": "Aggressive DPS #2",
       "role": "DPS",
+      "level": 1,
       "stats": {
         "health": 80,
         "maxHealth": 80,
@@ -90,16 +87,15 @@
         "damage": 10
       },
       "abilities": [
-        "selfish_sacrifice",
-        "flash_step",
-        "iron_sharpens_iron"
+        
       ],
-      "ultimate": "starward_sword"
+      "ultimate": ""
     },
     {
       "id": "traditional_warrior_dps_3",
       "name": "Traditional Warrior DPS #3",
       "role": "DPS",
+      "level": 1,
       "stats": {
         "health": 80,
         "maxHealth": 80,
@@ -109,21 +105,20 @@
         "ta": 5
       },
       "weapon": {
-        "range": 1,
+        "range": 2,
         "name": "Rail Cannon",
         "damage": 10
       },
       "abilities": [
-        "shadow_strike",
-        "fireball",
-        "calm_under_pressure"
+        
       ],
-      "ultimate": "dedicating"
+      "ultimate": ""
     },
     {
       "id": "healing_support_1",
       "name": "Patchwork",
       "role": "Support",
+      "level": 1,
       "stats": {
         "health": 60,
         "maxHealth": 60,
@@ -138,16 +133,15 @@
         "damage": 6
       },
       "abilities": [
-        "blackjack",
-        "humble",
-        "battery_drain"
+        
       ],
-      "ultimate": "love_galore"
+      "ultimate": ""
     },
     {
       "id": "offensive_support_2",
       "name": "Livewire",
       "role": "Support",
+      "level": 1,
       "stats": {
         "health": 70,
         "maxHealth": 70,
@@ -162,16 +156,15 @@
         "damage": 6
       },
       "abilities": [
-        "hurry_up",
-        "eagle_eye",
-        "feels_like_home"
+        
       ],
-      "ultimate": "here_we_go_again"
+      "ultimate": ""
     },
     {
       "id": "jack_of_all_trades_support_3",
       "name": "True North",
       "role": "Support",
+      "level": 1,
       "stats": {
         "health": 65,
         "maxHealth": 65,
@@ -186,16 +179,15 @@
         "damage": 6
       },
       "abilities": [
-        "diamond_boy",
-        "iron_sharpens_iron",
-        "zen"
+        
       ],
-      "ultimate": "dedicating"
+      "ultimate": ""
     },
     {
       "id": "hacker_support_4",
       "name": "Root Null",
       "role": "Support",
+      "level": 1,
       "stats": {
         "health": 65,
         "maxHealth": 65,
@@ -210,11 +202,9 @@
         "damage": 6
       },
       "abilities": [
-        "butterfly_effect",
-        "battery_drain",
-        "count_me_out"
+        
       ],
-      "ultimate": "emp"
+      "ultimate": ""
     }
   ]
 }

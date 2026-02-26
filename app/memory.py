@@ -9,6 +9,7 @@ from sentence_transformers import SentenceTransformer
 from typing import List, Dict, Optional, Any
 from datetime import datetime
 import uuid
+import sqlite3
 from loguru import logger
 from pathlib import Path
 
@@ -44,12 +45,53 @@ class MemoryStore:
         self.embedding_model = SentenceTransformer(embedding_model)
         
         # Get or create collection
-        self.collection = self.client.get_or_create_collection(
-            name=collection_name,
-            metadata={"hnsw:space": "cosine"}  # Use cosine similarity
-        )
+        try:
+            self.collection = self.client.get_or_create_collection(
+                name=collection_name,
+                metadata={"hnsw:space": "cosine"}  # Use cosine similarity
+            )
+        except sqlite3.OperationalError as exc:
+            if "collections.topic" not in str(exc):
+                raise
+            logger.warning(
+                "ChromaDB schema mismatch detected; backing up and rebuilding store. Error: %s",
+                exc
+            )
+            self._rebuild_store()
+            self.collection = self.client.get_or_create_collection(
+                name=collection_name,
+                metadata={"hnsw:space": "cosine"}  # Use cosine similarity
+            )
         
         logger.success("MemoryStore initialized successfully")
+
+    def _rebuild_store(self) -> None:
+        """Back up the existing store and reinitialize a fresh ChromaDB store."""
+
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        backup_path = self.db_path.with_name(f"{self.db_path.name}.bak-{timestamp}")
+        rebuild_path = self.db_path.with_name(f"{self.db_path.name}.rebuild-{timestamp}")
+
+        if self.db_path.exists():
+            try:
+                self.db_path.rename(backup_path)
+                logger.info("Backed up ChromaDB to %s", backup_path)
+            except PermissionError as exc:
+                logger.warning(
+                    "Backup rename failed (%s). Using new store at %s",
+                    exc,
+                    rebuild_path
+                )
+                self.db_path = rebuild_path
+
+        self.db_path.mkdir(parents=True, exist_ok=True)
+        self.client = chromadb.PersistentClient(
+            path=str(self.db_path),
+            settings=Settings(
+                anonymized_telemetry=False,
+                allow_reset=True
+            )
+        )
     
     def add_memory(
         self,

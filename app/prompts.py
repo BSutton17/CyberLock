@@ -277,6 +277,35 @@ def build_system_prompt(
     return prompt
 
 
+def build_event_instructions(
+    event_type: str,
+    data: Optional[Dict[str, Any]] = None,
+    message: Optional[str] = None
+) -> str:
+    """
+    Build event-specific instructions for the DM.
+
+    Args:
+        event_type: Key from EVENT_INSTRUCTIONS
+        data: Optional structured event data
+        message: Optional player message
+
+    Returns:
+        Event instructions string
+    """
+
+    base = EVENT_INSTRUCTIONS.get(event_type, "Handle the event in-character and keep it concise.")
+    parts = [base]
+
+    if message:
+        parts.append(f"Player input: {message}")
+
+    if data:
+        parts.append(f"Event data: {json.dumps(data, ensure_ascii=True)}")
+
+    return "\n".join(parts)
+
+
 # NPC templates based on your characters and enemies
 NPC_TEMPLATES = {
     **PLAYABLE_CHARACTERS,

@@ -16,11 +16,7 @@
       "weapon": {
         "range": 1,
         "name": "Hammer",
-<<<<<<< HEAD
         "damage": 10
-=======
-        "damage": 8
->>>>>>> origin/main
       },
       "abilities": [
 

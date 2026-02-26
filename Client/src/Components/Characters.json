@@ -6,7 +6,7 @@
       "role": "Tank",
       "level": 1,
       "stats": {
-        "health": 95,
+        "health": 55,
         "maxHealth": 95,
         "speed": 20,
         "resistance": 30,
@@ -16,7 +16,11 @@
       "weapon": {
         "range": 1,
         "name": "Hammer",
+<<<<<<< HEAD
         "damage": 10
+=======
+        "damage": 8
+>>>>>>> origin/main
       },
       "abilities": [
 

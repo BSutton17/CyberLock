@@ -8,6 +8,7 @@ export const useGameContext = () => {
 };
 
 export const GameProvider = ({ children }) => {
+  const SOCKET_BASE_URL = import.meta.env.VITE_API_URL || "https://cs-capstone-491b8f4e8664.herokuapp.com";
     const [players, setPlayers] = useState([]);
     const [isAdmin, setAdmin] = useState(false);
     const [room, setRoom] = useState("");
@@ -20,7 +21,7 @@ export const GameProvider = ({ children }) => {
     const [turnOrder, setTurnOrder] = useState([]); 
     const [isMyTurn, setIsMyTurn] = useState(false);
     const [enemies, setEnemies] = useState([]);
-    const [socket] = useState(() => io.connect(import.meta.env.VITE_API_URL || "http://localhost:5000"));
+    const [socket] = useState(() => io.connect(SOCKET_BASE_URL));
     const [gamePhase, setGamePhase] = useState('story');
     const [storyText, setStoryText] = useState('The adventure begins...');
     const [combatRewards, setCombatRewards] = useState(null);

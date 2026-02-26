@@ -844,8 +844,8 @@ io.on('connection', (socket) => {
     io.to(room).emit('level_up');
   });
 
-  socket.on("level_up_complete",({room}) => {
-    io.to(room).emit('level_up_complete');
+  socket.on("level_up_complete",({room, players}) => {
+    io.to(room).emit('level_up_complete', {players});
   });
 
   socket.on("ability_select_complete", ({room}) =>{

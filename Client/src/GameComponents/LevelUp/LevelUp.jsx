@@ -48,7 +48,7 @@ function LevelUp(){
         }
         setPlayerCharacters(updatedCharacter);
 
-        socket.emit('level_up_complete', {room});
+        socket.emit('level_up_complete', {room, players: updatedCharacter});
         setIsReady(true);
     }
 

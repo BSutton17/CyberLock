@@ -93,7 +93,7 @@
     },
     {
       "id": "traditional_warrior_dps_3",
-      "name": "Traditional Warrior DPS #3",
+      "name": "Last Legion",
       "role": "DPS",
       "level": 1,
       "stats": {
@@ -185,7 +185,7 @@
     },
     {
       "id": "hacker_support_4",
-      "name": "Root Null",
+      "name": "Ghost Shell",
       "role": "Support",
       "level": 1,
       "stats": {

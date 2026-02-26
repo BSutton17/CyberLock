@@ -21,6 +21,7 @@
     z-index: 1;
 }
 
+/* Header */
 .header {
     text-align: center;
     padding: 1.125vmin;
@@ -39,6 +40,7 @@
     text-transform: uppercase;
     letter-spacing: 0.281vmin;
     background: linear-gradient(90deg, #a78bfa 0%, #60a5fa 100%);
+    background-clip: text;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -54,6 +56,7 @@
     text-shadow: 0 0.188vmin 0.375vmin rgba(0, 0, 0, 0.8);
 }
 
+/* Main Layout Grid */
 .main-content {
     display: grid;
     grid-template-columns: 22.5vmin 1fr 31.5vmin; /* Slightly wider columns */
@@ -100,18 +103,7 @@
 }
 
 
-.faction-select button:hover {
-    border-color: rgba(139, 92, 246, 0.5);
-    box-shadow: 0 4px 16px rgba(139, 92, 246, 0.3);
-}
-
-.faction-select button.active {
-    font-weight: bold;
-    background: linear-gradient(135deg, rgba(139, 92, 246, 0.4) 0%, rgba(59, 130, 246, 0.4) 100%);
-    border: 2px solid #a78bfa;
-    box-shadow: 0 0 20px rgba(139, 92, 246, 0.5);
-}
-
+/* Left Section - Team */
 .selected-team {
     background: rgba(20, 20, 40, 0.7);
     backdrop-filter: blur(1.125vmin);
@@ -162,7 +154,7 @@
 }
 
 .team-character span {
-    color: #c4b5fd;
+    color: #a78bfa;
     font-weight: 700;
     font-size: 1.32vmin;
     text-shadow: 0 0 0.6vmin rgba(167, 139, 250, 0.6);
@@ -187,11 +179,8 @@
     color: #fca5a5;
     border-radius: 0.6vmin;
     cursor: pointer;
-    background: linear-gradient(135deg, #a78bfa 0%, #60a5fa 100%);
-    color: #fff;
-    border: none;
-    border-radius: 6px;
-    font-weight: 700;
+    transition: all 0.2s;
+    font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.075vmin;
 }
@@ -202,25 +191,13 @@
 }
 
 .team-controls button:disabled {
-    opacity: 0.3;
+    opacity: 0.4;
     cursor: not-allowed;
-    background: #333;
-    color: #666;
-    box-shadow: none;
+    border-color: rgba(239, 68, 68, 0.2);
 }
 
-.middle-section {
-    background: rgba(20, 20, 40, 0.7);
-    backdrop-filter: blur(12px);
-    border: 2px solid rgba(139, 92, 246, 0.3);
-    border-radius: 8px;
-    padding: 0.75rem;
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-}
 
+/* Middle Section - Character Grid */
 .characters-grid h3 {
     margin: 0 0 1.5vmin 0;
     font-size: 1.32vmin;
@@ -331,6 +308,8 @@
     border: 0.075vmin solid rgba(139, 92, 246, 0.3);
 }
 
+
+/* Right Section - Details */
 .right-section {
     padding: 0; /* Reset default padding to allow scrolling container */
 }
@@ -362,8 +341,6 @@
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     text-transform: uppercase;
-    letter-spacing: 2px;
-    color: #c4b5fd;
     font-weight: 900;
     filter: drop-shadow(0 0 0.6vmin rgba(167, 139, 250, 0.5));
 }
@@ -488,14 +465,8 @@
     line-height: 1.5;
 }
 
-.class-info {
-    position: relative;
-    left: 90%;
-    top: 5vh;
-}
-
+/* Footer */
 .footer-controls {
-    margin-top: 0.75rem;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -510,11 +481,6 @@
     position: fixed;
     font-size: 1.44vmin;
     font-weight: 900;
-    cursor: pointer;
-    background: linear-gradient(135deg, #a78bfa 0%, #60a5fa 100%);
-    color: #fff;
-    border: none;
-    border-radius: 8px;
     text-transform: uppercase;
     letter-spacing: 0.225vmin;
     background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
@@ -535,11 +501,11 @@
 }
 
 .ready-button-select:disabled {
-    opacity: 0.3;
+    background: #1f2937;
     cursor: not-allowed;
-    background: #333;
-    color: #666;
     box-shadow: none;
+    opacity: 0.5;
+    border-color: #374151;
 }
 
 .ready-status {
@@ -548,7 +514,3 @@
     font-size: 1.2vmin;
     text-shadow: 0 0.075vmin 0.15vmin rgba(0,0,0,0.8);
 }
-
-
-
-

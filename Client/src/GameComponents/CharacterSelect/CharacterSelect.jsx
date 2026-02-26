@@ -6,7 +6,6 @@ import './CharacterSelect.css';
 
 function CharacterSelect() {
     const { players, playerName, playerCharacters, setPlayerCharacters, socket, room, readyPlayers } = useGameContext();
-    const [selectedFaction, setSelectedFaction] = useState('');
     const [selectedCharacter, setSelectedCharacter] = useState(null);
     const [displayClassInfo, setDisplayClassInfo] = useState(false);
 
@@ -146,13 +145,15 @@ function CharacterSelect() {
                                         <p>TA: {selectedCharacter.stats.ta}</p>
                                     </div>
 
-                                    <div className='weapon-detail'>
-                                        <h5>Weapon:</h5>
-                                        <p>{selectedCharacter.weapon.name}</p>
-                                        {selectedCharacter.weapon.damage && (
-                                            <p>Damage: {selectedCharacter.weapon.damage}</p>
-                                        )}
-                                    </div>
+                                <div className='weapon-detail'>
+                                    <h5>Weapon: {selectedCharacter.weapon.name}</h5>
+                                    {selectedCharacter.weapon.damage && (
+                                        <>
+                                        <p>Damage: {selectedCharacter.weapon.damage}</p>
+                                        <p>{selectedCharacter.weapon.range == 1 ? "Range: Melee" : `Range: ${selectedCharacter.weapon.range}`}</p>
+                                        </>
+                                    )}
+                                </div>
 
                                     <div className='abilities-detail'>
                                         <h5>Abilities:</h5>
@@ -188,7 +189,6 @@ function CharacterSelect() {
                 >
                     {isPlayerReady ? "Ready! Waiting for others..." : "Ready"}
                 </button>
-                <p className='ready-status'>{readyPlayers}/{players.length}) players ready</p>
             </div>
         </div>
     );

@@ -3,7 +3,7 @@ export const ABILITIES = {
         id: 'ability_boost',
         name: 'Ability Boost',
         description: 'Grants yourself +5 Speed and +5 Bonus Health for 2 turns',
-        role: "tank",
+        role: "Tank",
         level: 1,
         cooldown: 3,
         targetType: 'self',
@@ -45,7 +45,7 @@ export const ABILITIES = {
         id: 'binding_chains',
         name: 'Binding Chains',
         description: 'Use energy chains to temporarily immobilize 2 enemies for 1 turn',
-        role: "tank",
+        role: "Tank",
         level: 3,
         cooldown: 2,
         targetType: 'multi-enemy', 
@@ -83,8 +83,8 @@ export const ABILITIES = {
         id: 'battery_drain',
         name: 'Battery Drain',
         description: 'Drain energy from an enemy. 25% of damage dealt heals the weakest ally',
-        role: "support",
-        level: 1,
+        role: "Support",
+        level: 3,
         cooldown: 2,
         targetType: 'single-enemy',
         type: 'damage',
@@ -147,7 +147,7 @@ export const ABILITIES = {
         id: 'blackjack',
         name: 'Blackjack',
         description: '50% chance to restore one ally 50% HP. Every 5 TA above 30 grants +1% chance',
-        role: "support",
+        role: "Support",
         level: 5,
         cooldown: 3,
         targetType: 'ally',
@@ -194,11 +194,82 @@ export const ABILITIES = {
             };
         }
     },
+    blizzard: {
+        id: 'blizzard',
+        name: 'Blizzard',
+        description: 'Create a blizzard in a 3x3 area that halves enemy speed for 3 turns',
+        role: "DPS",
+        level: 3,
+        cooldown: 5,
+        targetType: 'ground-target',
+        type: 'debuff',
+        range: 4,
+        aoeSize: 3, // 3x3 area
+        
+        /**
+         * @param {Object} params
+         * @param {Object} params.caster - Character using ability
+         * @param {Object} params.targetPosition - {row, col} of clicked square
+         * @param {Array} params.enemies - All enemies
+         * @param {Object} params.characterPositions - Positions of all characters
+         * @returns {Object} Effect data
+         */
+        execute: ({ caster, targetPosition, enemies, characterPositions }) => {
+            const { row, col } = targetPosition;
+            const effects = [];
+            const affectedEnemies = [];
+
+            // Create the blizzard field effect
+            effects.push({
+                type: 'blizzard_field',
+                center: { row, col },
+                radius: 1, // 3x3 area (1 square in each direction)
+                duration: 3
+            });
+            
+            // Find all enemies currently in the 3x3 area and apply speed debuff
+            enemies.forEach(enemy => {
+                const enemyPos = characterPositions[enemy.id];
+                if (!enemyPos) return;
+                
+                const rowDiff = Math.abs(enemyPos.row - row);
+                const colDiff = Math.abs(enemyPos.col - col);
+                
+                // Within 1 square in any direction (3x3 grid)
+                if (rowDiff <= 1 && colDiff <= 1) {
+                    affectedEnemies.push(enemy.name);
+                    
+                    // Apply speed debuff (half their current speed)
+                    const speedDebuff = -(Math.floor(enemy.stats.speed / 2));
+                    effects.push({
+                        type: 'stat_debuff',
+                        target: enemy.id,
+                        stat: 'speed',
+                        value: speedDebuff,
+                        duration: 3,
+                        stackable: false,
+                        source: 'blizzard' // Track that this is from blizzard field
+                    });
+                }
+            });
+            
+            const affectedMessage = affectedEnemies.length > 0
+                ? `${affectedEnemies.join(', ')} caught in the blizzard!`
+                : 'The blizzard awaits its victims...';
+
+            return {
+                success: true,
+                effects: effects,
+                aoePosition: targetPosition,
+                message: `${caster.name} summons a Blizzard! ${affectedMessage}`
+            };
+        }
+    },
     black_hole: {
         id: 'black_hole',
         name: 'Black Hole',
-        description: 'Click on a square, all enemies in a 5x5 area are sucked in and cannot move for 1 turn',
-        role: "dps",
+        description: 'Click on a square, all enemies in a 5x5 area are sucked in and cannot move for 2 turns',
+        role: "DPS",
         cooldown: 0,
         isUltimate: true,
         targetType: 'ground-target',
@@ -218,8 +289,14 @@ export const ABILITIES = {
             const { row, col } = targetPosition;
             const effects = [];
             const affectedEnemies = [];
+            const forcedMovement = [];
+            const occupied = new Set(
+                Object.values(characterPositions || {}).map(pos => `${pos.row},${pos.col}`)
+            );
+            const withinBounds = (r, c) => r >= 0 && r < 7 && c >= 0 && c < 10;
             
             // Find all enemies in 5x5 area (2 squares in each direction)
+            const enemiesInArea = [];
             enemies.forEach(enemy => {
                 const enemyPos = characterPositions[enemy.id];
                 if (!enemyPos) return;
@@ -230,10 +307,79 @@ export const ABILITIES = {
                 // Within 2 squares in any direction (5x5 grid)
                 if (rowDiff <= 2 && colDiff <= 2) {
                     affectedEnemies.push(enemy.name);
+                    enemiesInArea.push({ enemy, enemyPos });
                     effects.push({
-                        type: 'movement_disabled',
+                        type: 'status_effect',
                         target: enemy.id,
-                        duration: 1
+                        status: 'black_hole_pull',
+                        center: { row, col },
+                        duration: 2,
+                        preventMovement: false,
+                        preventActions: false
+                    });
+                }
+            });
+
+            effects.push({
+                type: 'black_hole_zone',
+                center: { row, col },
+                radius: 2,
+                duration: 2
+            });
+
+            // Pull enemies toward center, up to 2 cells, without passing through occupied cells
+            const sortedTargets = enemiesInArea.sort((a, b) => {
+                const distA = Math.abs(a.enemyPos.row - row) + Math.abs(a.enemyPos.col - col);
+                const distB = Math.abs(b.enemyPos.row - row) + Math.abs(b.enemyPos.col - col);
+                return distB - distA;
+            });
+
+            sortedTargets.forEach(({ enemy, enemyPos }) => {
+                let current = { ...enemyPos };
+                const path = [];
+                occupied.delete(`${enemyPos.row},${enemyPos.col}`);
+
+                for (let step = 0; step < 2; step++) {
+                    const currentDistance = Math.abs(current.row - row) + Math.abs(current.col - col);
+                    if (currentDistance === 0) break;
+
+                    const candidateMoves = [
+                        { row: current.row - 1, col: current.col },
+                        { row: current.row + 1, col: current.col },
+                        { row: current.row, col: current.col - 1 },
+                        { row: current.row, col: current.col + 1 }
+                    ].filter(next => {
+                        if (!withinBounds(next.row, next.col)) return false;
+                        const key = `${next.row},${next.col}`;
+                        if (occupied.has(key)) return false;
+                        const nextDistance = Math.abs(next.row - row) + Math.abs(next.col - col);
+                        return nextDistance < currentDistance;
+                    });
+
+                    if (candidateMoves.length === 0) break;
+
+                    candidateMoves.sort((first, second) => {
+                        const firstDistance = Math.abs(first.row - row) + Math.abs(first.col - col);
+                        const secondDistance = Math.abs(second.row - row) + Math.abs(second.col - col);
+                        if (firstDistance !== secondDistance) return firstDistance - secondDistance;
+                        const firstRowDelta = Math.abs(first.row - row);
+                        const secondRowDelta = Math.abs(second.row - row);
+                        if (firstRowDelta !== secondRowDelta) return firstRowDelta - secondRowDelta;
+                        return Math.abs(first.col - col) - Math.abs(second.col - col);
+                    });
+
+                    const nextCell = candidateMoves[0];
+                    path.push(nextCell);
+                    current = nextCell;
+                }
+
+                occupied.add(`${current.row},${current.col}`);
+
+                if (path.length > 0) {
+                    forcedMovement.push({
+                        enemyId: enemy.id,
+                        path,
+                        to: current
                     });
                 }
             });
@@ -248,8 +394,9 @@ export const ABILITIES = {
             return {
                 success: true,
                 effects: effects,
+                forcedMovement,
                 aoePosition: targetPosition,
-                message: `${caster.name} creates a Black Hole! ${affectedEnemies.join(', ')} cannot move for 1 turn!`
+                message: `${caster.name} creates a Black Hole! ${affectedEnemies.join(', ')} are pulled inward and cannot move for 2 turns!`
             };
         }
     },
@@ -257,7 +404,7 @@ export const ABILITIES = {
         id: 'butterfly_effect',
         name: 'Butterfly Effect',
         description: 'Add one turn of cooldown to enemies abilities',
-        role: "support",
+        role: "Support",
         level: 3,
         cooldown: 2,
         targetType: 'all-enemies',
@@ -294,7 +441,7 @@ export const ABILITIES = {
         id: 'calm_under_pressure',
         name: 'Calm Under Pressure',
         description: 'Heal yourself for 15 hp',
-        role: "dps",
+        role: "DPS",
         level: 3,
         cooldown: 3,
         targetType: 'self',
@@ -327,7 +474,7 @@ export const ABILITIES = {
         id: 'charge',
         name: "Charge!",
         description: 'A move that completely takes down an enemy with a lower strength stat',
-        role: "tank",
+        role: "Tank",
         level: 5,
         cooldown: 3, 
         targetType: 'single-enemy',
@@ -378,7 +525,7 @@ export const ABILITIES = {
         id: 'count_me_out',
         name: 'Count me Out',
         description: 'Remove one turn of CD for one of your allies',
-        role: "support",
+        role: "Support",
         level: 3,
         cooldown: 3,
         targetType: 'ally',
@@ -409,11 +556,88 @@ export const ABILITIES = {
             };
         }
     },
+    cursed: {
+        id: 'cursed',
+        name: 'Cursed',
+        description: 'Mark an enemy as cursed. Enemy takes extra 30% damage from all sources for 2 turns',
+        role: "Tank",
+        level: 3,
+        cooldown: 2,
+        targetType: 'single-enemy',
+        type: 'debuff',
+        range: 3,
+
+        /**
+         * @param {Object} params
+         * @param {Object} params.caster - Character using ability
+         * @param {string} params.target - Enemy ID
+         * @param {Array} params.enemies - All enemies
+         * @returns {Object} Effect data
+         */
+        execute: ({ caster, target, enemies }) => {
+            const enemy = enemies.find(e => e.id === target);
+
+            if (!enemy) {
+                return { success: false, message: 'Target not found' };
+            }
+
+            return {
+                success: true,
+                effects: [{
+                    type: 'damage_taken_multiplier',
+                    target: enemy.id,
+                    value: 1.3,
+                    duration: 2,
+                    stackable: false
+                }],
+                message: `${caster.name} curses ${enemy.name}! All incoming damage is amplified by 30% for 2 turns!`
+            };
+        }
+    },
+    defensive_jab: {
+        id: 'defensive_jab',
+        name: 'Defensive Jab',
+        description: 'A strike that deals light damage and lowers enemy Strength by 10 for 1 turn',
+        role: "Tank",
+        level: 1,
+        cooldown: 1,
+        targetType: 'single-enemy',
+        type: 'damage',
+        damageType: 'physical',
+        damageScaling: 'strength',
+        abilityDamage: 6,
+        range: 1,
+
+        execute: ({ caster, target, enemies }) => {
+            const enemy = enemies.find(e => e.id === target);
+            if (!enemy) {
+                return { success: false, message: 'Target not found' };
+            }
+
+            const finalDamage = Math.max(1, Math.round(
+                (caster.stats.strength / 10) * 6 - (enemy.stats.resistance / 10)
+            ));
+
+            return {
+                success: true,
+                damage: [{ target: enemy.id, amount: finalDamage }],
+                effects: [{
+                    type: 'stat_debuff',
+                    target: enemy.id,
+                    stat: 'strength',
+                    value: -10,
+                    duration: 1,
+                    stackable: false
+                }],
+                message: `${caster.name} uses Defensive Jab on ${enemy.name} for ${finalDamage} damage and lowers Strength by 3!`
+            };
+        }
+    },
     dedicating: {
         id: 'dedicating',
         name: 'Dedicating Everything to You',
         description: 'One ally gains +15 bonus in all stats for one turn',
-        role: "support",
+        role: "Support",
         cooldown: 0,
         isUltimate: true,
         targetType: 'ally',
@@ -498,11 +722,86 @@ export const ABILITIES = {
             return result;
         }
     },
+    greater_ability_boost: {
+        id: 'greater_ability_boost',
+        name: 'Greater Ability Boost',
+        description: 'Grants yourself +15 Speed, +15 Bonus Health, and +10 Strength for 2 turns',
+        role: "Tank",
+        level: 5,
+        cooldown: 3,
+        targetType: 'self',
+        type: 'buff',
+        
+        /**
+         * @param {Object} params
+         * @param {Object} params.caster - The character using the ability
+         * @param {Object} params.playerCharacters - All player characters
+         * @returns {Object} Effect data
+         */
+        execute: ({ caster, playerName }) => {
+            const result = {
+                success: true,
+                effects: [
+                    {
+                        type: 'stat_buff',
+                        target: playerName,
+                        stat: 'speed',
+                        value: 15,
+                        duration: 2,
+                        stackable: false
+                    },
+                    {
+                        type: 'stat_buff',
+                        target: playerName,
+                        stat: 'health',
+                        value: 15,
+                        duration: 2,
+                        stackable: false
+                    },
+                    {
+                        type: 'stat_buff',
+                        target: playerName,
+                        stat: 'strength',
+                        value: 10,
+                        duration: 2,
+                        stackable: false
+                    }
+                ],
+                message: `${caster.name} gains +5 Speed and +5 Health for 2 turns!`
+            };
+            return result;
+        }
+    },
+    guarded_breath: {
+        id: 'guarded_breath',
+        name: 'Guarded Breath',
+        description: 'Gain +10 Resistance for 1 turn',
+        role: "Tank",
+        level: 1,
+        cooldown: 1,
+        targetType: 'self',
+        type: 'buff',
+
+        execute: ({ caster, playerName }) => {
+            return {
+                success: true,
+                effects: [{
+                    type: 'stat_buff',
+                    target: playerName,
+                    stat: 'resistance',
+                    value: 10,
+                    duration: 1,
+                    stackable: false
+                }],
+                message: `${caster.name} takes a Guarded Breath and gains +4 Resistance for 1 turn!`
+            };
+        }
+    },
     diamond_body: {
         id: 'diamond_body',
         name: 'Diamond Body',
         description: 'Tanks in your party receive +5 resistance for 1 turn',
-        role: "support",
+        role: "Support",
         level: 1,
         cooldown: 1,
         targetType: 'all-allies',
@@ -516,12 +815,12 @@ export const ABILITIES = {
          */
         execute: ({ caster, playerCharacters }) => {
             const effects = [];
-            const tankNames = [];
+            const TankNames = [];
             
             Object.keys(playerCharacters).forEach(playerName => {
                 const character = playerCharacters[playerName];
                 if (character.role === 'Tank') {
-                    tankNames.push(character.name);
+                    TankNames.push(character.name);
                     effects.push({
                         type: 'stat_buff',
                         target: playerName,
@@ -532,17 +831,17 @@ export const ABILITIES = {
                 }
             });
             
-            if (tankNames.length === 0) {
+            if (TankNames.length === 0) {
                 return {
                     success: false,
-                    message: 'No tanks in party to buff!'
+                    message: 'No Tanks in party to buff!'
                 };
             }
             
             return {
                 success: true,
                 effects: effects,
-                message: `${caster.name} uses Diamond Boy! ${tankNames.join(', ')} gain +5 Resistance for 1 turn!`
+                message: `${caster.name} uses Diamond Boy! ${TankNames.join(', ')} gain +5 Resistance for 1 turn!`
             };
         }
     },
@@ -550,7 +849,7 @@ export const ABILITIES = {
         id: 'eagle_eye',
         name: 'Eagle Eye',
         description: 'See the health of all enemies for one turn',
-        role: "support",
+        role: "Support",
         level: 5,
         cooldown: 2,
         targetType: 'self',
@@ -578,7 +877,7 @@ export const ABILITIES = {
         id: 'executioners_judgment',
         name: "Executioner's Judgment",
         description: 'Enemies with lower Max Health lose half their HP, enemies with higher Max Health than you lose 20% of their current health',
-        role: "tank",
+        role: "Tank",
         cooldown: 0, 
         isUltimate: true,
         targetType: 'all-enemies',
@@ -626,7 +925,7 @@ export const ABILITIES = {
         id: 'emp',
         name: 'EMP',
         description: 'Remove all abilities from enemies for two turn',
-        role: "support",
+        role: "Support",
         isUltimate: true,
         cooldown: 4,
         targetType: 'all-enemies',
@@ -662,12 +961,12 @@ export const ABILITIES = {
         id: 'feels_like_home',
         name: 'Feels Like Home',
         description: 'Place a healing field that heals allies +5 for two turns',
-        role: "support",
+        role: "Support",
         level: 1,
         cooldown: 2,
         targetType: 'ground-target',
         type: 'heal',
-        range: 5,
+        range: 3,
         aoeSize: 3, // 3x3 area
         
         /**
@@ -680,9 +979,15 @@ export const ABILITIES = {
          */
         execute: ({ caster, targetPosition, playerCharacters, characterPositions }) => {
             const { row, col } = targetPosition;
-            const healing = [];
             const effects = [];
             const allyNames = [];
+
+            effects.push({
+                type: 'healing_field',
+                center: { row, col },
+                radius: 1,
+                duration: 2
+            });
             
             // Find all allies in 3x3 area
             Object.keys(playerCharacters).forEach(playerName => {
@@ -707,18 +1012,77 @@ export const ABILITIES = {
                 }
             });
             
-            if (allyNames.length === 0) {
-                return {
-                    success: false,
-                    message: 'No allies in target area!'
-                };
-            }
-            
+            const healingMessage = allyNames.length > 0
+                ? `${allyNames.join(', ')} will heal +10 HP for 2 turns!`
+                : 'No allies are currently in the field.';
+
             return {
                 success: true,
                 effects: effects,
                 aoePosition: targetPosition,
-                message: `${caster.name} places a healing field! ${allyNames.join(', ')} will heal +5 HP for 2 turns!`
+                message: `${caster.name} places a healing field! ${healingMessage}`
+            };
+        }
+    },
+    toxic_mist: {
+        id: 'toxic_mist',
+        name: 'Toxic Mist',
+        description: 'Place a toxic field that deals 10 damage to enemies inside it for 2 turns',
+        role: "Tank",
+        level: 3,
+        cooldown: 2,
+        targetType: 'ground-target',
+        type: 'damage',
+        range: 3,
+        aoeSize: 3,
+
+        /**
+         * @param {Object} params
+         * @param {Object} params.caster - Character using ability
+         * @param {Object} params.targetPosition - {row, col} of clicked square
+         * @param {Array} params.enemies - Enemy list for the caster's perspective
+         * @param {Object} params.characterPositions - Positions of all characters
+         * @returns {Object} Effect data
+         */
+        execute: ({ caster, targetPosition, enemies, characterPositions }) => {
+            const { row, col } = targetPosition;
+            const effects = [];
+            const affectedNames = [];
+
+            effects.push({
+                type: 'toxic_mist_field',
+                center: { row, col },
+                radius: 1,
+                duration: 2
+            });
+
+            enemies.forEach(enemy => {
+                const enemyPos = characterPositions?.[enemy.id];
+                if (!enemyPos) return;
+
+                const rowDiff = Math.abs(enemyPos.row - row);
+                const colDiff = Math.abs(enemyPos.col - col);
+
+                if (rowDiff <= 1 && colDiff <= 1) {
+                    affectedNames.push(enemy.name);
+                    effects.push({
+                        type: 'damage_over_time',
+                        target: enemy.id,
+                        amount: 10,
+                        duration: 2
+                    });
+                }
+            });
+
+            const damageMessage = affectedNames.length > 0
+                ? `${affectedNames.join(', ')} will take 10 damage for 2 turns!`
+                : 'No enemies are currently in the toxic field.';
+
+            return {
+                success: true,
+                effects,
+                aoePosition: targetPosition,
+                message: `${caster.name} releases Toxic Mist! ${damageMessage}`
             };
         }
     },
@@ -726,7 +1090,7 @@ export const ABILITIES = {
         id: 'flood_of_frost',
         name: 'Flood of Frost',
         description: 'A spell that freezes an enemy, cutting their speed in half for 2 turns and does light damage',
-        role: "support",
+        role: "DPS",
         level: 3,
         cooldown: 2,
         targetType: 'single-enemy', 
@@ -776,8 +1140,8 @@ export const ABILITIES = {
         id: 'flash_step',
         name: 'Flash Step',
         description: 'Double your speed for one turn',
-        role: "dps",
-        level: 1,
+        role: "DPS",
+        level: 3,
         cooldown: 3,
         targetType: 'self',
         type: 'buff',
@@ -808,7 +1172,7 @@ export const ABILITIES = {
         id: 'fireball',
         name: 'Fireball',
         description: 'A move that does AOE damage with 20% chance to burn',
-        role: "dps",
+        role: "DPS",
         level: 5,
         cooldown: 1,
         targetType: 'ground-target',
@@ -851,12 +1215,20 @@ export const ABILITIES = {
             
             // Calculate total damage and divide equally
             const totalDamage = Math.max(1, Math.round(
-                (caster.stats.ta / 10) * 15
+                (caster.stats.ta / 10) * 10  - (affectedEnemies.reduce((maxRes, enemy) => Math.max(maxRes, enemy.stats.resistance), 0) / 10)
             ));
             const damagePerEnemy = Math.floor(totalDamage / affectedEnemies.length);
             
             const damageResults = [];
-            const effects = [];
+            const effects = [
+                {
+                    type: 'fireball_zone',
+                    center: { row, col },
+                    radius: 1,
+                    duration: 1,
+                    tickOnCastTurn: true
+                }
+            ];
             
             affectedEnemies.forEach(enemy => {
                 // Apply damage
@@ -893,7 +1265,7 @@ export const ABILITIES = {
     humble: {
         id: 'humble',
         name: 'Humble',
-        description: 'Grants yourself +10 ta for 1 turn',
+        description: 'Grants yourself +10 ta for 2 turns',
         role: "support",
         level: 1,
         cooldown: 1,
@@ -915,20 +1287,53 @@ export const ABILITIES = {
                         target: playerName,
                         stat: 'ta',
                         value: 10,
+                        duration: 2,
+                        stackable: false
+                    }
+                ],
+                message: `${caster.name} gains +10 TA for 2 turns!`
+            };
+            return result;
+        }
+    },
+    shield_up: {
+        id: 'shield_up',
+        name: 'Shield Up',
+        description: 'Set your Speed to 0, but negate all incoming damage for 1 turn',
+        role: "Tank",
+        level: 3,
+        cooldown: 2,
+        targetType: 'self',
+        type: 'buff',
+
+        execute: ({ caster, playerName }) => {
+            return {
+                success: true,
+                effects: [
+                    {
+                        type: 'stat_debuff',
+                        target: playerName,
+                        stat: 'speed',
+                        value: -(caster.stats.speed || 0),
+                        duration: 1,
+                        stackable: false
+                    },
+                    {
+                        type: 'damage_immunity',
+                        target: playerName,
                         duration: 1,
                         stackable: false
                     }
                 ],
-                message: `${caster.name} gains +10 TA for 1 turn!`
+                message: `${caster.name} uses Shield Up! Speed drops to 0, but all incoming damage is negated for 1 turn!`
             };
-            return result;
         }
     },
     here_we_go_again: {
         id: 'here_we_go_again',
         name: 'Here We Go Again',
         description: 'All allies have all of their cooldowns set to 0',
-        role: "support",
+        role: "Support",
         isUltimate: true,
         cooldown: 5,
         targetType: 'all-allies',
@@ -965,7 +1370,7 @@ export const ABILITIES = {
         id: 'hurry_up',
         name: 'Hurry Up!',
         description: 'Add +10 speed to one ally for 1 turns',
-        role: "support",
+        role: "Support",
         level: 1,
         cooldown: 2,
         targetType: 'ally',
@@ -1020,8 +1425,8 @@ export const ABILITIES = {
         id: 'iron_sharpens_iron',
         name: 'Iron Sharpens Iron',
         description: 'DPS in your party receive +5 Strength for 1 turn',
-        role: "support",
-        level: 3,
+        role: "Support",
+        level: 1,
         cooldown: 1,
         targetType: 'all-allies',
         type: 'buff',
@@ -1034,12 +1439,12 @@ export const ABILITIES = {
          */
         execute: ({ caster, playerCharacters }) => {
             const effects = [];
-            const dpsNames = [];
+            const DPSNames = [];
             
             Object.keys(playerCharacters).forEach(playerName => {
                 const character = playerCharacters[playerName];
                 if (character.role === 'DPS') {
-                    dpsNames.push(character.name);
+                    DPSNames.push(character.name);
                     effects.push({
                         type: 'stat_buff',
                         target: playerName,
@@ -1050,7 +1455,7 @@ export const ABILITIES = {
                 }
             });
             
-            if (dpsNames.length === 0) {
+            if (DPSNames.length === 0) {
                 return {
                     success: false,
                     message: 'No DPS in party to buff!'
@@ -1060,15 +1465,52 @@ export const ABILITIES = {
             return {
                 success: true,
                 effects: effects,
-                message: `${caster.name} uses Iron Sharpens Iron! ${dpsNames.join(', ')} gain +5 Strength for 1 turn!`
+                message: `${caster.name} uses Iron Sharpens Iron! ${DPSNames.join(', ')} gain +5 Strength for 1 turn!`
+            };
+        }
+    },
+    love: {
+        id: 'love',
+        name: 'Love',
+        description: 'Heal all allies for 10 HP',
+        role: "Support",
+        level: 3,
+        cooldown: 2,
+        targetType: 'all-allies',
+        type: 'heal',
+        
+        /**
+         * @param {Object} params
+         * @param {Object} params.caster - Character using ability
+         * @param {Object} params.playerCharacters - All player characters
+         * @returns {Object} Effect data
+         */
+        execute: ({ caster, playerCharacters }) => {
+            const healing = [];
+            const allyNames = [];
+
+            Object.keys(playerCharacters).forEach(playerName => {
+                const character = playerCharacters[playerName];
+                allyNames.push(character.name);
+                
+                healing.push({
+                    target: playerName,
+                    amount: 10
+                });
+            });
+
+            return {
+                success: true,
+                healing: healing,
+                message: `${caster.name} casts Love! ${allyNames.join(', ')} are healed for 10 HP!`
             };
         }
     },
     love_galore: {
         id: 'love_galore',
         name: "Love Galore",
-        description: 'All party members are restore 50% hp',
-        role: "support",
+        description: 'All party members restore 50% hp',
+        role: "Support",
         cooldown: 0, 
         isUltimate: true,
         targetType: 'all-allies',
@@ -1106,7 +1548,7 @@ export const ABILITIES = {
         id: 'murus_fictilis',
         name: "Murus Fictilis",
         description: 'Grants all members of the party +25 Bonus Health and +20 Res for 2 turns',
-        role: "tank",
+        role: "Tank",
         cooldown: 0, 
         isUltimate: true,
         targetType: 'all-allies',
@@ -1151,15 +1593,38 @@ export const ABILITIES = {
             };
         }
     },
+    counter: {
+        id: 'counter',
+        name: 'Counter',
+        description: 'Deflect all incoming damage back to attackers for 1 turn',
+        role: "DPS",
+        level: 5,
+        cooldown: 3,
+        targetType: 'self',
+        type: 'buff',
+
+        execute: ({ caster, playerName }) => {
+            return {
+                success: true,
+                effects: [{
+                    type: 'damage_reflection',
+                    target: playerName,
+                    duration: 1
+                }],
+                message: `${caster.name} activates Counter! All incoming damage will be reflected for 1 turn!`
+            };
+        }
+    },
     poison_apple: {
         id: 'poison_apple',
         name: 'Poison Apple',
-        description: 'A spell that prevents enemies from healing for 1 turn',
-        role: "dps",
+        description: 'A spell that prevents enemies from receiving healing for 1 turn',
+        role: "DPS",
         level: 5,
         cooldown: 2,
         targetType: 'single-enemy',
         type: 'debuff',
+        range: 3,
         
         /**
          * @param {Object} params
@@ -1186,12 +1651,127 @@ export const ABILITIES = {
             };
         }
     },
+    power_boost: {
+        id: 'power_boost',
+        name: 'Power Boost',
+        description: 'Ultimate: Gain +50 Strength but your Speed becomes 0 for 1 turn',
+        role: "DPS",
+        isUltimate: true,
+        cooldown: 0,
+        targetType: 'self',
+        type: 'buff',
+
+        execute: ({ caster, playerName }) => {
+            return {
+                success: true,
+                effects: [
+                    {
+                        type: 'stat_buff',
+                        target: playerName,
+                        stat: 'strength',
+                        value: 50,
+                        duration: 1,
+                        stackable: false
+                    },
+                    {
+                        type: 'stat_debuff',
+                        target: playerName,
+                        stat: 'speed',
+                        value: -(caster.stats.speed || 0),
+                        duration: 1,
+                        stackable: false
+                    }
+                ],
+                message: `${caster.name} activates Power Boost! +50 Strength, but Speed drops to 0 for 1 turn!`
+            };
+        }
+    },
+    quick_jab: {
+        id: 'quick_jab',
+        name: 'Quick Jab',
+        description: 'A fast beginner strike that deals light physical damage and reduces enemy strength for 1 turn',
+        role: "DPS",
+        level: 1,
+        cooldown: 2,
+        targetType: 'single-enemy',
+        type: 'damage',
+        damageType: 'physical',
+        damageScaling: 'strength',
+        abilityDamage: 8,
+        range: 1,
+
+        execute: ({ caster, target, enemies }) => {
+            const enemy = enemies.find(e => e.id === target);
+            if (!enemy) {
+                return { success: false, message: 'Target not found' };
+            }
+
+            const finalDamage = Math.max(1, Math.round(
+                (caster.stats.strength / 10) * 8 - (enemy.stats.resistance / 10)
+            ));
+
+            // Halve enemy's strength for 1 turn
+            const strengthDebuff = -(Math.floor(enemy.stats.strength * 0.25));
+
+            return {
+                success: true,
+                damage: [{
+                    target: enemy.id,
+                    amount: finalDamage
+                }],
+                effects: [{
+                    type: 'stat_debuff',
+                    target: enemy.id,
+                    stat: 'strength',
+                    value: strengthDebuff,
+                    duration: 1,
+                    stackable: false
+                }],
+                message: `${caster.name} lands a Quick Jab on ${enemy.name} for ${finalDamage} damage and weakens their strength!`
+            };
+        }
+    },
+    rallying_guard: {
+        id: 'rallying_guard',
+        name: 'Rallying Guard',
+        description: 'Gain +5 Speed and +5 Resistance for 1 turn',
+        role: "Tank",
+        level: 1,
+        cooldown: 2,
+        targetType: 'self',
+        type: 'buff',
+
+        execute: ({ caster, playerName }) => {
+            return {
+                success: true,
+                effects: [
+                    {
+                        type: 'stat_buff',
+                        target: playerName,
+                        stat: 'speed',
+                        value: 4,
+                        duration: 1,
+                        stackable: false
+                    },
+                    {
+                        type: 'stat_buff',
+                        target: playerName,
+                        stat: 'resistance',
+                        value: 4,
+                        duration: 1,
+                        stackable: false
+                    }
+                ],
+                message: `${caster.name} uses Rallying Guard and gains +4 Speed and +4 Resistance for 1 turn!`
+            };
+        }
+    },
     selfish_sacrifice: {
         id: 'selfish_sacrifice',
         name: 'Selfish Sacrifice',
-        description: ' Drain your mp and transfer it elsewhere, giving you -10mp but +5 Spd and +5 Str for two turns',
-        role: "dps",
-        level: 3,
+        description: 'Drain your ta and transfer it elsewhere, giving you -10ta but +10 Spd and +5 Str for two turns',
+        role: "DPS",
+        level: 1,
         cooldown: 4,
         targetType: 'self',
         type: 'buff',
@@ -1209,7 +1789,7 @@ export const ABILITIES = {
                     {
                         type: 'stat_debuff',
                         target: playerName,
-                        stat: 'mp',
+                        stat: 'ta',
                         value: -10,
                         duration: 2,
                         stackable: false
@@ -1218,7 +1798,7 @@ export const ABILITIES = {
                         type: 'stat_buff',
                         target: playerName,
                         stat: 'speed',
-                        value: 5,
+                        value: 10,
                         duration: 2,
                         stackable: false
                     },
@@ -1231,7 +1811,111 @@ export const ABILITIES = {
                         stackable: false
                     }
                 ],
-                message: `${caster.name} gains -10 MP but +5 Speed and +5 Strength for 2 turns!`
+                message: `${caster.name} gains -10 TA but +10 Speed and +5 Strength for 2 turns!`
+            };
+        }
+    },
+    sparkshot: {
+        id: 'sparkshot',
+        name: 'Sparkshot',
+        description: 'Fire a weak technical blast that can briefly reduce enemy Speed',
+        role: "DPS",
+        level: 1,
+        cooldown: 2,
+        targetType: 'single-enemy',
+        type: 'damage',
+        damageType: 'technical',
+        damageScaling: 'ta',
+        abilityDamage: 7,
+        range: 3,
+
+        execute: ({ caster, target, enemies }) => {
+            const enemy = enemies.find(e => e.id === target);
+            if (!enemy) {
+                return { success: false, message: 'Target not found' };
+            }
+
+            const finalDamage = Math.max(1, Math.round(
+                (caster.stats.ta / 10) * 7 - (enemy.stats.resistance / 10)
+            ));
+
+            const effects = [];
+            if (Math.random() < 0.35) {
+                effects.push({
+                    type: 'stat_debuff',
+                    target: enemy.id,
+                    stat: 'speed',
+                    value: -2,
+                    duration: 1,
+                    stackable: false
+                });
+            }
+
+            const slowText = effects.length > 0 ? ' Their speed is reduced!' : '';
+
+            return {
+                success: true,
+                damage: [{ target: enemy.id, amount: finalDamage }],
+                effects,
+                message: `${caster.name} blasts ${enemy.name} with Sparkshot for ${finalDamage} damage!${slowText}`
+            };
+        }
+    },
+    stonewall: {
+        id: 'stonewall',
+        name: 'Stonewall',
+        description: 'Grant adjacent allies +15 bonus health for 2 turns',
+        role: "Tank",
+        level: 5,
+        cooldown: 2,
+        targetType: 'all-allies',
+        type: 'buff',
+        aoeSize: 3, // 3x3 area centered on caster
+
+        execute: ({ caster, playerName, playerCharacters, characterPositions }) => {
+            const casterPosition = characterPositions?.[playerName];
+
+            if (!casterPosition) {
+                return { success: false, message: 'Caster position not found' };
+            }
+
+            const effects = [];
+            const protectedAllies = [];
+
+            Object.entries(playerCharacters || {}).forEach(([allyPlayerName, allyCharacter]) => {
+                if (allyPlayerName === playerName) return;
+
+                const allyPosition = characterPositions?.[allyPlayerName];
+                if (!allyPosition) return;
+
+                const rowDiff = Math.abs(allyPosition.row - casterPosition.row);
+                const colDiff = Math.abs(allyPosition.col - casterPosition.col);
+                const isInAdjacentArea = rowDiff <= 1 && colDiff <= 1;
+
+                if (!isInAdjacentArea) return;
+
+                protectedAllies.push(allyCharacter.name);
+                effects.push({
+                    type: 'stat_buff',
+                    target: allyPlayerName,
+                    stat: 'health',
+                    value: 15,
+                    duration: 2,
+                    stackable: false
+                });
+            });
+
+            if (effects.length === 0) {
+                return {
+                    success: false,
+                    message: 'No adjacent allies to protect.'
+                };
+            }
+
+            return {
+                success: true,
+                effects,
+                message: `${caster.name} uses Stonewall! ${protectedAllies.join(', ')} gain +8 bonus health for 1 turn!`
             };
         }
     },
@@ -1239,7 +1923,7 @@ export const ABILITIES = {
         id: 'shadow_strike',
         name: 'Shadow Strike',
         description: 'A devastating strike that deals damage to a single enemy',
-        role: "dps",
+        role: "DPS",
         level: 1,
         cooldown: 1,
         targetType: 'single-enemy',
@@ -1282,7 +1966,7 @@ export const ABILITIES = {
         id: 'starward_sword',
         name: 'Starward Sword',
         description: 'Allows you to use your weapon 3 times in one turn',
-        role: "tank",
+        role: "DPS",
         cooldown: 0,
         isUltimate: true,
         targetType: 'self',
@@ -1311,14 +1995,14 @@ export const ABILITIES = {
         id: 'sword_slash',
         name: 'Sword Slash',
         description: 'Deal high AOE damage to enemies in front and to the sides',
-        role: "dps",
-        level: 3,
+        role: "DPS",
+        level: 1,
         cooldown: 1,
         targetType: 'ground-target',
         type: 'damage',
         damageType: 'physical',
         damageScaling: 'strength',
-        abilityDamage: 20, // 1.25x multiplier applied
+        abilityDamage: 10, 
         range: 1,
         
         /**
@@ -1400,10 +2084,84 @@ export const ABILITIES = {
             };
         }
     },
+    the_show_must_go_on: {
+        id: 'the_show_must_go_on',
+        name: 'The Show Must Go On',
+        description: 'Heal one ally for 10 HP',
+        role: "Support",
+        level: 1,
+        cooldown: 2,
+        targetType: 'ally',
+        type: 'heal',
+        
+        /**
+         * @param {Object} params
+         * @param {Object} params.caster - Character using ability
+         * @param {string} params.target - Ally player name/ID
+         * @param {Object} params.playerCharacters - All player characters
+         * @returns {Object} Effect data
+         */
+        execute: ({ caster, target, playerCharacters }) => {
+            const ally = playerCharacters[target];
+            
+            if (!ally) {
+                return { success: false, message: 'Target not found' };
+            }
+
+            return {
+                success: true,
+                healing: [{
+                    target: target,
+                    amount: 10
+                }],
+                message: `${caster.name} casts The Show Must Go On! ${ally.name} is healed for 10 HP!`
+            };
+        }
+    },
+    white_phospherus: {
+        id: 'white_phospherus',
+        name: 'White Phospherus',
+        description: 'Ultimate: Burns all enemies for 10 damage per turn over 5 turns',
+        role: "Tank",
+        cooldown: 0,
+        isUltimate: true,
+        targetType: 'all-enemies',
+        type: 'damage',
+
+        /**
+         * @param {Object} params
+         * @param {Object} params.caster - Character using ultimate
+         * @param {Array} params.enemies - All current enemies
+         * @returns {Object} Effect data
+         */
+        execute: ({ caster, enemies }) => {
+            const effects = [];
+            const affectedNames = [];
+
+            enemies.forEach(enemy => {
+                if (enemy.isDefeated) return;
+
+                affectedNames.push(enemy.name);
+                effects.push({
+                    type: 'damage_over_time',
+                    target: enemy.id,
+                    amount: 10,
+                    duration: 5,
+                    source: 'white_phospherus'
+                });
+            });
+
+            return {
+                success: true,
+                effects,
+                message: `${caster.name} unleashes White Phospherus! ${affectedNames.join(', ')} will take 10 damage for 5 turns!`
+            };
+        }
+    },
     zen: {
         id: 'zen',
         name: 'Zen',
-        description: 'All support receive +10 ta for one turn',
+        description: 'All supports receive +10 ta for one turn',
         role: "support",
         level: 3,
         cooldown: 2,

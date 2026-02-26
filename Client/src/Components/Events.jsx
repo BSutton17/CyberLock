@@ -11,6 +11,44 @@ function Events(){
       setCombatRewards, room, setEnemies, 
       setTurnOrder, setCurrentTurn, 
       setIsMyTurn, playerName, setAttributeAllocations, playerCharacters } = useGameContext();
+
+    const resolveAbilities = (incomingCharacter, previousCharacter) => {
+      const incomingAbilities = incomingCharacter?.abilities;
+      const previousAbilities = previousCharacter?.abilities;
+
+      if (!Array.isArray(incomingAbilities)) {
+        return previousAbilities;
+      }
+
+      const hasPreviousAbilities = Array.isArray(previousAbilities) && previousAbilities.length > 0;
+      const incomingIsEmpty = incomingAbilities.length === 0;
+
+      if (incomingIsEmpty && hasPreviousAbilities) {
+        console.warn('[ABILITY DEBUG] Ignoring empty incoming abilities, preserving previous abilities.');
+        return previousAbilities;
+      }
+
+      return incomingAbilities;
+    };
+
+    const resolveUltimate = (incomingCharacter, previousCharacter) => {
+      const incomingUltimate = incomingCharacter?.ultimate;
+      const hasValidIncomingUltimate =
+        (typeof incomingUltimate === 'string' && incomingUltimate.trim().length > 0) ||
+        (incomingUltimate && typeof incomingUltimate === 'object' && !!incomingUltimate.id);
+
+      return hasValidIncomingUltimate ? incomingUltimate : previousCharacter?.ultimate;
+    };
+
+    const mergeCharacterPayload = (incomingCharacter, previousCharacter = {}) => {
+      return {
+        ...previousCharacter,
+        ...incomingCharacter,
+        abilities: resolveAbilities(incomingCharacter, previousCharacter),
+        ultimate: resolveUltimate(incomingCharacter, previousCharacter)
+      };
+    };
+
     useEffect(() => {
     
         socket.on("updatePlayerList", (playerList) => {
@@ -27,7 +65,6 @@ function Events(){
           const storedIsAdmin = localStorage.getItem('isAdmin') === 'true';
           const storedRoom = localStorage.getItem('room');
           
-          // Identify race condition on refresh where server denies admin because old socket persists
           if (!admin && storedIsAdmin && storedRoom === room) {
             isAdmin = true;
           }
@@ -37,13 +74,19 @@ function Events(){
         });
 
         socket.on("update_character_selections", (selections) => {
-          const normalizedSelections = Object.fromEntries(
-            Object.entries(selections).map(([name, character]) => [
-              name,
-              enrichCharacterAbilities(character)
-            ])
-          );
-          setPlayerCharacters(normalizedSelections);
+          setPlayerCharacters(prevCharacters => {
+            const normalizedSelections = Object.fromEntries(
+              Object.entries(selections).map(([name, character]) => {
+                const previousCharacter = prevCharacters[name] || {};
+                return [name, enrichCharacterAbilities(mergeCharacterPayload(character, previousCharacter))];
+              })
+            );
+
+            return {
+              ...prevCharacters,
+              ...normalizedSelections
+            };
+          });
         });
 
         socket.on("update_ready_status", (readyList) => {
@@ -55,30 +98,40 @@ function Events(){
         });
 
         socket.on("start_main_game", () => {
+          setScreen("chooseAbilities");
+        });
+
+        socket.on("start_game", () => {
           setScreen("main");
         });
 
         // Game phase transitions
-        socket.on("", ({ enemies, enemyPositions, turnOrder, currentTurn, characterSelections }) => {
+        socket.on("phase_changed_combat", ({ enemies, enemyPositions, turnOrder, currentTurn, characterSelections }) => {
           console.log('Combat Phase Started - Turn Order:', turnOrder);
           console.log('Received enemies:', enemies);
           console.log('Received enemy positions:', enemyPositions);
           console.log('Received character selections:', characterSelections);
+
+          setGamePhase('combat');
           
-          // Update character selections to ensure all players have current data
           if (characterSelections) {
-            const normalizedSelections = Object.fromEntries(
-              Object.entries(characterSelections).map(([name, character]) => [
-                name,
-                enrichCharacterAbilities(character)
-              ])
-            );
-            setPlayerCharacters(normalizedSelections);
+            setPlayerCharacters(prevCharacters => {
+              const mergedSelections = Object.fromEntries(
+                Object.entries(characterSelections).map(([name, character]) => {
+                  const previousCharacter = prevCharacters[name] || {};
+                  return [name, enrichCharacterAbilities(mergeCharacterPayload(character, previousCharacter))];
+                })
+              );
+
+              return {
+                ...prevCharacters,
+                ...mergedSelections
+              };
+            });
           }
           
           setEnemies(enemies);
           
-          // Store enemy positions in session storage so Main.jsx can use them
           if (enemyPositions) {
             sessionStorage.setItem(`enemyPositions_${room}`, JSON.stringify(enemyPositions));
           }
@@ -105,7 +158,6 @@ function Events(){
         });
 
         socket.on("player_health_updated", ({ playerName: damagedPlayer, newHealth }) => {
-          console.log(`🩹 Player health updated: ${damagedPlayer} -> ${newHealth}`);
           setPlayerCharacters(prev => ({
             ...prev,
             [damagedPlayer]: {
@@ -119,6 +171,19 @@ function Events(){
           setScreen("levelup");
         });
 
+        socket.on("level_up_complete", () => {
+          setScreen("chooseAbilities");
+        });
+
+        socket.on("game_reset", () => {
+          setPlayerCharacters({});
+          setReadyPlayers([]);
+          setEnemies([]);
+          setTurnOrder([]);
+          setAttributeAllocations({});
+          setScreen("waiting");
+        });
+
         return () => {
           socket.off("updatePlayerList");
           socket.off("gameStarted");
@@ -126,12 +191,16 @@ function Events(){
           socket.off("update_character_selections");
           socket.off("update_ready_status");
           socket.off("start_main_game");
+          socket.off("start_game");
           socket.off("phase_changed_combat");
           socket.off("turn_changed");
           socket.off("attribute_allocations_updated");
           socket.off("player_health_updated");
+          socket.off("level_up");
+          socket.off("level_up_complete");
+          socket.off("game_reset");
         };
-    }, [room, playerName]); // Added playerName dependency so listeners update when it changes
+    }, [room, playerName]);
     
     return (
         <>

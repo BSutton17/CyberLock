@@ -11,6 +11,44 @@ function Events(){
       setCombatRewards, room, setEnemies, 
       setTurnOrder, setCurrentTurn, 
       setIsMyTurn, playerName, setAttributeAllocations, playerCharacters } = useGameContext();
+
+    const resolveAbilities = (incomingCharacter, previousCharacter) => {
+      const incomingAbilities = incomingCharacter?.abilities;
+      const previousAbilities = previousCharacter?.abilities;
+
+      if (!Array.isArray(incomingAbilities)) {
+        return previousAbilities;
+      }
+
+      const hasPreviousAbilities = Array.isArray(previousAbilities) && previousAbilities.length > 0;
+      const incomingIsEmpty = incomingAbilities.length === 0;
+
+      if (incomingIsEmpty && hasPreviousAbilities) {
+        console.warn('[ABILITY DEBUG] Ignoring empty incoming abilities, preserving previous abilities.');
+        return previousAbilities;
+      }
+
+      return incomingAbilities;
+    };
+
+    const resolveUltimate = (incomingCharacter, previousCharacter) => {
+      const incomingUltimate = incomingCharacter?.ultimate;
+      const hasValidIncomingUltimate =
+        (typeof incomingUltimate === 'string' && incomingUltimate.trim().length > 0) ||
+        (incomingUltimate && typeof incomingUltimate === 'object' && !!incomingUltimate.id);
+
+      return hasValidIncomingUltimate ? incomingUltimate : previousCharacter?.ultimate;
+    };
+
+    const mergeCharacterPayload = (incomingCharacter, previousCharacter = {}) => {
+      return {
+        ...previousCharacter,
+        ...incomingCharacter,
+        abilities: resolveAbilities(incomingCharacter, previousCharacter),
+        ultimate: resolveUltimate(incomingCharacter, previousCharacter)
+      };
+    };
+
     useEffect(() => {
     
         socket.on("updatePlayerList", (playerList) => {
@@ -36,13 +74,19 @@ function Events(){
         });
 
         socket.on("update_character_selections", (selections) => {
-          const normalizedSelections = Object.fromEntries(
-            Object.entries(selections).map(([name, character]) => [
-              name,
-              enrichCharacterAbilities(character)
-            ])
-          );
-          setPlayerCharacters(normalizedSelections);
+          setPlayerCharacters(prevCharacters => {
+            const normalizedSelections = Object.fromEntries(
+              Object.entries(selections).map(([name, character]) => {
+                const previousCharacter = prevCharacters[name] || {};
+                return [name, enrichCharacterAbilities(mergeCharacterPayload(character, previousCharacter))];
+              })
+            );
+
+            return {
+              ...prevCharacters,
+              ...normalizedSelections
+            };
+          });
         });
 
         socket.on("update_ready_status", (readyList) => {
@@ -54,7 +98,7 @@ function Events(){
         });
 
         socket.on("start_main_game", () => {
-          setScreen("main");
+          setScreen("chooseAbilities");
         });
 
         // Game phase transitions
@@ -67,13 +111,19 @@ function Events(){
           setGamePhase('combat');
           
           if (characterSelections) {
-            const normalizedSelections = Object.fromEntries(
-              Object.entries(characterSelections).map(([name, character]) => [
-                name,
-                enrichCharacterAbilities(character)
-              ])
-            );
-            setPlayerCharacters(normalizedSelections);
+            setPlayerCharacters(prevCharacters => {
+              const mergedSelections = Object.fromEntries(
+                Object.entries(characterSelections).map(([name, character]) => {
+                  const previousCharacter = prevCharacters[name] || {};
+                  return [name, enrichCharacterAbilities(mergeCharacterPayload(character, previousCharacter))];
+                })
+              );
+
+              return {
+                ...prevCharacters,
+                ...mergedSelections
+              };
+            });
           }
           
           setEnemies(enemies);

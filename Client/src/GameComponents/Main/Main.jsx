@@ -10,7 +10,7 @@ import { assignEnemyAbilities } from '../../Utils/enemyAbilityUtils';
 import './Main.css';
 
 function Main() {
-    const { players, playerCharacters, setPlayerCharacters, playerName, room, socket, attributeAllocations, setGamePhase, isMyTurn, currentTurn, enemies, setEnemies, turnOrder, setTurnOrder, isAdmin, setScreen } = useGameContext();
+    const { players, playerCharacters, setPlayerCharacters, playerName, room, socket, attributeAllocations, setGamePhase, isMyTurn, currentTurn, enemies, setEnemies, turnOrder, setTurnOrder, isAdmin, setScreen, getCharacterImage } = useGameContext();
     const [currentPlayerCharacter, setCurrentPlayerCharacter] = useState(null);
     const [ultimateReady, setUltimateReady] = useState(false);
     const [characterPositions, setCharacterPositions] = useState({});
@@ -1116,6 +1116,7 @@ function Main() {
             // Delay before completing turn (movement + attack + visual feedback)
             const totalDelay = movementDelay + (turnAction.target ? 500 : 0) + 1000;
             const turnCycleAtSchedule = currentTurnCycleRef.current;
+            const completionKey = `${enemyId}:${turnCycleAtSchedule}`;
             setTimeout(() => {
                 const liveTurn = currentTurnRef.current;
                 if (!liveTurn || liveTurn.type !== 'enemy' || liveTurn.id !== enemyId) {
@@ -1126,15 +1127,16 @@ function Main() {
                     return;
                 }
 
-                if (completedEnemyTurnCyclesRef.current.has(turnCycleAtSchedule)) {
+                if (completedEnemyTurnCyclesRef.current.has(completionKey)) {
                     console.log('[ENEMY TURN] Skipping duplicate completion for turn cycle:', {
                         enemyId,
-                        turnCycleAtSchedule
+                        turnCycleAtSchedule,
+                        completionKey
                     });
                     return;
                 }
 
-                completedEnemyTurnCyclesRef.current.add(turnCycleAtSchedule);
+                completedEnemyTurnCyclesRef.current.add(completionKey);
 
                 console.log('[ENEMY TURN] Completing turn for', enemyId);
                 
@@ -1887,7 +1889,7 @@ function Main() {
                         onClick={() => handleGridClick(row, col)}
                     >
                         {characterOnCell && (
-                            <div className="grid-character">
+                            <div className={`grid-character ${!isEnemy ? 'player-grid-character' : ''}`}>
                                 {isEnemy ? (
                                     isCorpse ? (
                                         <div className="enemy-corpse-icon">
@@ -1906,7 +1908,13 @@ function Main() {
                                         </>
                                     )
                                 ) : (
-                                    playerCharacters[characterOnCell[0]]?.name || '?'
+                                    playerCharacters[characterOnCell[0]] ? (
+                                        <img
+                                            className="grid-character-image"
+                                            src={getCharacterImage(playerCharacters[characterOnCell[0]])}
+                                            alt={playerCharacters[characterOnCell[0]].name}
+                                        />
+                                    ) : '?'
                                 )}
                             </div>
                         )}
@@ -2660,7 +2668,12 @@ function Main() {
                         >
                             {character ? (
                                 <>
-                                    <div className="character-icon"></div>
+                                    <div className="character-icon">
+                                        <img
+                                            src={getCharacterImage(character)}
+                                            alt={character.name}
+                                        />
+                                    </div>
                                     <div className="character-info">
                                         <div className="character-name">{character.name}</div>
                                         <div className="character-stats">
@@ -2739,7 +2752,12 @@ function Main() {
                 <>
                     <div className="character-sheet-header">
                         <div className="character-portrait">
-                            <div className="portrait-icon"></div>
+                            <div className="portrait-icon">
+                                <img
+                                    src={getCharacterImage(currentPlayerCharacter)}
+                                    alt={currentPlayerCharacter.name}
+                                />
+                            </div>
                             <div className="character-title">
                                 <div className="char-name">{currentPlayerCharacter.name}</div>
                                 <div className="char-role">{currentPlayerCharacter.role}</div>

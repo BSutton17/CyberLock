@@ -5,7 +5,7 @@ import { enrichAllCharacters } from '../../Utils/characterUtils';
 import './CharacterSelect.css';
 
 function CharacterSelect() {
-    const { players, playerName, playerCharacters, setPlayerCharacters, socket, room, readyPlayers } = useGameContext();
+    const { players, playerName, playerCharacters, setPlayerCharacters, socket, room, readyPlayers, getCharacterImage } = useGameContext();
     const [selectedCharacter, setSelectedCharacter] = useState(null);
     const [displayClassInfo, setDisplayClassInfo] = useState(false);
 
@@ -77,15 +77,12 @@ function CharacterSelect() {
                                     }}
                                     onDoubleClick={() => handleAddToTeam(character)}
                                 >
-                                    <h4>{character.name}</h4>
-                                    <p className='role'>{character.role}</p>
-                                    <div className='mini-stats'>
-                                        <div className="stat-pill">HP {character.stats.health}</div>
-                                        <div className="stat-pill">SPD {character.stats.speed}</div>
-                                        <div className="stat-pill">RES {character.stats.resistance}</div>
-                                        <div className="stat-pill">STR {character.stats.strength}</div>
-                                        <div className="stat-pill">TA {character.stats.ta}</div>
-                                    </div>
+                                    {/* <h4>{character.name}</h4> */}
+                                    <img
+                                        className='character-card-image'
+                                        src={getCharacterImage(character)}
+                                        alt={character.name}
+                                    />
                                 </div>
                             ))}
                         </div>
@@ -98,7 +95,6 @@ function CharacterSelect() {
                             <div className='character-details'>
                                 <h4>{selectedCharacter.name}</h4>
                                 <p className='detail-role'><strong>Role:</strong> {selectedCharacter.role}</p>
-                                <p className='detail-desc'>{selectedCharacter.nonCombatRole}</p>
                                 
                                 <div className='stats-detail'>
                                     <h5>Stats</h5>
@@ -113,29 +109,10 @@ function CharacterSelect() {
                                     <h5>Weapon: {selectedCharacter.weapon.name}</h5>
                                     {selectedCharacter.weapon.damage && (
                                         <>
-                                        <p>Damage: {selectedCharacter.weapon.damage}</p>
-                                        <p>{selectedCharacter.weapon.range == 1 ? "Range: Melee" : `Range: ${selectedCharacter.weapon.range}`}</p>
+                                        <p className='weapon-stats'>Damage: {selectedCharacter.weapon.damage}</p>
+                                        <p className='weapon-stats'>{selectedCharacter.weapon.range == 1 ? "Range: Melee" : `Range: ${selectedCharacter.weapon.range}`}</p>
                                         </>
                                     )}
-                                </div>
-
-                                <div className='abilities-detail'>
-                                    <h5>Abilities</h5>
-                                    {selectedCharacter.abilities.map((ability, index) => (
-                                        <div key={index} className='ability'>
-                                            <div className="ability-header">
-                                                <strong>{ability.name}</strong>
-                                                {ability.cooldown && <span className="cooldown">CD: {ability.cooldown}</span>}
-                                            </div>
-                                            <p>{ability.description}</p>
-                                        </div>
-                                    ))}
-                                </div>
-
-                                <div className='ultimate-detail'>
-                                    <h5>Ultimate</h5>
-                                    <strong>{selectedCharacter.ultimate.name}</strong>
-                                    <p>{selectedCharacter.ultimate.description}</p>
                                 </div>
                             </div>
                         </div>

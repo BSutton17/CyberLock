@@ -37,7 +37,6 @@ function CharacterSelect() {
         <div className='character-select-container'>
             <div className='header'>
                 <h1>Character Select</h1>
-                <h2>Choose your team</h2>
             </div>
 
             <div className='main-content'>
@@ -65,7 +64,7 @@ function CharacterSelect() {
 
                 <div className='middle-section'>
                     <div className='characters-grid'>
-                        <h3>Available Characters</h3>
+                        <h3>Choose Your Character</h3>
                         <div className='character-cards'>
                             {enrichedCharactersData.characters.map((character) => (
                                 <div 

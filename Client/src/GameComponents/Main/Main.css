@@ -151,6 +151,7 @@ h3, h4, p {
     justify-content: center;
     align-items: center;
     min-height: 0;
+    width: 100%;
 }
 
 .game-area {
@@ -451,6 +452,11 @@ h3, h4, p {
 
 .ai-text {
     line-height: 1.4;
+    display: flex;
+    align-items: center;
+    font-size: 2.5vmin;
+    width: 1000vmin;
+    height: 7.5vmin;
 }
 
 .ai-choices {

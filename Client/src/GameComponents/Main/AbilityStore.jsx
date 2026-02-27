@@ -2212,7 +2212,7 @@ export const ABILITIES = {
     white_phospherus: {
         id: 'white_phospherus',
         name: 'White Phospherus',
-        description: 'Ultimate: Burns all enemies for 10 damage per turn over 5 turns',
+        description: 'Burns all enemies for 10 damage per turn over 5 turns',
         role: "Tank",
         cooldown: 0,
         isUltimate: true,

@@ -31,6 +31,10 @@ function Main() {
     const [pendingPostEncounterChoice, setPendingPostEncounterChoice] = useState(false);
     const [pendingNextEncounterChoice, setPendingNextEncounterChoice] = useState(false);
     const [aiText, setAiText] = useState('');
+    const [aiSentences, setAiSentences] = useState([]);
+    const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0);
+    const [displayText, setDisplayText] = useState('');
+    const [typingIndex, setTypingIndex] = useState(0);
     const aiLogRef = useRef(null);
     const hasRequestedIntroRef = useRef(false);
     const pendingStartCombatRef = useRef(false);
@@ -228,11 +232,58 @@ function Main() {
     }, [playerCharacters, playerName]);
 
     useEffect(() => {
-        if (aiLog.length > 0) {
-            const latestEntry = aiLog[aiLog.length - 1];
-            setAiText(latestEntry.text);
+        const message = (aiText || '').trim();
+        if (!message) {
+            setAiSentences([]);
+            setCurrentSentenceIndex(0);
+            setDisplayText('');
+            setTypingIndex(0);
+            return;
         }
-    }, [aiLog]);
+
+        const segments = message
+            .split(/(?<=[.!?])\s+|\n+/)
+            .map(segment => segment.trim())
+            .filter(Boolean);
+
+        setAiSentences(segments.length > 0 ? segments : [message]);
+        setCurrentSentenceIndex(0);
+        setDisplayText('');
+        setTypingIndex(0);
+    }, [aiText]);
+
+    useEffect(() => {
+        const currentSentence = aiSentences[currentSentenceIndex] || '';
+        if (!currentSentence || typingIndex >= currentSentence.length) {
+            return;
+        }
+
+        const interval = setInterval(() => {
+            setDisplayText((prevText) => prevText + currentSentence.charAt(typingIndex));
+            setTypingIndex((prevIndex) => prevIndex + 1);
+        }, 20);
+
+        return () => clearInterval(interval);
+    }, [aiSentences, currentSentenceIndex, typingIndex]);
+
+    useEffect(() => {
+        const currentSentence = aiSentences[currentSentenceIndex] || '';
+        if (!currentSentence || typingIndex < currentSentence.length) {
+            return;
+        }
+
+        if (currentSentenceIndex >= aiSentences.length - 1) {
+            return;
+        }
+
+        const timer = setTimeout(() => {
+            setCurrentSentenceIndex((prevIndex) => prevIndex + 1);
+            setDisplayText('');
+            setTypingIndex(0);
+        }, currentSentence.length * 12);
+
+        return () => clearTimeout(timer);
+    }, [aiSentences, currentSentenceIndex, typingIndex]);
 
     useEffect(() => {
         if (!isAdmin || !room || hasRequestedIntroRef.current) return;
@@ -256,6 +307,7 @@ function Main() {
         const handleAiMessage = ({ eventType, response }) => {
             setAiBusy(false);
             appendAiLog({ role: 'ai', text: response, eventType });
+            setAiText(response || '');
 
             if (eventType === 'game_start') {
                 setPendingFactionChoice(true);
@@ -2745,7 +2797,9 @@ function Main() {
         {/* <button style={{ width: '150px' }} onClick={handleLevelUp}>Level Up</button> */}
         <button style={{ width: '150px' }} onClick={() => handleStoryComplete()}>Combat</button>
             </div>
-            <span className="ai-text">{aiText}</span>
+            <span className="ai-text">
+                {displayText}
+            </span>
        </div>
         <div className="inventory">
             {currentPlayerCharacter ? (

@@ -352,6 +352,7 @@ io.on('connection', (socket) => {
       rooms[room].readyPlayers = [];
       rooms[room].abilitySelections = {};
       rooms[room].abilityReadyPlayers = [];
+      rooms[room].levelUpReadyPlayers = [];
       rooms[room].attributePoints = {};
       rooms[room].attributeReadyPlayers = [];
       rooms[room].sortedAttributeAllocations = {};
@@ -475,6 +476,8 @@ io.on('connection', (socket) => {
                                 );
       
       if (allAttributeReady) {
+        rooms[room].abilityReadyPlayers = [];
+        io.to(room).emit("ability_ready_status", []);
         io.to(room).emit("start_main_game");
       }
     }
@@ -598,7 +601,17 @@ io.on('connection', (socket) => {
       return;
     }
     
-    if (currentTurn.id !== playerName) return;
+    if (currentTurn.id !== playerName) {
+      io.to(room).emit("turn_changed", { currentTurn });
+      if (currentTurn.type === 'enemy') {
+        io.to(room).emit("execute_enemy_turn", {
+          enemyId: currentTurn.id,
+          allies: rooms[room]?.players || [],
+          alliedEnemies: getAlliedEnemyIds(combat, currentTurn.id)
+        });
+      }
+      return;
+    }
 
     combat.currentTurnIndex++;
     if(combat.currentTurnIndex >= combat.turnOrder.length) {
@@ -628,9 +641,37 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on("enemy_turn_complete", ({ room }) => {
+  socket.on("enemy_turn_complete", ({ room, enemyId, updatedEnemies, updatedPlayerCharacters, updatedActiveEffects }) => {
     const combat = combatSessions[room];
     if (!combat) return;
+
+    const activeTurn = combat.turnOrder?.[combat.currentTurnIndex];
+    if (!activeTurn || activeTurn.type !== 'enemy' || activeTurn.id !== enemyId) {
+      console.warn('[SERVER] Ignoring stale enemy_turn_complete:', {
+        room,
+        incomingEnemyId: enemyId,
+        activeTurn
+      });
+      return;
+    }
+
+    if (updatedEnemies && Array.isArray(updatedEnemies)) {
+      combat.enemies = normalizeEnemiesForCombat(updatedEnemies, combat.enemies || []);
+      removeDeadEnemiesFromTurnOrder(combat);
+      io.to(room).emit("enemies_updated", { enemies: combat.enemies });
+    }
+
+    if (rooms[room] && updatedPlayerCharacters) {
+      rooms[room].characterSelections = {
+        ...rooms[room].characterSelections,
+        ...updatedPlayerCharacters
+      };
+      io.to(room).emit("characters_updated", updatedPlayerCharacters);
+    }
+
+    if (updatedActiveEffects) {
+      io.to(room).emit("active_effects_updated", updatedActiveEffects);
+    }
 
     combat.currentTurnIndex++;
     if(combat.currentTurnIndex >= combat.turnOrder.length) {
@@ -698,8 +739,8 @@ io.on('connection', (socket) => {
     if (newHealth <= 0) {
       const currentTurn = combat.turnOrder[combat.currentTurnIndex];
       const wasCurrentTurn = currentTurn && currentTurn.id === enemyId;
-      
-      combat.turnOrder = combat.turnOrder.filter(turn => turn.id !== enemyId);
+
+      removeDeadEnemiesFromTurnOrder(combat);
       console.log(`Enemy ${enemyId} defeated`);
       
       // If the dead enemy was the current turn, advance immediately
@@ -841,15 +882,42 @@ io.on('connection', (socket) => {
   });
 
   socket.on("level_up",({room}) => {
+    if (rooms[room]) {
+      rooms[room].levelUpReadyPlayers = [];
+      io.to(room).emit('level_up_ready_status', []);
+    }
     io.to(room).emit('level_up');
   });
 
-  socket.on("level_up_complete",({room, players}) => {
-    io.to(room).emit('level_up_complete', {players});
-  });
+  socket.on("level_up_ready", ({ room, playerName, updatedCharacter }) => {
+    if (!rooms[room]) return;
 
-  socket.on("ability_select_complete", ({room}) =>{
-    io.to(room).emit('ability_select_complete');
+    if (!rooms[room].levelUpReadyPlayers) {
+      rooms[room].levelUpReadyPlayers = [];
+    }
+
+    if (updatedCharacter) {
+      if (!rooms[room].characterSelections) {
+        rooms[room].characterSelections = {};
+      }
+      rooms[room].characterSelections[playerName] = updatedCharacter;
+      io.to(room).emit("characters_updated", { [playerName]: updatedCharacter });
+    }
+
+    if (!rooms[room].levelUpReadyPlayers.includes(playerName)) {
+      rooms[room].levelUpReadyPlayers.push(playerName);
+    }
+
+    io.to(room).emit('level_up_ready_status', rooms[room].levelUpReadyPlayers);
+
+    const allLevelReady = rooms[room].players.length > 0 &&
+      rooms[room].players.every(player => rooms[room].levelUpReadyPlayers.includes(player));
+
+    if (allLevelReady) {
+      rooms[room].abilityReadyPlayers = [];
+      io.to(room).emit('ability_ready_status', []);
+      io.to(room).emit('level_up_complete');
+    }
   });
 });
 

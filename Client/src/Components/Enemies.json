@@ -5,6 +5,7 @@
       "name": "Goblin",
       "tier": "generic",
       "role": "DPS",
+      "level": 1,
       "behavior": "aggressive",
       "stats": {
         "health": 70,
@@ -26,12 +27,13 @@
       "tier": "generic",
       "role": "Tank",
       "behavior": "defensive",
+      "level": 1,
       "stats": {
         "health": 80,
         "maxHealth": 80,
         "speed": 25,
         "resistance": 35,
-        "strength": 40,
+        "strength": 20,
         "ta": 10
       },
       "weapon": {

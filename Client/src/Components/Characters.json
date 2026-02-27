@@ -4,7 +4,7 @@
       "id": "offensive_tank_1",
       "name": "Offensive Tank #1",
       "role": "Tank",
-      "level": 5,
+      "level": 1,
       "stats": {
         "health": 95,
         "maxHealth": 95,
@@ -16,7 +16,7 @@
       "weapon": {
         "range": 1,
         "name": "Hammer",
-        "damage": 108
+        "damage": 10
       },
       "abilities": [
 
@@ -65,7 +65,6 @@
         "damage": 10
       },
       "abilities": [
-        
       ],
       "ultimate": ""
     },
@@ -106,7 +105,7 @@
         "ta": 5
       },
       "weapon": {
-        "range": 1,
+        "range": 2,
         "name": "Rail Cannon",
         "damage": 10
       },
@@ -176,7 +175,7 @@
       },
       "weapon": {
         "range": 3,
-        "name": "Energy Staff",
+        "name": "Magic Energy",
         "damage": 6
       },
       "abilities": [

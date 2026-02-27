@@ -1,5 +1,7 @@
 //This file handles all enemy combat logic including target selection, movement, ability usage, and behavior determination.
 
+import { ABILITIES } from './AbilityStore';
+
 const ROLE_PRIORITY = {
     'Support': 1,
     'DPS': 1.5,
@@ -127,6 +129,43 @@ function isInRangeOfAny(enemyPos, targetIds, characterPositions) {
     });
 }
 
+/**
+ * Check if a cell is in a danger zone that this enemy should avoid
+ * @param {Object} cell - { row, col } position to check
+ * @param {Array} activeEffects - Active effects including zone effects
+ * @param {Object} enemy - Enemy object (to check behavior/role)
+ * @returns {boolean} True if enemy should avoid this cell
+ */
+function isCellInDangerZone(cell, activeEffects = [], enemy) {
+    if (!activeEffects || activeEffects.length === 0) return false;
+    
+    const behavior = enemy.behavior || 'aggressive';
+    const role = enemy.role || 'DPS';
+    
+    // Check for blizzard zones (selective avoidance)
+    const inBlizzardZone = activeEffects.some(effect => {
+        if (effect.type !== 'blizzard_field' || effect.turnsRemaining <= 0 || !effect.center) {
+            return false;
+        }
+        const radius = effect.radius ?? 1;
+        return Math.abs(effect.center.row - cell.row) <= radius &&
+               Math.abs(effect.center.col - cell.col) <= radius;
+    });
+    
+    if (inBlizzardZone) {
+        // Aggressive and Support enemies walk through blizzard if needed
+        if (behavior === 'aggressive' || role === 'Support') {
+            return false; // Don't avoid
+        }
+        // Defensive and Intelligent enemies avoid blizzard
+        if (behavior === 'defensive' || behavior === 'intelligent') {
+            return true; // Avoid
+        }
+    }
+    
+    return false;
+}
+
 function getValidMovementCells(position, maxMovement, characterPositions, ROWS = 7, COLS = 10) {
     const validCells = [];
     
@@ -153,11 +192,24 @@ function getValidMovementCells(position, maxMovement, characterPositions, ROWS =
     return validCells;
 }
 
+function isCellBlockedByBarrier(cell, activeEffects = []) {
+    if (!activeEffects || activeEffects.length === 0) return false;
+
+    return activeEffects.some(effect =>
+        effect.type === 'blue_barrier' &&
+        effect.turnsRemaining > 0 &&
+        effect.cell &&
+        effect.cell.row === cell.row &&
+        effect.cell.col === cell.col
+    );
+}
+
 /**
  * BFS pathfinding to find reachable cells within movement range
  * Returns all reachable cells with their actual path distance
  */
-function getReachableCells(startPos, maxMovement, characterPositions, ROWS = 7, COLS = 10) {
+function getReachableCells(startPos, maxMovement, characterPositions, activeEffects = [], enemy = null, ROWS = 7, COLS = 10, options = {}) {
+    const { ignoreDangerZones = false } = options;
     const visited = new Set();
     const queue = [{ pos: startPos, distance: 0 }];
     const reachable = [];
@@ -196,8 +248,14 @@ function getReachableCells(startPos, maxMovement, characterPositions, ROWS = 7, 
             const isOccupied = Object.values(characterPositions).some(
                 p => p.row === neighbor.row && p.col === neighbor.col
             );
+            const blockedByBarrier = isCellBlockedByBarrier(neighbor, activeEffects);
             
-            if (!isOccupied) {
+            // Check if in danger zone (and should be avoided)
+            const inDangerZone = !ignoreDangerZones && enemy
+                ? isCellInDangerZone(neighbor, activeEffects, enemy)
+                : false;
+            
+            if (!isOccupied && !inDangerZone && !blockedByBarrier) {
                 visited.add(key);
                 queue.push({ pos: neighbor, distance: distance + 1 });
             }
@@ -208,7 +266,7 @@ function getReachableCells(startPos, maxMovement, characterPositions, ROWS = 7, 
 }
 
 //aggressive behavior type movement logic
-function calculateAggressiveMovement(enemy, allies, characterPositions) {
+function calculateAggressiveMovement(enemy, allies, characterPositions, activeEffects = []) {
     const enemyPos = characterPositions[enemy.id];
     if (!enemyPos) return null;
     
@@ -226,7 +284,16 @@ function calculateAggressiveMovement(enemy, allies, characterPositions) {
     
     const targetPos = characterPositions[closest.targetId];
     // Use BFS pathfinding to get reachable cells
-    const reachableCells = getReachableCells(enemyPos, maxMovement, characterPositions);
+    const reachableCells = getReachableCells(
+        enemyPos,
+        maxMovement,
+        characterPositions,
+        activeEffects,
+        enemy,
+        7,
+        10,
+        { ignoreDangerZones: true }
+    );
     
     if (reachableCells.length === 0) return null;
     
@@ -241,7 +308,7 @@ function calculateAggressiveMovement(enemy, allies, characterPositions) {
 }
 
 //defensive behavior type movement logic
-function calculateDefensiveMovement(enemy, allies, characterPositions) {
+function calculateDefensiveMovement(enemy, allies, characterPositions, activeEffects = []) {
     const enemyPos = characterPositions[enemy.id];
     if (!enemyPos) return null;
     const weaponRange = enemy.weapon?.range || 1;
@@ -254,7 +321,7 @@ function calculateDefensiveMovement(enemy, allies, characterPositions) {
     
     const targetPos = characterPositions[closest.targetId];
     // Use BFS pathfinding to get reachable cells
-    const reachableCells = getReachableCells(enemyPos, maxMovement, characterPositions);
+    const reachableCells = getReachableCells(enemyPos, maxMovement, characterPositions, activeEffects, enemy);
     
     if (reachableCells.length === 0) return null;
 
@@ -313,7 +380,7 @@ function calculateSupportMovement(enemy, alliedEnemies, characterPositions) {
     
     const targetPos = characterPositions[closest.targetId];
     // Use BFS pathfinding to get reachable cells
-    const reachableCells = getReachableCells(enemyPos, maxMovement, characterPositions);
+    const reachableCells = getReachableCells(enemyPos, maxMovement, characterPositions, activeEffects, enemy);
     
     if (reachableCells.length === 0) return null;
     const bestMove = reachableCells.reduce((best, cell) => {
@@ -326,61 +393,32 @@ function calculateSupportMovement(enemy, alliedEnemies, characterPositions) {
 }
 
 
-export function calculateEnemyMovement(enemy, allies, alliedEnemies, playerCharacters, characterPositions) {
+export function calculateEnemyMovement(enemy, allies, alliedEnemies, playerCharacters, characterPositions, activeEffects = []) {
     const behavior = determineBehavior(enemy, allies, playerCharacters);
     const role = enemy.role || 'DPS';
     
     if (role === 'Support') {
-        return calculateSupportMovement(enemy, alliedEnemies, characterPositions);
+        return calculateSupportMovement(enemy, alliedEnemies, characterPositions, activeEffects);
     }
     
     if (behavior === 'aggressive') {
-        return calculateAggressiveMovement(enemy, allies, characterPositions);
+        return calculateAggressiveMovement(enemy, allies, characterPositions, activeEffects);
     }
     
     if (behavior === 'defensive') {
-        return calculateDefensiveMovement(enemy, allies, characterPositions);
+        return calculateDefensiveMovement(enemy, allies, characterPositions, activeEffects);
     }
     
     return null;
 }
 
-function calculatePullMovementToCenter(enemy, center, characterPositions) {
-    const enemyPos = characterPositions[enemy.id];
-    if (!enemyPos || !center) return null;
-
-    const maxMovement = Math.floor(enemy.stats.speed / 10);
-    if (maxMovement <= 0) return null;
-
-    const reachableCells = getReachableCells(enemyPos, maxMovement, characterPositions);
-    if (reachableCells.length === 0) return null;
-
-    const currentDistance = getDistance(enemyPos, center);
-    const closerCells = reachableCells.filter(cell => getDistance(cell, center) < currentDistance);
-
-    if (closerCells.length === 0) {
-        return null;
-    }
-
-    const bestMove = closerCells.reduce((best, cell) => {
-        const distance = getDistance(cell, center);
-        const bestDistance = getDistance(best, center);
-        return distance < bestDistance ? cell : best;
-    });
-
-    return { row: bestMove.row, col: bestMove.col };
-}
-
-
 export function executeEnemyTurn(enemy, allies, alliedEnemies, playerCharacters, characterPositions, activeEffects = []) {
+    console.log(`[ENEMY TURN] ${enemy.name} (${enemy.id}) starting turn`);
+    console.log(`[ENEMY TURN] Enemy abilities:`, enemy.abilities);
+    console.log(`[ENEMY TURN] Enemy cooldowns:`, enemy.cooldowns);
+    
     // Check for status effects on this enemy
     const enemyEffects = activeEffects.filter(effect => effect.target === enemy.id);
-    const blackHolePullEffect = enemyEffects.find(effect =>
-        effect.type === 'status_effect' &&
-        effect.status === 'black_hole_pull' &&
-        effect.turnsRemaining > 0 &&
-        effect.center
-    );
     const immobilizeEffects = enemyEffects.filter(effect =>
         effect.type === 'status_effect' && 
         effect.status === 'immobilized' && 
@@ -389,6 +427,15 @@ export function executeEnemyTurn(enemy, allies, alliedEnemies, playerCharacters,
     const isImmobilized = immobilizeEffects.length > 0;
     const movementPrevented = immobilizeEffects.some(effect => effect.preventMovement !== false);
     const actionsPrevented = immobilizeEffects.some(effect => effect.preventActions === true);
+    
+    // Check if abilities are disabled (EMP effect)
+    const abilitiesDisabled = enemyEffects.some(effect => 
+        effect.type === 'abilities_disabled' && effect.turnsRemaining > 0
+    );
+    
+    if (abilitiesDisabled) {
+        console.log(`[ENEMY ABILITIES] ${enemy.name}'s abilities are disabled!`);
+    }
     
     if (isImmobilized && actionsPrevented) {
         return {
@@ -406,9 +453,7 @@ export function executeEnemyTurn(enemy, allies, alliedEnemies, playerCharacters,
     // Calculate movement
     const newPosition = movementPrevented
         ? null
-        : blackHolePullEffect
-            ? calculatePullMovementToCenter(enemy, blackHolePullEffect.center, characterPositions)
-            : calculateEnemyMovement(enemy, allies, alliedEnemies, playerCharacters, characterPositions);
+        : calculateEnemyMovement(enemy, allies, alliedEnemies, playerCharacters, characterPositions, activeEffects);
     
     // Create updated positions to check attack range AFTER moving
     const updatedPositions = newPosition ? {
@@ -416,14 +461,129 @@ export function executeEnemyTurn(enemy, allies, alliedEnemies, playerCharacters,
         [enemy.id]: newPosition
     } : characterPositions;
     
-    // Check for attack target from the new position (or current if no movement)
-    const target = selectAttackTarget(enemy, allies, playerCharacters, updatedPositions, updatedPositions);
+    // Check if enemy should use an ability instead of weapon
+    let abilityToUse = null;
+    let abilityRequiresTarget = false;
+    if (!abilitiesDisabled && enemy.abilities && enemy.abilities.length > 0 && enemy.cooldowns) {
+        console.log(`[ENEMY ABILITIES] ${enemy.name} (${enemy.id}) checking abilities...`);
+        
+        // Find all abilities that are off cooldown and currently usable
+        const availableAbilities = enemy.abilities.filter(ability => {
+            const currentCooldown = enemy.cooldowns[ability.id] || 0;
+            if (currentCooldown !== 0) {
+                console.log(`[ENEMY ABILITIES]   - ${ability.name} (level ${ability.level}): cooldown ${currentCooldown}`);
+                return false;
+            }
+            
+            const abilityDef = ABILITIES[ability.id];
+            const abilityType = abilityDef?.type;
+            const targetType = abilityDef?.targetType;
+            const abilityRange = abilityDef?.range || 1;
+            const enemyPos = characterPositions[enemy.id];
+
+            // Non-damage abilities should be used immediately when ready
+            if (abilityType !== 'damage') {
+                console.log(`[ENEMY ABILITIES]   - ${ability.name} (level ${ability.level}): cooldown ${currentCooldown}, non-damage ready=true`);
+                return true;
+            }
+
+            // Damage abilities that don't need a direct target are immediately usable
+            if (targetType === 'self' || targetType === 'all-enemies' || targetType === 'all-allies') {
+                console.log(`[ENEMY ABILITIES]   - ${ability.name} (level ${ability.level}): cooldown ${currentCooldown}, no direct target required`);
+                return true;
+            }
+            
+            // Check if any valid target is in ability range
+            const targetInRange = allies.some(allyId => {
+                const target = playerCharacters[allyId];
+                if (!target || target.stats.health <= 0) return false;
+                
+                const targetPos = characterPositions[allyId];
+                if (!targetPos) return false;
+                
+                const distance = getDistance(enemyPos, targetPos);
+                return distance <= abilityRange;
+            });
+            
+            console.log(`[ENEMY ABILITIES]   - ${ability.name} (level ${ability.level}, range ${abilityRange}): cooldown ${currentCooldown}, targetInRange ${targetInRange}`);
+            return targetInRange;
+        });
+        
+        // If there is a ready non-damage ability, use it immediately (highest level among them)
+        if (availableAbilities.length > 0) {
+            const nonDamageAbilities = availableAbilities.filter(ability => {
+                const abilityDef = ABILITIES[ability.id];
+                return abilityDef?.type !== 'damage';
+            });
+
+            const abilityPool = nonDamageAbilities.length > 0 ? nonDamageAbilities : availableAbilities;
+            abilityToUse = abilityPool.reduce((best, current) => {
+                return (current.level || 1) > (best.level || 1) ? current : best;
+            });
+            console.log(`[ENEMY ABILITIES] ${enemy.name} (${enemy.id}) will use ${abilityToUse.name} (level ${abilityToUse.level || 1})!`);
+
+            const selectedAbilityDef = ABILITIES[abilityToUse.id];
+            const selectedTargetType = selectedAbilityDef?.targetType;
+            abilityRequiresTarget = !['self', 'all-enemies', 'all-allies'].includes(selectedTargetType);
+        }
+    }
+    
+    // Select target based on whether we're using an ability or weapon
+    let target;
+    if (abilityToUse) {
+        // For abilities, find the closest valid target in ability range
+        const abilityDef = ABILITIES[abilityToUse.id];
+        const targetType = abilityDef?.targetType;
+
+        if (targetType === 'self' || targetType === 'all-enemies' || targetType === 'all-allies') {
+            target = null;
+            console.log(`[ENEMY ABILITIES] ${abilityToUse.name} does not require a direct target.`);
+        } else {
+        const abilityRange = abilityDef?.range || 1;
+        const enemyPos = characterPositions[enemy.id];
+        
+        const validTargets = allies.filter(allyId => {
+            const allyChar = playerCharacters[allyId];
+            if (!allyChar || allyChar.stats.health <= 0) return false;
+            
+            const targetPos = characterPositions[allyId];
+            if (!targetPos) return false;
+            
+            const distance = getDistance(enemyPos, targetPos);
+            return distance <= abilityRange;
+        });
+        
+        if (validTargets.length > 0) {
+            // Pick closest target
+            target = validTargets.reduce((closest, allyId) => {
+                const allyPos = characterPositions[allyId];
+                const closestPos = characterPositions[closest];
+                const allyDistance = getDistance(enemyPos, allyPos);
+                const closestDistance = getDistance(enemyPos, closestPos);
+                return allyDistance < closestDistance ? allyId : closest;
+            });
+        }
+        }
+        
+        console.log(`[ENEMY ABILITIES] Target for ${abilityToUse.name} by ${enemy.name} (${enemy.id}):`, target);
+    } else {
+        // For weapon attacks, use normal range-based targeting
+        target = selectAttackTarget(enemy, allies, playerCharacters, updatedPositions, updatedPositions);
+    }
+    
+    // Fallback: if ability needs a target but none found, use weapon attack instead
+    if (abilityToUse && abilityRequiresTarget && !target) {
+        console.log(`[ENEMY ABILITIES] ${enemy.name} (${enemy.id}) selected ${abilityToUse.name} but no target in range - falling back to weapon attack`);
+        abilityToUse = null;
+        target = selectAttackTarget(enemy, allies, playerCharacters, updatedPositions, updatedPositions);
+    }
     
     return {
         enemyId: enemy.id,
         movement: newPosition,
         target: target,
-        useWeapon: target ? true : false,
+        useWeapon: !abilityToUse && target ? true : false,
+        abilityToUse: abilityToUse,
         immobilized: movementPrevented
     };
 }

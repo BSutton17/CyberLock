@@ -3,24 +3,27 @@ import { useState, useEffect, useRef } from 'react';
 import { useGameContext } from '../../Components/Context';
 import EnemiesData from '../../Components/Enemies.json';
 import { executeEnemyTurn } from './EnemyCombat';
-import { getAbility, executeAbility, applyAbilityEffects, tickCooldowns, tickActiveEffects, calculateTotalStat, getStatBonuses } from './AbilityLogic';
+import { getAbility, executeAbility, applyAbilityEffects, tickCooldowns, tickActiveEffects, calculateTotalStat, getStatBonuses, hasDamageImmunity, getDamageTakenMultiplier, applyDamageKeywords, hasDamageReflection, updateBlizzardFieldEffects } from './AbilityLogic';
 import { enrichCharacterAbilities } from '../../Utils/characterUtils';
 import { GiDeathSkull } from 'react-icons/gi';
+import { assignEnemyAbilities } from '../../Utils/enemyAbilityUtils';
 import './Main.css';
 
 function Main() {
-    const { players, playerCharacters, setPlayerCharacters, playerName, room, socket, attributeAllocations, setGamePhase, isMyTurn, currentTurn, enemies, setEnemies, turnOrder, setTurnOrder, isAdmin, setScreen } = useGameContext();
+    const { players, playerCharacters, setPlayerCharacters, playerName, room, socket, attributeAllocations, setGamePhase, isMyTurn, currentTurn, enemies, setEnemies, turnOrder, setTurnOrder, isAdmin, setScreen, getCharacterImage } = useGameContext();
     const [currentPlayerCharacter, setCurrentPlayerCharacter] = useState(null);
     const [ultimateReady, setUltimateReady] = useState(false);
     const [characterPositions, setCharacterPositions] = useState({});
     const [weaponSelected, setWeaponSelected] = useState(false);
     const [selectedAbility, setSelectedAbility] = useState(null);
     const [selectedTargets, setSelectedTargets] = useState([]);
+    const [pendingRelocateTarget, setPendingRelocateTarget] = useState(null);
     const [cooldowns, setCooldowns] = useState({});
     const [activeEffects, setActiveEffects] = useState([]);
     const [turnStartPosition, setTurnStartPosition] = useState(null);
     const [movementUsed, setMovementUsed] = useState(0);
     const [actionUsed, setActionUsed] = useState(false);
+    const [turnTimeLeft, setTurnTimeLeft] = useState(null);
     const [aiLog, setAiLog] = useState([]);
     // const [aiInput, setAiInput] = useState('');
     const [aiBusy, setAiBusy] = useState(false);
@@ -28,6 +31,10 @@ function Main() {
     const [pendingPostEncounterChoice, setPendingPostEncounterChoice] = useState(false);
     const [pendingNextEncounterChoice, setPendingNextEncounterChoice] = useState(false);
     const [aiText, setAiText] = useState('');
+    const [aiSentences, setAiSentences] = useState([]);
+    const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0);
+    const [displayText, setDisplayText] = useState('');
+    const [typingIndex, setTypingIndex] = useState(0);
     const aiLogRef = useRef(null);
     const hasRequestedIntroRef = useRef(false);
     const pendingStartCombatRef = useRef(false);
@@ -52,6 +59,15 @@ function Main() {
     const playerCharactersRef = useRef(playerCharacters);
     const enemiesRef = useRef(enemies);
     const gameOverRef = useRef(gameOver);
+    const movementUsedRef = useRef(movementUsed);
+    const currentPlayerCharacterRef = useRef(currentPlayerCharacter);
+    const actionUsedRef = useRef(actionUsed);
+    const currentTurnRef = useRef(currentTurn);
+    const currentTurnCycleRef = useRef(0);
+    const completedEnemyTurnCyclesRef = useRef(new Set());
+    const completedAllyTurnCyclesRef = useRef(new Set());
+    const turnTimerIntervalRef = useRef(null);
+    const turnTimerAutoEndedRef = useRef(false);
 
     const isEnemyDeadBody = (enemy) => {
         return !!enemy && (enemy.isDeadBody || (enemy.stats?.health || 0) <= 0);
@@ -95,6 +111,45 @@ function Main() {
     useEffect(() => {
         gameOverRef.current = gameOver;
     }, [gameOver]);
+
+    useEffect(() => {
+        if (!selectedAbility) {
+            setPendingRelocateTarget(null);
+        }
+    }, [selectedAbility]);
+
+    useEffect(() => {
+        movementUsedRef.current = movementUsed;
+    }, [movementUsed]);
+
+    useEffect(() => {
+        currentPlayerCharacterRef.current = currentPlayerCharacter;
+    }, [currentPlayerCharacter]);
+
+    useEffect(() => {
+        actionUsedRef.current = actionUsed;
+    }, [actionUsed]);
+
+    useEffect(() => {
+        currentTurnRef.current = currentTurn;
+    }, [currentTurn]);
+
+    useEffect(() => {
+        currentTurnCycleRef.current += 1;
+    }, [currentTurn?.type, currentTurn?.id]);
+
+    const getMovementRemainingForAutoEnd = () => {
+        const playerCharacter = currentPlayerCharacterRef.current;
+        if (!playerCharacter) return 0;
+
+        const totalSpeed = calculateTotalStat(playerCharacter, playerName, 'speed', activeEffectsRef.current || []);
+        const maxMovement = Math.floor(totalSpeed / 10);
+        return Math.max(0, maxMovement - (movementUsedRef.current || 0));
+    };
+
+    const shouldAutoEndTurn = () => {
+        return actionUsedRef.current === true && getMovementRemainingForAutoEnd() <= 0;
+    };
 
     const appendAiLog = (entry) => {
         const logEntry = {
@@ -158,16 +213,77 @@ function Main() {
 
     useEffect(() => {
         if (playerCharacters[playerName]) {
-            setCurrentPlayerCharacter(playerCharacters[playerName]);
+            const nextCharacter = playerCharacters[playerName];
+            console.log('[ABILITY DEBUG] Hydrating current player character:', {
+                playerName,
+                hasCharacter: !!nextCharacter,
+                abilitiesType: Array.isArray(nextCharacter?.abilities) ? 'array' : typeof nextCharacter?.abilities,
+                abilitiesLength: Array.isArray(nextCharacter?.abilities) ? nextCharacter.abilities.length : null,
+                abilitiesPreview: Array.isArray(nextCharacter?.abilities)
+                    ? nextCharacter.abilities.map(ability => (typeof ability === 'string' ? ability : ability?.id || ability?.name || 'invalid'))
+                    : nextCharacter?.abilities,
+                ultimateType: typeof nextCharacter?.ultimate,
+                ultimatePreview: typeof nextCharacter?.ultimate === 'string'
+                    ? nextCharacter.ultimate
+                    : nextCharacter?.ultimate?.id || nextCharacter?.ultimate?.name || null
+            });
+            setCurrentPlayerCharacter(nextCharacter);
         }
     }, [playerCharacters, playerName]);
 
     useEffect(() => {
-        if (aiLog.length > 0) {
-            const latestEntry = aiLog[aiLog.length - 1];
-            setAiText(latestEntry.text);
+        const message = (aiText || '').trim();
+        if (!message) {
+            setAiSentences([]);
+            setCurrentSentenceIndex(0);
+            setDisplayText('');
+            setTypingIndex(0);
+            return;
         }
-    }, [aiLog]);
+
+        const segments = message
+            .split(/(?<=[.!?])\s+|\n+/)
+            .map(segment => segment.trim())
+            .filter(Boolean);
+
+        setAiSentences(segments.length > 0 ? segments : [message]);
+        setCurrentSentenceIndex(0);
+        setDisplayText('');
+        setTypingIndex(0);
+    }, [aiText]);
+
+    useEffect(() => {
+        const currentSentence = aiSentences[currentSentenceIndex] || '';
+        if (!currentSentence || typingIndex >= currentSentence.length) {
+            return;
+        }
+
+        const interval = setInterval(() => {
+            setDisplayText((prevText) => prevText + currentSentence.charAt(typingIndex));
+            setTypingIndex((prevIndex) => prevIndex + 1);
+        }, 20);
+
+        return () => clearInterval(interval);
+    }, [aiSentences, currentSentenceIndex, typingIndex]);
+
+    useEffect(() => {
+        const currentSentence = aiSentences[currentSentenceIndex] || '';
+        if (!currentSentence || typingIndex < currentSentence.length) {
+            return;
+        }
+
+        if (currentSentenceIndex >= aiSentences.length - 1) {
+            return;
+        }
+
+        const timer = setTimeout(() => {
+            setCurrentSentenceIndex((prevIndex) => prevIndex + 1);
+            setDisplayText('');
+            setTypingIndex(0);
+        }, currentSentence.length * 12);
+
+        return () => clearTimeout(timer);
+    }, [aiSentences, currentSentenceIndex, typingIndex]);
 
     useEffect(() => {
         if (!isAdmin || !room || hasRequestedIntroRef.current) return;
@@ -191,6 +307,7 @@ function Main() {
         const handleAiMessage = ({ eventType, response }) => {
             setAiBusy(false);
             appendAiLog({ role: 'ai', text: response, eventType });
+            setAiText(response || '');
 
             if (eventType === 'game_start') {
                 setPendingFactionChoice(true);
@@ -270,6 +387,50 @@ function Main() {
         }
     }, [isMyTurn, playerName]);
 
+    useEffect(() => {
+        if (turnTimerIntervalRef.current) {
+            clearInterval(turnTimerIntervalRef.current);
+            turnTimerIntervalRef.current = null;
+        }
+
+        if (!isMyTurn) {
+            turnTimerAutoEndedRef.current = false;
+            setTurnTimeLeft(null);
+            return;
+        }
+
+        turnTimerAutoEndedRef.current = false;
+        setTurnTimeLeft(30);
+
+        turnTimerIntervalRef.current = setInterval(() => {
+            setTurnTimeLeft(prev => {
+                if (prev === null) return null;
+                return Math.max(0, prev - 1);
+            });
+        }, 1000);
+
+        return () => {
+            if (turnTimerIntervalRef.current) {
+                clearInterval(turnTimerIntervalRef.current);
+                turnTimerIntervalRef.current = null;
+            }
+        };
+    }, [isMyTurn, currentTurn?.id]);
+
+    useEffect(() => {
+        if (!isMyTurn || turnTimeLeft !== 0 || turnTimerAutoEndedRef.current) {
+            return;
+        }
+
+        if (!shouldAutoEndTurn()) {
+            return;
+        }
+
+        turnTimerAutoEndedRef.current = true;
+        console.log('[AUTO END TURN TIMER] Timer reached 0, ending turn');
+        handleEndTurn();
+    }, [isMyTurn, turnTimeLeft]);
+
     // Check if current player is alive
     const isPlayerAlive = currentPlayerCharacter && currentPlayerCharacter.stats.health > 0;
 
@@ -278,6 +439,67 @@ function Main() {
         effect.target === playerName &&
         effect.turnsRemaining > 0
     );
+
+    const getPlayerIdByCharacterName = (characterName) => {
+        if (!characterName || !playerCharacters) return null;
+
+        const matchingPlayerIds = Object.keys(playerCharacters).filter(
+            id => playerCharacters[id]?.name === characterName
+        );
+
+        if (matchingPlayerIds.length === 1) {
+            return matchingPlayerIds[0];
+        }
+
+        return null;
+    };
+
+    const getCanonicalUnitId = (unitId) => {
+        if (!unitId) return null;
+        if (playerCharacters?.[unitId]) return unitId;
+
+        const matchingPlayerId = getPlayerIdByCharacterName(unitId);
+        return matchingPlayerId || unitId;
+    };
+
+    const getCurrentPlayerPosition = () => {
+        const byPlayerId = characterPositions[playerName];
+        if (byPlayerId) return byPlayerId;
+
+        const byCharacterName = currentPlayerCharacter?.name
+            ? characterPositions[currentPlayerCharacter.name]
+            : null;
+
+        return byCharacterName || null;
+    };
+
+    const resolveUnitIdFromCell = (rawId, row, col) => {
+        if (!rawId) return rawId;
+
+        if (playerCharacters?.[rawId]) return rawId;
+        if (enemies?.some(enemy => enemy.id === rawId)) return rawId;
+
+        const playerAtCell = players.find(playerId => {
+            const pos = characterPositions[playerId];
+            return pos?.row === row && pos?.col === col;
+        });
+
+        if (playerAtCell) return playerAtCell;
+
+        const byCharacterName = getPlayerIdByCharacterName(rawId);
+        if (byCharacterName) return byCharacterName;
+
+        return rawId;
+    };
+
+    const getResolvedUnitsAtCell = (row, col) => {
+        const rawUnits = Object.entries(characterPositions)
+            .filter(([, pos]) => pos.row === row && pos.col === col)
+            .map(([id]) => id);
+
+        const resolved = rawUnits.map(id => resolveUnitIdFromCell(id, row, col));
+        return [...new Set(resolved)];
+    };
 
     const getEnemySpawnDepth = (enemy) => {
         const behavior = enemy.behavior || 'aggressive';
@@ -384,7 +606,7 @@ function Main() {
     const createEnemyInstance = (enemyTemplate, instanceNumber, partySize) => {
         const resistanceMultiplier = partySize / 3;
 
-        return {
+        const enemyInstance = {
             ...enemyTemplate,
             stats: {
                 ...enemyTemplate.stats,
@@ -393,6 +615,22 @@ function Main() {
             weapon: { ...enemyTemplate.weapon },
             id: `${enemyTemplate.id}_${instanceNumber + 1}`
         };
+
+        // Assign abilities based on enemy level and behavior
+        enemyInstance.abilities = assignEnemyAbilities(enemyInstance);
+        
+        // Initialize cooldowns for enemy abilities
+        enemyInstance.cooldowns = {};
+        if (enemyInstance.abilities && Array.isArray(enemyInstance.abilities)) {
+            enemyInstance.abilities.forEach(ability => {
+                enemyInstance.cooldowns[ability.id] = 0;
+            });
+        }
+        
+        console.log(`[ENEMY CREATION] ${enemyInstance.name} created with abilities:`, enemyInstance.abilities);
+        console.log(`[ENEMY CREATION] Initialized cooldowns:`, enemyInstance.cooldowns);
+
+        return enemyInstance;
     };
 
     const selectEnemiesByTier = (tier, count, partySize) => {
@@ -522,9 +760,70 @@ function Main() {
         return path;
     };
 
+    const findShortestWalkablePath = (start, end, allPositions, movingCharacterId) => {
+        const ROWS = 7;
+        const COLS = 10;
+
+        if (!start || !end) return null;
+        if (start.row === end.row && start.col === end.col) return [];
+
+        const occupied = new Set(
+            Object.entries(allPositions)
+                .filter(([id]) => id !== movingCharacterId)
+                .map(([, pos]) => `${pos.row},${pos.col}`)
+        );
+
+        const barrierCells = new Set(
+            (activeEffects || [])
+                .filter(effect => effect.type === 'blue_barrier' && effect.turnsRemaining > 0 && effect.cell)
+                .map(effect => `${effect.cell.row},${effect.cell.col}`)
+        );
+
+        const endKey = `${end.row},${end.col}`;
+        if (occupied.has(endKey) || barrierCells.has(endKey)) return null;
+
+        const startKey = `${start.row},${start.col}`;
+        const queue = [{ row: start.row, col: start.col, path: [] }];
+        const visited = new Set([startKey]);
+        const directions = [
+            { row: 1, col: 0 },
+            { row: -1, col: 0 },
+            { row: 0, col: 1 },
+            { row: 0, col: -1 }
+        ];
+
+        while (queue.length > 0) {
+            const current = queue.shift();
+
+            for (const direction of directions) {
+                const nextRow = current.row + direction.row;
+                const nextCol = current.col + direction.col;
+
+                if (nextRow < 0 || nextRow >= ROWS || nextCol < 0 || nextCol >= COLS) continue;
+
+                const nextKey = `${nextRow},${nextCol}`;
+                if (visited.has(nextKey) || occupied.has(nextKey) || barrierCells.has(nextKey)) continue;
+
+                const nextPath = [...current.path, { row: nextRow, col: nextCol }];
+                if (nextRow === end.row && nextCol === end.col) {
+                    return nextPath;
+                }
+
+                visited.add(nextKey);
+                queue.push({ row: nextRow, col: nextCol, path: nextPath });
+            }
+        }
+
+        return null;
+    };
+
     // Listen for enemy turn execution
     useEffect(() => {
         const handleExecuteEnemyTurn = ({ enemyId, allies, alliedEnemies }) => {
+            const latestEnemies = enemiesRef.current;
+            const latestPlayerCharacters = playerCharactersRef.current;
+            const latestActiveEffects = activeEffectsRef.current;
+
             // Check if game is over - don't execute enemy turns
             if (gameOverRef.current) {
                 console.log('[ENEMY TURN] Game is over, skipping enemy turn');
@@ -545,10 +844,10 @@ function Main() {
             console.log('[ENEMY TURN] This player will handle the enemy turn');
             console.log('Allied Enemies:', alliedEnemies);
             
-            const enemy = enemies.find(e => e.id === enemyId && !isEnemyDeadBody(e));
+            const enemy = latestEnemies.find(e => e.id === enemyId && !isEnemyDeadBody(e));
             if (!enemy) {
                 console.error('Enemy not found:', enemyId);
-                console.log('Available enemies:', enemies.map(e => e.id));
+                console.log('Available enemies:', latestEnemies.map(e => e.id));
                 return;
             }
 
@@ -558,19 +857,135 @@ function Main() {
                 enemy,
                 allies,
                 alliedEnemies,
-                playerCharacters,
+                latestPlayerCharacters,
                 characterPositions,
-                activeEffects
+                latestActiveEffects
             );
 
             console.log('Turn Action:', turnAction);
 
-            // Calculate movement path and total animation time
+            // Handle enemy ability usage - execute the ability if one is selected
+            if (turnAction.abilityToUse && !turnAction.immobilized) {
+                console.log(`[ENEMY ABILITY] ${enemy.name} using ability: ${turnAction.abilityToUse.name}`);
+
+                const enemyAbilityTargets = Object.entries(latestPlayerCharacters).map(([id, character]) => ({
+                    ...character,
+                    id
+                }));
+                const enemyAbilityDef = getAbility(turnAction.abilityToUse.id);
+                const enemyTargetPosition = turnAction.target ? characterPositions[turnAction.target] : null;
+
+                const enemyAbilityParams = {
+                    caster: enemy,
+                    playerName: enemy.id,
+                    target: turnAction.target,
+                    enemies: enemyAbilityTargets,
+                    playerCharacters: latestPlayerCharacters,
+                    characterPositions,
+                    cooldowns: enemy.cooldowns
+                };
+
+                if (enemyAbilityDef?.targetType === 'ground-target') {
+                    enemyAbilityParams.targetPosition = enemyTargetPosition;
+                }
+
+                if (enemyAbilityDef?.targetType === 'multi-enemy' && turnAction.target) {
+                    enemyAbilityParams.targets = [turnAction.target];
+                }
+                
+                let abilityResult;
+                if (enemyAbilityDef?.targetType === 'ground-target' && !enemyTargetPosition) {
+                    console.warn(`[ENEMY ABILITY] ${enemy.name} cannot use ${turnAction.abilityToUse.name}: missing targetPosition for target ${turnAction.target}`);
+                    abilityResult = { success: false, message: 'Missing target position for ground-target ability' };
+                } else {
+                    abilityResult = executeAbility(turnAction.abilityToUse.id, enemyAbilityParams);
+                }
+                
+                if (abilityResult.success) {
+                    console.log(`[ENEMY ABILITY] ${enemy.name} successfully used ${turnAction.abilityToUse.name}! Effects:`, abilityResult.effects);
+                    console.log(`[ENEMY ABILITY] New cooldown for ${turnAction.abilityToUse.name}: ${abilityResult.newCooldown}`);
+                    console.log(`[ENEMY ABILITY] Message from ability result: ${abilityResult.message || '(no message returned)'}`);
+                    
+                    // Apply ability effects
+                    const updates = applyAbilityEffects(abilityResult, {
+                        enemies: latestEnemies,
+                        playerCharacters: latestPlayerCharacters,
+                        activeEffects: latestActiveEffects,
+                        effectOwnerTurnId: enemy.id
+                    });
+                    
+                    // Handle special effects for enemy abilities (cooldown_increase, etc)
+                    let finalUpdatedEnemies = updates.enemies;
+                    if (abilityResult.effects) {
+                        abilityResult.effects.forEach(effect => {
+                            if (effect.type === 'cooldown_increase') {
+                                // Increase cooldowns for target enemy
+                                console.log(`[ENEMY ABILITY] Effect: cooldown_increase for ${effect.target} by ${effect.value}`);
+                                finalUpdatedEnemies = finalUpdatedEnemies.map(e => {
+                                    if (e.id === effect.target && e.cooldowns) {
+                                        const newCooldowns = { ...e.cooldowns };
+                                        Object.keys(newCooldowns).forEach(abilityId => {
+                                            if (newCooldowns[abilityId] >= 0) {
+                                                newCooldowns[abilityId] += effect.value;
+                                                console.log(`  - ${e.name} ${abilityId}: increased by ${effect.value} to ${newCooldowns[abilityId]}`);
+                                            }
+                                        });
+                                        return { ...e, cooldowns: newCooldowns };
+                                    }
+                                    return e;
+                                });
+                            }
+                        });
+                    }
+                    
+                    // Set cooldown for the ability using the value returned from executeAbility
+                    const updatedEnemies2 = finalUpdatedEnemies.map(e => {
+                        if (e.id === enemy.id) {
+                            const newCooldowns = { ...e.cooldowns };
+                            newCooldowns[turnAction.abilityToUse.id] = abilityResult.newCooldown;
+                            console.log(`[ENEMY ABILITY] Set ${enemy.name}'s ${turnAction.abilityToUse.name} cooldown to ${abilityResult.newCooldown}`);
+                            return {
+                                ...e,
+                                cooldowns: newCooldowns
+                            };
+                        }
+                        return e;
+                    });
+                    
+                    // Update state
+                    setActiveEffects(updates.activeEffects);
+                    setPlayerCharacters(updates.playerCharacters);
+                    setEnemies(normalizeEnemiesState(updatedEnemies2));
+                    
+                    // Emit ability usage to server
+                    socket.emit('ability_used', {
+                        room,
+                        actor: enemy.name,
+                        ability: turnAction.abilityToUse.name,
+                        target: turnAction.target,
+                        effects: abilityResult.effects
+                    });
+                    
+                    emitAiEvent(
+                        'turn_action',
+                        abilityResult.message || `${enemy.name} uses ${turnAction.abilityToUse.name}!`,
+                        {
+                            actor: enemy.name,
+                            actionType: 'enemy_ability',
+                            ability: turnAction.abilityToUse.name,
+                            target: turnAction.target
+                        }
+                    );
+                } else {
+                    console.log(`[ENEMY ABILITY] ${enemy.name} failed to use ${turnAction.abilityToUse.name}:`, abilityResult.message);
+                }
+            }
+
             let movementDelay = 0;
             if (turnAction.movement) {
                 const startPos = characterPositions[enemyId];
                 const endPos = { row: turnAction.movement.row, col: turnAction.movement.col };
-                const path = calculatePath(startPos, endPos);
+                const path = findShortestWalkablePath(startPos, endPos, characterPositions, enemyId) || calculatePath(startPos, endPos);
                 const stepDelay = 10000 / enemy.stats.speed;
                 movementDelay = path.length * stepDelay;
                 
@@ -594,91 +1009,132 @@ function Main() {
             }
 
             // Apply damage after movement delay
-            if (turnAction.target && turnAction.useWeapon) {
+            if (turnAction.target && !turnAction.abilityToUse) {
                 setTimeout(() => {
                     const target = playerCharacters[turnAction.target];
                 if (target) {
+                    const hasImmunity = hasDamageImmunity(activeEffects, turnAction.target);
+                    const hasReflection = hasDamageReflection(activeEffects, turnAction.target);
                     let damageAmount = Math.max(1, (enemy.stats.strength / 10) * enemy.weapon.damage - (target.stats.resistance / 10));
-                    console.log(`${enemy.name} attacks ${turnAction.target} for ${damageAmount.toFixed(1)} damage!`);
+                    damageAmount = applyDamageKeywords(damageAmount, activeEffects, turnAction.target, { minimumDamage: 0 });
+                    console.log(`[WEAPON ATTACK] ${enemy.name} attacks ${turnAction.target} for ${damageAmount.toFixed(1)} damage!`);
+                    if (hasImmunity) {
+                        console.log('[DAMAGE KEYWORD] damage_immunity negated incoming damage for', turnAction.target);
+                    }
 
-                    emitAiEvent(
-                        'turn_action',
-                        `${enemy.name} closes in and attacks ${turnAction.target} for ${damageAmount.toFixed(1)} damage.`,
-                        {
-                            actor: enemy.name,
-                            target: turnAction.target,
-                            damage: Number(damageAmount.toFixed(1)),
-                            actionType: 'enemy_attack'
-                        }
-                    );
-                    
-                    // Check for health buffs (bonus health) - consume them first
-                    const healthBuffs = activeEffects.filter(e => 
-                        e.target === turnAction.target && 
-                        e.stat === 'health' && 
-                        e.type === 'stat_buff' && 
-                        e.turnsRemaining > 0
-                    );
-                    
-                    let remainingDamage = damageAmount;
-                    const updatedEffects = [...activeEffects];
-                    
-                    // Consume health buffs first
-                    healthBuffs.forEach(buff => {
-                        if (remainingDamage > 0) {
-                            const buffIndex = updatedEffects.findIndex(e => 
-                                e.target === buff.target && 
-                                e.stat === buff.stat && 
-                                e.type === buff.type &&
-                                e.turnsRemaining === buff.turnsRemaining
-                            );
-                            if (buffIndex !== -1) {
-                                if (buff.value <= remainingDamage) {
-                                    // Buff completely consumed
-                                    remainingDamage -= buff.value;
-                                    updatedEffects.splice(buffIndex, 1);
-                                } else {
-                                    // Buff partially consumed
-                                    updatedEffects[buffIndex] = { ...buff, value: buff.value - remainingDamage };
-                                    remainingDamage = 0;
-                                }
-                            }
-                        }
-                    });
-                    
-                    // Remove health buffs that have been completely consumed (value <= 0)
-                    const filteredEffects = updatedEffects.filter(effect => {
-                        if (effect.stat === 'health' && effect.type === 'stat_buff') {
-                            return effect.value > 0;
-                        }
-                        return true;
-                    });
-                    
-                    setActiveEffects(filteredEffects);
-                    
-                    // Apply remaining damage to base health
-                    const newHealth = target.stats.health - remainingDamage;
-                    const updatedPlayerCharacters = {
-                        ...playerCharacters,
-                        [turnAction.target]: {
-                            ...target,
-                            stats: { ...target.stats, health: Math.max(0, newHealth) }
-                        }
-                    };
-                    setPlayerCharacters(updatedPlayerCharacters);
-                    
-                    // Remove dead player from turn order and handle death
-                    if (newHealth <= 0) {
-                        console.log(`Player ${turnAction.target} has died! Removing from turn order.`);
-                        setTurnOrder(prevOrder => prevOrder.filter(turn => turn.id !== turnAction.target));
+                    // Handle damage reflection
+                    if (hasReflection && damageAmount > 0) {
+                        console.log(`[DAMAGE REFLECTION] ${turnAction.target} reflects ${damageAmount.toFixed(1)} damage back to ${enemy.name}!`);
                         
-                        // Check if all players are dead
-                        const remainingPlayers = players.filter(p => p !== turnAction.target);
-                        const allPlayersDeadCheck = remainingPlayers.every(p => 
-                            updatedPlayerCharacters[p]?.stats.health <= 0
+                        emitAiEvent(
+                            'turn_action',
+                            `${enemy.name} attacks ${turnAction.target}, but the damage is reflected back! ${enemy.name} takes ${damageAmount.toFixed(1)} damage.`,
+                            {
+                                actor: enemy.name,
+                                target: turnAction.target,
+                                damage: Number(damageAmount.toFixed(1)),
+                                actionType: 'enemy_attack_reflected'
+                            }
+                        );
+
+                        // Apply reflected damage to the attacking enemy
+                        const enemyIndex = enemies.findIndex(e => e.id === enemy.id);
+                        if (enemyIndex !== -1) {
+                            const newEnemyHealth = enemies[enemyIndex].stats.health - damageAmount;
+                            const updatedEnemies = normalizeEnemiesState(
+                                enemies.map((e, idx) => 
+                                    idx === enemyIndex ? { ...e, stats: { ...e.stats, health: Math.max(0, newEnemyHealth) } } : e
+                                )
+                            );
+                            setEnemies(updatedEnemies);
+
+                            // Remove dead enemy from turn order
+                            if (newEnemyHealth <= 0) {
+                                setTurnOrder(prevOrder => prevOrder.filter(turn => turn.id !== enemy.id));
+                            }
+
+                            socket.emit('enemy_damaged', { room, enemyId: enemy.id, damage: damageAmount, newHealth: Math.max(0, newEnemyHealth) });
+                        }
+                    } else {
+                        // Normal damage application to player
+                        emitAiEvent(
+                            'turn_action',
+                            `${enemy.name} closes in and attacks ${turnAction.target} for ${damageAmount.toFixed(1)} damage.`,
+                            {
+                                actor: enemy.name,
+                                target: turnAction.target,
+                                damage: Number(damageAmount.toFixed(1)),
+                                actionType: 'enemy_attack'
+                            }
                         );
                         
-                        if (allPlayersDeadCheck) {
+                        // Check for health buffs (bonus health) - consume them first
+                        const healthBuffs = activeEffects.filter(e => 
+                            e.target === turnAction.target && 
+                            e.stat === 'health' && 
+                            e.type === 'stat_buff' && 
+                            e.turnsRemaining > 0
+                        );
+                        
+                        let remainingDamage = damageAmount;
+                        const updatedEffects = [...activeEffects];
+                        
+                        // Consume health buffs first
+                        healthBuffs.forEach(buff => {
+                            if (remainingDamage > 0) {
+                                const buffIndex = updatedEffects.findIndex(e => 
+                                    e.target === buff.target && 
+                                    e.stat === buff.stat && 
+                                    e.type === buff.type &&
+                                    e.turnsRemaining === buff.turnsRemaining
+                                );
+                                if (buffIndex !== -1) {
+                                    if (buff.value <= remainingDamage) {
+                                        // Buff completely consumed
+                                        remainingDamage -= buff.value;
+                                        updatedEffects.splice(buffIndex, 1);
+                                    } else {
+                                        // Buff partially consumed
+                                        updatedEffects[buffIndex] = { ...buff, value: buff.value - remainingDamage };
+                                        remainingDamage = 0;
+                                    }
+                                }
+                            }
+                        });
+                        
+                        // Remove health buffs that have been completely consumed (value <= 0)
+                        const filteredEffects = updatedEffects.filter(effect => {
+                            if (effect.stat === 'health' && effect.type === 'stat_buff') {
+                                return effect.value > 0;
+                            }
+                            return true;
+                        });
+                        
+                        setActiveEffects(filteredEffects);
+                        
+                        // Apply remaining damage to base health
+                        const newHealth = target.stats.health - remainingDamage;
+                        const updatedPlayerCharacters = {
+                            ...playerCharacters,
+                            [turnAction.target]: {
+                                ...target,
+                                stats: { ...target.stats, health: Math.max(0, newHealth) }
+                            }
+                        };
+                        setPlayerCharacters(updatedPlayerCharacters);
+                        
+                        // Remove dead player from turn order and handle death
+                        if (newHealth <= 0) {
+                            console.log(`Player ${turnAction.target} has died! Removing from turn order.`);
+                            setTurnOrder(prevOrder => prevOrder.filter(turn => turn.id !== turnAction.target));
+                            
+                            // Check if all players are dead
+                            const remainingPlayers = players.filter(p => p !== turnAction.target);
+                            const allPlayersDeadCheck = remainingPlayers.every(p => 
+                                updatedPlayerCharacters[p]?.stats.health <= 0
+                            );
+                            
+                            if (allPlayersDeadCheck) {
                             console.log('All players defeated! Game Over.');
                             setGameOver(true);
                         } else {
@@ -703,6 +1159,7 @@ function Main() {
                     });
                     
                     console.log(`${turnAction.target} health: ${target.stats.health} → ${Math.max(0, newHealth)} (${damageAmount - remainingDamage} absorbed by bonus health)`);
+                    }
 
                     }
                 }, movementDelay); // Apply attack after movement completes
@@ -710,9 +1167,64 @@ function Main() {
 
             // Delay before completing turn (movement + attack + visual feedback)
             const totalDelay = movementDelay + (turnAction.target ? 500 : 0) + 1000;
+            const turnCycleAtSchedule = currentTurnCycleRef.current;
+            const completionKey = `${enemyId}:${turnCycleAtSchedule}`;
             setTimeout(() => {
+                const liveTurn = currentTurnRef.current;
+                if (!liveTurn || liveTurn.type !== 'enemy' || liveTurn.id !== enemyId) {
+                    console.log('[ENEMY TURN] Skipping stale completion callback:', {
+                        enemyId,
+                        liveTurn
+                    });
+                    return;
+                }
+
+                if (completedEnemyTurnCyclesRef.current.has(completionKey)) {
+                    console.log('[ENEMY TURN] Skipping duplicate completion for turn cycle:', {
+                        enemyId,
+                        turnCycleAtSchedule,
+                        completionKey
+                    });
+                    return;
+                }
+
+                completedEnemyTurnCyclesRef.current.add(completionKey);
+
                 console.log('[ENEMY TURN] Completing turn for', enemyId);
-                socket.emit('enemy_turn_complete', { room });
+                
+                // Tick down cooldowns for ALL enemies
+                console.log('[ENEMY COOLDOWNS] Ticking down cooldowns for all enemies');
+                const updatedEnemies = enemies.map(e => {
+                    const newCooldowns = { ...e.cooldowns };
+                    Object.keys(newCooldowns).forEach(abilityId => {
+                        if (newCooldowns[abilityId] > 0) {
+                            newCooldowns[abilityId]--;
+                            console.log(`[ENEMY COOLDOWNS]   - ${e.name} ${abilityId}: ${newCooldowns[abilityId]}`);
+                        }
+                    });
+                    return {
+                        ...e,
+                        cooldowns: newCooldowns
+                    };
+                });
+
+                const tickResult = tickActiveEffects(
+                    activeEffectsRef.current,
+                    playerCharactersRef.current,
+                    updatedEnemies,
+                    enemyId
+                );
+                
+                setActiveEffects(tickResult.updatedEffects);
+                setPlayerCharacters(tickResult.updatedCharacters);
+                setEnemies(normalizeEnemiesState(tickResult.updatedEnemies));
+                socket.emit('enemy_turn_complete', {
+                    room,
+                    enemyId,
+                    updatedEnemies: tickResult.updatedEnemies,
+                    updatedPlayerCharacters: tickResult.updatedCharacters,
+                    updatedActiveEffects: tickResult.updatedEffects
+                });
             }, totalDelay);
         };
 
@@ -732,12 +1244,38 @@ function Main() {
                 const normalizedUpdates = Object.fromEntries(
                     Object.entries(updatedCharacters).map(([name, character]) => {
                         const prevCharacter = prevChars[name] || {};
+                        const incomingAbilities = character?.abilities;
+                        const previousAbilities = prevCharacter?.abilities;
+                        const shouldPreservePreviousAbilities =
+                            Array.isArray(incomingAbilities) &&
+                            incomingAbilities.length === 0 &&
+                            Array.isArray(previousAbilities) &&
+                            previousAbilities.length > 0;
+
+                        const incomingUltimate = character?.ultimate;
+                        const hasValidIncomingUltimate =
+                            (typeof incomingUltimate === 'string' && incomingUltimate.trim().length > 0) ||
+                            (incomingUltimate && typeof incomingUltimate === 'object' && !!incomingUltimate.id);
+
                         const mergedCharacter = {
                             ...prevCharacter,
                             ...character,
-                            abilities: character?.abilities ?? prevCharacter?.abilities,
-                            ultimate: character?.ultimate ?? prevCharacter?.ultimate
+                            abilities: shouldPreservePreviousAbilities
+                                ? previousAbilities
+                                : (Array.isArray(incomingAbilities) ? incomingAbilities : previousAbilities),
+                            ultimate: hasValidIncomingUltimate ? incomingUltimate : prevCharacter?.ultimate
                         };
+                        console.log('[ABILITY DEBUG] Merged character result:', {
+                            player: name,
+                            mergedAbilitiesType: Array.isArray(mergedCharacter?.abilities) ? 'array' : typeof mergedCharacter?.abilities,
+                            mergedAbilitiesLength: Array.isArray(mergedCharacter?.abilities) ? mergedCharacter.abilities.length : null,
+                            mergedAbilitiesPreview: Array.isArray(mergedCharacter?.abilities)
+                                ? mergedCharacter.abilities.map(ability => (typeof ability === 'string' ? ability : ability?.id || ability?.name || 'invalid'))
+                                : mergedCharacter?.abilities,
+                            mergedUltimatePreview: typeof mergedCharacter?.ultimate === 'string'
+                                ? mergedCharacter.ultimate
+                                : mergedCharacter?.ultimate?.id || mergedCharacter?.ultimate?.name || null
+                        });
                         return [name, enrichCharacterAbilities(mergedCharacter)];
                     })
                 );
@@ -756,6 +1294,36 @@ function Main() {
 
         const handleEnemyMoved = ({ enemyId, path, stepDelay }) => {
             if (!path || path.length === 0) return;
+
+            setActiveEffects(prevEffects => prevEffects.filter(effect => {
+                if (effect.type === 'gtg_target_marker' && effect.target === enemyId) {
+                    return false;
+                }
+
+                if (effect.type === 'gtg_origin_marker' && (effect.target === enemyId || !effect.target)) {
+                    return false;
+                }
+
+                return true;
+            }));
+
+            const startingPosition = characterPositions[enemyId] || null;
+            const finalPosition = path[path.length - 1] || null;
+
+            console.log('[TELEPORT DEBUG] Enemy movement received:', {
+                enemyId,
+                from: startingPosition,
+                to: finalPosition,
+                path,
+                stepDelay
+            });
+
+            console.log('[BLACK HOLE TELEPORT] Before enemy_moved apply:', {
+                enemyId,
+                from: startingPosition,
+                path,
+                to: finalPosition
+            });
             
             // Animate through each step in the path
             path.forEach((position, index) => {
@@ -766,14 +1334,69 @@ function Main() {
                     }));
                 }, stepDelay * index);
             });
+            
+            // After movement animation completes, check blizzard field effects
+            setTimeout(() => {
+                const { updatedEffects, updatedEnemies } = updateBlizzardFieldEffects(
+                    activeEffects,
+                    enemies,
+                    characterPositions
+                );
+                
+                if (updatedEffects.length !== activeEffects.length || 
+                    updatedEnemies.some((e, i) => e.stats.speed !== enemies[i]?.stats.speed)) {
+                    setActiveEffects(updatedEffects);
+                    setEnemies(normalizeEnemiesState(updatedEnemies));
+                    socket.emit('active_effects_updated', { room, effects: updatedEffects });
+                    socket.emit('enemies_updated', { room, enemies: updatedEnemies });
+                }
+
+                console.log('[BLACK HOLE TELEPORT] After enemy_moved apply:', {
+                    enemyId,
+                    from: startingPosition,
+                    to: finalPosition
+                });
+            }, stepDelay * path.length + 50); // Small delay after final position update
         };
 
         const handlePlayerMoved = ({ playerName: movedPlayer, position }) => {
-            console.log('[PLAYER MOVED] Received:', movedPlayer, 'to', position);
-            setCharacterPositions(prev => ({
-                ...prev,
-                [movedPlayer]: position
+            const canonicalPlayerId = getCanonicalUnitId(movedPlayer);
+            const beforePosition =
+                characterPositions[canonicalPlayerId] ||
+                (movedPlayer !== canonicalPlayerId ? characterPositions[movedPlayer] : null) ||
+                null;
+            console.log('[PLAYER MOVED] Received:', movedPlayer, 'canonical:', canonicalPlayerId, 'to', position);
+            console.log('[TELEPORT DEBUG] Player movement received:', {
+                incomingId: movedPlayer,
+                canonicalId: canonicalPlayerId,
+                from: beforePosition,
+                to: position
+            });
+
+            setActiveEffects(prevEffects => prevEffects.filter(effect => {
+                if (effect.type === 'gtg_target_marker' && (effect.target === movedPlayer || effect.target === canonicalPlayerId)) {
+                    return false;
+                }
+
+                if (effect.type === 'gtg_origin_marker' && (effect.target === movedPlayer || effect.target === canonicalPlayerId || !effect.target)) {
+                    return false;
+                }
+
+                return true;
             }));
+
+            setCharacterPositions(prev => {
+                const updated = {
+                    ...prev,
+                    [canonicalPlayerId]: position
+                };
+
+                if (movedPlayer !== canonicalPlayerId && updated[movedPlayer]) {
+                    delete updated[movedPlayer];
+                }
+
+                return updated;
+            });
         };
 
         const handleCooldownReduced = ({ targetPlayer, value }) => {
@@ -857,7 +1480,7 @@ function Main() {
             socket.off("cooldown_reduced", handleCooldownReduced);
             socket.off("cooldowns_reset", handleCooldownsReset);
         };
-    }, [socket, enemies, playerCharacters, setPlayerCharacters, characterPositions, room, turnOrder, setTurnOrder]);
+    }, [socket, enemies, playerCharacters, setPlayerCharacters, characterPositions, room, turnOrder, setTurnOrder, playerName, activeEffects, setEnemies, isAdmin, setGameOver]);
 
     const handleGridClick = (row, col) => {
         console.log('[GRID CLICK]', { row, col, isMyTurn, playerName, hasCharacter: !!currentPlayerCharacter });
@@ -867,9 +1490,72 @@ function Main() {
             return;
         }
         
+        const characterOnCell = Object.entries(characterPositions).find(
+            ([, pos]) => pos.row === row && pos.col === col
+        );
+
         // Handle ground-target abilities
         if (selectedAbility) {
             const abilityData = getAbility(selectedAbility);
+
+            if (abilityData?.targetType === 'relocate') {
+                if (!pendingRelocateTarget) {
+                    const resolvedUnitsOnCell = getResolvedUnitsAtCell(row, col);
+
+                    if (resolvedUnitsOnCell.length === 0) {
+                        console.log('[RELOCATE] Select an ally or enemy first');
+                        return;
+                    }
+
+                    const validTargets = resolvedUnitsOnCell.filter(id => {
+                        const isAllyTarget = !!playerCharacters[id];
+                        const isEnemyTarget = enemies.some(e => e.id === id && !isEnemyDeadBody(e));
+                        return isAllyTarget || isEnemyTarget;
+                    });
+
+                    if (validTargets.length === 0) {
+                        console.log('[RELOCATE] Invalid target selected');
+                        return;
+                    }
+
+                    const targetId = validTargets.find(id => id !== playerName) || validTargets[0];
+                    const allyTarget = !!playerCharacters[targetId];
+                    const enemyTarget = enemies.find(e => e.id === targetId && !isEnemyDeadBody(e));
+
+                    if (!allyTarget && !enemyTarget) {
+                        console.log('[RELOCATE] Invalid target selected');
+                        return;
+                    }
+
+                    const currentPos = getCurrentPlayerPosition();
+                    const targetPos = characterPositions[targetId];
+                    if (currentPos && targetPos && abilityData.range) {
+                        const distance = Math.abs(currentPos.row - targetPos.row) + Math.abs(currentPos.col - targetPos.col);
+                        if (distance > abilityData.range) {
+                            console.log(`[RELOCATE] Target out of range! Distance: ${distance}, Max Range: ${abilityData.range}`);
+                            return;
+                        }
+                    }
+
+                    setPendingRelocateTarget(targetId);
+                    console.log('[RELOCATE] Target selected. Click an empty destination tile.');
+                    return;
+                }
+
+                const pendingTargetCanonicalId = getCanonicalUnitId(pendingRelocateTarget);
+
+                const isOccupied = Object.entries(characterPositions).some(
+                    ([id, pos]) => getCanonicalUnitId(id) !== pendingTargetCanonicalId && pos.row === row && pos.col === col
+                );
+
+                if (isOccupied) {
+                    console.log('[RELOCATE] Destination must be empty');
+                    return;
+                }
+
+                executeRelocateAbility(selectedAbility, pendingRelocateTarget, { row, col });
+                return;
+            }
             
             if (abilityData?.targetType === 'ground-target') {
                 console.log('[GROUND TARGET] Executing ground-target ability at:', { row, col });
@@ -893,10 +1579,6 @@ function Main() {
         }
         
         // Check if clicking on an enemy with weapon selected
-        const characterOnCell = Object.entries(characterPositions).find(
-            ([, pos]) => pos.row === row && pos.col === col
-        );
-        
         // Handle ability targeting
         if (selectedAbility && characterOnCell) {
             const targetId = characterOnCell[0];
@@ -937,8 +1619,8 @@ function Main() {
             if (enemy) {
                 // Check range for abilities with range requirement
                 if (abilityData.range) {
-                    const currentPos = characterPositions[playerName];
-                    const targetPos = characterPositions[targetId];
+                    const currentPos = getCurrentPlayerPosition();
+                    const targetPos = characterPositions[getCanonicalUnitId(targetId)];
                     
                     if (currentPos && targetPos) {
                         const distance = Math.abs(currentPos.row - targetPos.row) + Math.abs(currentPos.col - targetPos.col);
@@ -979,7 +1661,7 @@ function Main() {
             
             if (enemy && currentPlayerCharacter) {
                 // Check weapon range
-                const currentPos = characterPositions[playerName];
+                const currentPos = getCurrentPlayerPosition();
                 const enemyPos = characterPositions[enemyId];
                 
                 if (!currentPos || !enemyPos) return;
@@ -999,7 +1681,9 @@ function Main() {
                     return;
                 }
                 
-                const damage = (currentPlayerCharacter.stats.strength/10) * currentPlayerCharacter.weapon.damage - (enemy.stats.resistance/10);
+                const baseDamage = Math.max(1, (currentPlayerCharacter.stats.strength / 10) * currentPlayerCharacter.weapon.damage - (enemy.stats.resistance / 10));
+                const totalMultiplier = getDamageTakenMultiplier(activeEffects, enemyId);
+                const damage = applyDamageKeywords(baseDamage, activeEffects, enemyId, { minimumDamage: 1 });
                 const newHealth = enemy.stats.health - damage;
                 
                 console.log('Weapon Attack:', {
@@ -1008,6 +1692,8 @@ function Main() {
                     weapon: currentPlayerCharacter.weapon.name,
                     range: weaponRange,
                     distance: distance,
+                    baseDamage: baseDamage.toFixed(1),
+                    multiplier: totalMultiplier.toFixed(2),
                     damage: damage.toFixed(1),
                     newHealth: Math.max(0, newHealth).toFixed(1)
                 });
@@ -1043,9 +1729,11 @@ function Main() {
                 setWeaponSelected(false);
                 setActionUsed(true);
                 
-                // Auto-end turn after 1.5 seconds
+                // Auto-end only if movement is exhausted
                 setTimeout(() => {
-                    handleEndTurn();
+                    if (isMyTurn && shouldAutoEndTurn()) {
+                        handleEndTurn();
+                    }
                 }, 1500);
                 return;
             }
@@ -1064,24 +1752,41 @@ function Main() {
             maxMovement
         });
         
-        // Calculate distance from current position to target
-        const movementThisStep = Math.abs(row - currentPos.row) + Math.abs(col - currentPos.col);
+        const pathToTarget = findShortestWalkablePath(
+            currentPos,
+            { row, col },
+            characterPositions,
+            playerName
+        );
+
+        // Movement cost is based on actual walkable path length (blocked if null)
+        const movementThisStep = pathToTarget ? pathToTarget.length : Infinity;
         
         // Check if we have enough movement remaining
         const movementRemaining = maxMovement - movementUsed;
 
-        const isOccupied = Object.values(characterPositions).some(
-            pos => pos.row === row && pos.col === col
+        const isOccupied = Object.entries(characterPositions).some(
+            ([id, pos]) => id !== playerName && pos.row === row && pos.col === col
         );
 
+        if (!pathToTarget) {
+            console.log('Movement blocked by occupied cells:', {
+                from: currentPos,
+                to: { row, col }
+            });
+            return;
+        }
+
         if (movementThisStep <= movementRemaining && movementThisStep > 0 && !isOccupied) {
+            const movementRemainingAfterMove = movementRemaining - movementThisStep;
+
             console.log('Movement:', {
                 character: currentPlayerCharacter.name,
                 speed: currentPlayerCharacter.stats.speed,
                 maxMovement: maxMovement,
                 movementUsed: movementUsed,
                 movementThisStep: movementThisStep,
-                movementRemaining: movementRemaining - movementThisStep,
+                movementRemaining: movementRemainingAfterMove,
                 from: currentPos,
                 to: { row, col }
             });
@@ -1099,6 +1804,15 @@ function Main() {
                 playerName,
                 position: newPosition
             });
+
+            if (movementRemainingAfterMove <= 0) {
+                setTimeout(() => {
+                    if (isMyTurn && shouldAutoEndTurn()) {
+                        console.log('[AUTO END TURN MOVE] Action used and no movement remaining, ending turn');
+                        handleEndTurn();
+                    }
+                }, 250);
+            }
         } else if (movementThisStep > movementRemaining) {
             console.log('Not enough movement remaining:', {
                 movementThisStep: movementThisStep,
@@ -1127,6 +1841,26 @@ function Main() {
             effect.type === 'black_hole_zone' &&
             effect.turnsRemaining > 0 &&
             effect.center
+        );
+        const activeBlizzardFields = activeEffects.filter(effect =>
+            effect.type === 'blizzard_field' &&
+            effect.turnsRemaining > 0 &&
+            effect.center
+        );
+        const activeToxicMistFields = activeEffects.filter(effect =>
+            effect.type === 'toxic_mist_field' &&
+            effect.turnsRemaining > 0 &&
+            effect.center
+        );
+        const activeBlueBarriers = activeEffects.filter(effect =>
+            effect.type === 'blue_barrier' &&
+            effect.turnsRemaining > 0 &&
+            effect.cell
+        );
+        const activeGtgOriginMarkers = activeEffects.filter(effect =>
+            effect.type === 'gtg_origin_marker' &&
+            effect.turnsRemaining > 0 &&
+            effect.cell
         );
         
         for (let row = 0; row < ROWS; row++) {
@@ -1160,17 +1894,54 @@ function Main() {
                         Math.abs(zone.center.col - col) <= radius
                     );
                 });
+                const isBlizzardFieldCell = activeBlizzardFields.some(field => {
+                    const radius = field.radius ?? 1;
+                    return (
+                        Math.abs(field.center.row - row) <= radius &&
+                        Math.abs(field.center.col - col) <= radius
+                    );
+                });
+                const isToxicMistCell = activeToxicMistFields.some(field => {
+                    const radius = field.radius ?? 1;
+                    return (
+                        Math.abs(field.center.row - row) <= radius &&
+                        Math.abs(field.center.col - col) <= radius
+                    );
+                });
+                const isBlueBarrierCell = activeBlueBarriers.some(barrier =>
+                    barrier.cell.row === row && barrier.cell.col === col
+                );
+                const isGtgOriginCell = activeGtgOriginMarkers.some(marker =>
+                    marker.cell.row === row && marker.cell.col === col
+                );
+                const isWhitePhospherusEnemy = isEnemy && enemyOnCell && activeEffects.some(effect =>
+                    effect.type === 'damage_over_time' &&
+                    effect.source === 'white_phospherus' &&
+                    effect.target === enemyOnCell.id &&
+                    effect.turnsRemaining > 0
+                );
+                const isGuardedBreathAlly = !isEnemy && !!characterOnCell && activeEffects.some(effect =>
+                    effect.type === 'stat_buff' &&
+                    effect.source === 'guarded_breath' &&
+                    effect.target === characterOnCell[0] &&
+                    effect.turnsRemaining > 0
+                );
+                const isGtgTeleportedTarget = !!characterOnCell && activeEffects.some(effect =>
+                    effect.type === 'gtg_target_marker' &&
+                    effect.target === characterOnCell[0] &&
+                    effect.turnsRemaining > 0
+                );
 
                 grid.push(
                     <div
                         key={`${row}-${col}`}
                         className={`grid-cell ${
                             characterOnCell ? 'occupied' : ''
-                        } ${isPlayerCharacter ? 'player-controlled' : ''} ${isEnemy ? (isCorpse ? 'enemy-corpse-cell' : 'enemy-cell') : ''} ${isHealingFieldCell ? 'healing-field-cell' : ''} ${isFireballZoneCell ? 'fireball-zone-cell' : ''} ${isBlackHoleZoneCell ? 'black-hole-zone-cell' : ''}`}
+                        } ${isPlayerCharacter ? 'player-controlled' : ''} ${isEnemy ? (isCorpse ? 'enemy-corpse-cell' : 'enemy-cell') : ''} ${isHealingFieldCell ? 'healing-field-cell' : ''} ${isFireballZoneCell ? 'fireball-zone-cell' : ''} ${isBlackHoleZoneCell ? 'black-hole-zone-cell' : ''} ${isBlizzardFieldCell ? 'blizzard-field-cell' : ''} ${isToxicMistCell ? 'toxic-mist-cell' : ''} ${isBlueBarrierCell ? 'blue-barrier-cell' : ''} ${isGtgOriginCell ? 'gtg-origin-cell' : ''} ${isWhitePhospherusEnemy ? 'white-phospherus-glow' : ''} ${isGuardedBreathAlly ? 'guarded-breath-glow' : ''} ${isGtgTeleportedTarget ? 'gtg-target-glow' : ''}`}
                         onClick={() => handleGridClick(row, col)}
                     >
                         {characterOnCell && (
-                            <div className="grid-character">
+                            <div className={`grid-character ${!isEnemy ? 'player-grid-character' : ''}`}>
                                 {isEnemy ? (
                                     isCorpse ? (
                                         <div className="enemy-corpse-icon">
@@ -1189,7 +1960,13 @@ function Main() {
                                         </>
                                     )
                                 ) : (
-                                    playerCharacters[characterOnCell[0]]?.name || '?'
+                                    playerCharacters[characterOnCell[0]] ? (
+                                        <img
+                                            className="grid-character-image"
+                                            src={getCharacterImage(playerCharacters[characterOnCell[0]])}
+                                            alt={playerCharacters[characterOnCell[0]].name}
+                                        />
+                                    ) : '?'
                                 )}
                             </div>
                         )}
@@ -1247,9 +2024,136 @@ function Main() {
             // For other abilities, select and wait for target
             setSelectedAbility(ability.id);
             setSelectedTargets([]);
+            setPendingRelocateTarget(null);
             setWeaponSelected(false);
             console.log(`Selected ability: ${ability.name}. Click a target.`);
         }
+    };
+
+    const executeRelocateAbility = (abilityId, target, targetPosition) => {
+        const result = executeAbility(abilityId, {
+            caster: currentPlayerCharacter,
+            playerName,
+            target,
+            targetPosition,
+            enemies,
+            playerCharacters,
+            characterPositions,
+            cooldowns
+        });
+
+        if (!result.success) {
+            console.log('Relocate ability failed:', result.message);
+            return;
+        }
+
+        const updates = applyAbilityEffects(result, {
+            enemies,
+            playerCharacters,
+            activeEffects,
+            effectOwnerTurnId: playerName
+        });
+
+        setEnemies(normalizeEnemiesState(updates.enemies));
+        setPlayerCharacters(updates.playerCharacters);
+        setActiveEffects(updates.activeEffects);
+
+        if (result.forcedMovement && result.forcedMovement.length > 0) {
+            result.forcedMovement.forEach(({ enemyId, path, to }) => {
+                const movementPath = path && path.length > 0 ? path : (to ? [to] : []);
+                if (movementPath.length === 0) return;
+
+                const movedUnitId = getCanonicalUnitId(enemyId);
+                const destination = movementPath[movementPath.length - 1];
+                const isPlayerUnit = !!playerCharacters[movedUnitId];
+                const unitType = isPlayerUnit ? 'player' : 'enemy';
+
+                const preTeleportPosition =
+                    characterPositions[movedUnitId] ||
+                    (enemyId !== movedUnitId ? characterPositions[enemyId] : null) ||
+                    null;
+
+                console.log('[TELEPORT DEBUG] Before teleport apply:', {
+                    abilityId,
+                    unitType,
+                    unitId: movedUnitId,
+                    incomingId: enemyId,
+                    from: preTeleportPosition,
+                    to: destination,
+                    path: movementPath
+                });
+
+                setCharacterPositions(prev => {
+                    const latestFrom =
+                        prev[movedUnitId] ||
+                        (enemyId !== movedUnitId ? prev[enemyId] : null) ||
+                        null;
+
+                    const updated = {
+                        ...prev,
+                        [movedUnitId]: destination
+                    };
+
+                    if (enemyId !== movedUnitId && updated[enemyId]) {
+                        delete updated[enemyId];
+                    }
+
+                    console.log('[TELEPORT DEBUG] After teleport apply:', {
+                        abilityId,
+                        unitType,
+                        unitId: movedUnitId,
+                        incomingId: enemyId,
+                        from: latestFrom,
+                        to: updated[movedUnitId]
+                    });
+
+                    return updated;
+                });
+
+                if (isPlayerUnit) {
+                    socket.emit('player_moved', {
+                        room,
+                        playerName: movedUnitId,
+                        position: destination
+                    });
+                } else {
+                    socket.emit('enemy_moved', {
+                        room,
+                        enemyId: movedUnitId,
+                        path: movementPath,
+                        stepDelay: 1
+                    });
+                }
+            });
+        }
+
+        if (result.newCooldown) {
+            setCooldowns(prev => ({
+                ...prev,
+                [abilityId]: result.newCooldown
+            }));
+        }
+
+        socket.emit('ability_used', {
+            room,
+            playerName,
+            abilityId,
+            result,
+            updatedPlayerCharacters: updates.playerCharacters,
+            updatedEnemies: updates.enemies,
+            updatedActiveEffects: updates.activeEffects
+        });
+
+        setSelectedAbility(null);
+        setSelectedTargets([]);
+        setPendingRelocateTarget(null);
+        setActionUsed(true);
+
+        setTimeout(() => {
+            if (isMyTurn && shouldAutoEndTurn()) {
+                handleEndTurn();
+            }
+        }, 300);
     };
 
     const executeAbilityOnTarget = (abilityId, target) => {
@@ -1270,6 +2174,7 @@ function Main() {
             targets: target ? [target] : undefined, // For multi-target abilities
             enemies: enemies,
             playerCharacters: playerCharacters,
+            characterPositions: characterPositions,
             cooldowns: cooldowns
         });
         
@@ -1297,10 +2202,27 @@ function Main() {
         const updates = applyAbilityEffects(result, {
             enemies,
             playerCharacters,
-            activeEffects
+            activeEffects,
+            effectOwnerTurnId: playerName
         });
-        
-        setEnemies(normalizeEnemiesState(updates.enemies));
+
+        const normalizedEnemies = normalizeEnemiesState(updates.enemies);
+        const shouldRemoveDeadBodiesImmediately = abilityId === 'charge';
+        const finalEnemies = shouldRemoveDeadBodiesImmediately
+            ? normalizedEnemies.filter(enemy => !isEnemyDeadBody(enemy))
+            : normalizedEnemies;
+
+        if (shouldRemoveDeadBodiesImmediately) {
+            const removedEnemyIds = normalizedEnemies
+                .filter(enemy => isEnemyDeadBody(enemy))
+                .map(enemy => enemy.id);
+
+            if (removedEnemyIds.length > 0) {
+                setTurnOrder(prevOrder => prevOrder.filter(turn => !removedEnemyIds.includes(turn.id)));
+            }
+        }
+
+        setEnemies(finalEnemies);
         setPlayerCharacters(updates.playerCharacters);
         setActiveEffects(updates.activeEffects);
 
@@ -1313,11 +2235,11 @@ function Main() {
                     room,
                     enemyId,
                     path: movementPath,
-                    stepDelay: 120
+                    stepDelay: 1
                 });
             });
         }
-        
+
         console.log('[ABILITY COMPLETE] Updated enemies:', updates.enemies);
         console.log('[ABILITY COMPLETE] Updated playerCharacters:', updates.playerCharacters);
         
@@ -1346,9 +2268,17 @@ function Main() {
                         targetPlayer: effect.target
                     });
                 } else if (effect.type === 'cooldown_increase') {
-                    // Increase cooldowns for target enemy (currently enemies don't have cooldowns tracked, but structure is here for future)
+                    // Increase cooldowns for target enemy
                     console.log(`[COOLDOWN INCREASE] Increasing cooldowns for enemy ${effect.target} by ${effect.value}`);
-                    // Note: Enemy cooldown tracking would need to be implemented for this to work
+                    const targetEnemy = updates.enemies.find(e => e.id === effect.target);
+                    if (targetEnemy && targetEnemy.cooldowns) {
+                        Object.keys(targetEnemy.cooldowns).forEach(abilityId => {
+                            if (targetEnemy.cooldowns[abilityId] >= 0) {
+                                targetEnemy.cooldowns[abilityId] += effect.value;
+                                console.log(`  - ${abilityId}: increased by ${effect.value} to ${targetEnemy.cooldowns[abilityId]}`);
+                            }
+                        });
+                    }
                 }
             });
         }
@@ -1373,7 +2303,7 @@ function Main() {
             abilityId,
             result,
             updatedPlayerCharacters: updates.playerCharacters,
-            updatedEnemies: updates.enemies,
+            updatedEnemies: finalEnemies,
             updatedActiveEffects: updates.activeEffects
         });
         
@@ -1383,13 +2313,13 @@ function Main() {
         setSelectedTargets([]);
         setActionUsed(true);
         
-        // Auto-end turn after 1.5 seconds - but only if it's still our turn
+        // Auto-end only if movement is exhausted
         setTimeout(() => {
-            if (isMyTurn) {
-                console.log('[AUTO END TURN] Executing after ability use');
+            if (isMyTurn && shouldAutoEndTurn()) {
+                console.log('[AUTO END TURN] Action used and no movement remaining after ability use, ending turn');
                 handleEndTurn();
             } else {
-                console.log('[AUTO END TURN] CANCELLED - No longer our turn');
+                console.log('[AUTO END TURN] Skipped - action not used, movement remains, or no longer our turn');
             }
         }, 1500);
     };
@@ -1427,12 +2357,33 @@ function Main() {
         const updates = applyAbilityEffects(result, {
             enemies,
             playerCharacters,
-            activeEffects
+            activeEffects,
+            effectOwnerTurnId: playerName
         });
         
         setEnemies(normalizeEnemiesState(updates.enemies));
         setPlayerCharacters(updates.playerCharacters);
         setActiveEffects(updates.activeEffects);
+
+        if (result.forcedMovement && result.forcedMovement.length > 0) {
+            result.forcedMovement.forEach(({ enemyId, path, to }) => {
+                const movementPath = path && path.length > 0 ? path : (to ? [to] : []);
+                if (movementPath.length === 0) return;
+
+                console.log('[BLACK HOLE TELEPORT] Emitting enemy_moved (multi-target path):', {
+                    enemyId,
+                    from: characterPositions[enemyId] || null,
+                    to: movementPath[movementPath.length - 1]
+                });
+
+                socket.emit('enemy_moved', {
+                    room,
+                    enemyId,
+                    path: movementPath,
+                    stepDelay: 1
+                });
+            });
+        }
         
         // Update cooldowns
         if (result.newCooldown) {
@@ -1462,13 +2413,13 @@ function Main() {
         setSelectedTargets([]);
         setActionUsed(true);
         
-        // Auto-end turn after 1.5 seconds - but only if it's still our turn
+        // Auto-end only if movement is exhausted
         setTimeout(() => {
-            if (isMyTurn) {
-                console.log('[AUTO END TURN MULTI] Executing after ability use');
+            if (isMyTurn && shouldAutoEndTurn()) {
+                console.log('[AUTO END TURN MULTI] Action used and no movement remaining after ability use, ending turn');
                 handleEndTurn();
             } else {
-                console.log('[AUTO END TURN MULTI] CANCELLED - No longer our turn');
+                console.log('[AUTO END TURN MULTI] Skipped - action not used, movement remains, or no longer our turn');
             }
         }, 1500);
     };
@@ -1517,12 +2468,33 @@ function Main() {
         const updates = applyAbilityEffects(result, {
             enemies,
             playerCharacters,
-            activeEffects
+            activeEffects,
+            effectOwnerTurnId: playerName
         });
         
         setEnemies(normalizeEnemiesState(updates.enemies));
         setPlayerCharacters(updates.playerCharacters);
         setActiveEffects(updates.activeEffects);
+
+        if (result.forcedMovement && result.forcedMovement.length > 0) {
+            result.forcedMovement.forEach(({ enemyId, path, to }) => {
+                const movementPath = path && path.length > 0 ? path : (to ? [to] : []);
+                if (movementPath.length === 0) return;
+
+                console.log('[BLACK HOLE TELEPORT] Emitting enemy_moved (ground-target path):', {
+                    enemyId,
+                    from: characterPositions[enemyId] || null,
+                    to: movementPath[movementPath.length - 1]
+                });
+
+                socket.emit('enemy_moved', {
+                    room,
+                    enemyId,
+                    path: movementPath,
+                    stepDelay: 1
+                });
+            });
+        }
         
         console.log('[GROUND TARGET COMPLETE] Updated enemies:', updates.enemies);
         console.log('[GROUND TARGET COMPLETE] Updated playerCharacters:', updates.playerCharacters);
@@ -1557,19 +2529,43 @@ function Main() {
         setSelectedAbility(null);
         setActionUsed(true);
         
-        // Auto-end turn after 1.5 seconds
+        // Auto-end only if movement is exhausted
         setTimeout(() => {
-            if (isMyTurn) {
-                console.log('[AUTO END TURN GROUND] Executing after ability use');
+            if (isMyTurn && shouldAutoEndTurn()) {
+                console.log('[AUTO END TURN GROUND] Action used and no movement remaining after ability use, ending turn');
                 handleEndTurn();
             } else {
-                console.log('[AUTO END TURN GROUND] CANCELLED - No longer our turn');
+                console.log('[AUTO END TURN GROUND] Skipped - action not used, movement remains, or no longer our turn');
             }
         }, 1500);
     };
 
     const handleEndTurn = () => {
         if (!isMyTurn) return;
+
+        const liveTurn = currentTurnRef.current;
+        const turnCycle = currentTurnCycleRef.current;
+        const isCurrentPlayersTurn = liveTurn?.type === 'ally' && liveTurn?.id === playerName;
+
+        if (!isCurrentPlayersTurn) {
+            console.log('[END TURN] Ignored stale end-turn request:', {
+                playerName,
+                liveTurn,
+                turnCycle
+            });
+            return;
+        }
+
+        if (completedAllyTurnCyclesRef.current.has(turnCycle)) {
+            console.log('[END TURN] Duplicate end-turn ignored for turn cycle:', {
+                playerName,
+                turnCycle
+            });
+            return;
+        }
+
+        completedAllyTurnCyclesRef.current.add(turnCycle);
+
         console.log('END TURN clicked');
         console.log('Player Name:', playerName);
         console.log('Room:', room);
@@ -1581,7 +2577,8 @@ function Main() {
         const { updatedEffects, updatedCharacters, updatedEnemies } = tickActiveEffects(
             activeEffectsRef.current, 
             playerCharactersRef.current, 
-            enemiesRef.current
+            enemiesRef.current,
+            playerName
         );
         
         console.log('Effects ticked:', {
@@ -1690,7 +2687,12 @@ function Main() {
             <h2>Location</h2>
             <h2>
                 {isMyTurn ? (
-                    <div className="turn">YOUR TURN</div>
+                    <div className="turn">
+                        YOUR TURN
+                        {turnTimeLeft !== null && turnTimeLeft < 16 && (
+                            <span className="turn-timer">{turnTimeLeft}s</span>
+                        )}
+                    </div>
                 ) : (
                     <div className="turn">
                     {currentTurn?.type === 'ally' 
@@ -1718,7 +2720,12 @@ function Main() {
                         >
                             {character ? (
                                 <>
-                                    <div className="character-icon"></div>
+                                    <div className="character-icon">
+                                        <img
+                                            src={getCharacterImage(character)}
+                                            alt={character.name}
+                                        />
+                                    </div>
                                     <div className="character-info">
                                         <div className="character-name">{character.name}</div>
                                         <div className="character-stats">
@@ -1786,17 +2793,25 @@ function Main() {
                 />
                 <button type="submit" disabled={aiBusy || !aiInput.trim()}>Send</button>
             </form> */}
-        {/* <button style={{ width: '150px' }} onClick={() => handleStoryComplete()}>Combat</button> */}
-        <button onClick={handleLevelUp}>Level Up</button>
+            
+        {/* <button style={{ width: '150px' }} onClick={handleLevelUp}>Level Up</button> */}
+        <button style={{ width: '150px' }} onClick={() => handleStoryComplete()}>Combat</button>
             </div>
-            <span className="ai-text">{aiText}</span>
+            <span className="ai-text">
+                {displayText}
+            </span>
        </div>
         <div className="inventory">
             {currentPlayerCharacter ? (
                 <>
                     <div className="character-sheet-header">
                         <div className="character-portrait">
-                            <div className="portrait-icon"></div>
+                            <div className="portrait-icon">
+                                <img
+                                    src={getCharacterImage(currentPlayerCharacter)}
+                                    alt={currentPlayerCharacter.name}
+                                />
+                            </div>
                             <div className="character-title">
                                 <div className="char-name">{currentPlayerCharacter.name}</div>
                                 <div className="char-role">{currentPlayerCharacter.role}</div>
@@ -1909,15 +2924,26 @@ function Main() {
                     <div className="abilities-section">
                         <h4>Abilities</h4>
                         <div className="abilities-grid">
-                            {currentPlayerCharacter.abilities.map((ability, index) => {
-                                const currentCooldown = cooldowns[ability.id] || 0;
+                            {(Array.isArray(currentPlayerCharacter.abilities) ? currentPlayerCharacter.abilities : []).map((ability, index) => {
+                                const resolvedAbility = typeof ability === 'string' ? getAbility(ability) : ability;
+                                if (!resolvedAbility?.id) {
+                                    console.warn('[ABILITY DEBUG] Dropping ability during render - invalid shape:', {
+                                        index,
+                                        rawAbility: ability,
+                                        rawType: typeof ability,
+                                        resolvedAbility
+                                    });
+                                    return null;
+                                }
+
+                                const currentCooldown = cooldowns[resolvedAbility.id] || 0;
                                 const isOnCooldown = currentCooldown > 0;
-                                const isSelected = selectedAbility === ability.id;
-                                const range = ability.range === 1 ? "Melee" : ability.range === undefined ? "" : "Range: " + ability.range;
+                                const isSelected = selectedAbility === resolvedAbility.id;
+                                const range = resolvedAbility.range === 1 ? "Melee" : resolvedAbility.range === undefined ? "" : "Range: " + resolvedAbility.range;
                                 
                                 return (
                                     <button 
-                                        onClick={() => handleAbilityClick(ability)} 
+                                        onClick={() => handleAbilityClick(resolvedAbility)} 
                                         key={index} 
                                         className={`ability-card ${
                                             isOnCooldown ? 'ability-on-cooldown' : ''
@@ -1927,15 +2953,15 @@ function Main() {
                                         disabled={!isMyTurn || isOnCooldown || actionUsed || !isPlayerAlive}
                                     >
                                         <div className="ability-header">
-                                            <div className="ability-name">{ability.name}</div>
+                                            <div className="ability-name">{resolvedAbility.name}</div>
                                             <div className="ability-cd">
-                                                {isOnCooldown ? currentCooldown : `CD: ${ability.cooldown}`}
+                                                {isOnCooldown ? currentCooldown : `CD: ${resolvedAbility.cooldown}`}
                                                 <div className="ability-range">
                                                     {range}
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className="ability-desc">{ability.description}</div>
+                                        <div className="ability-desc">{resolvedAbility.description}</div>
                                     </button>
                                 );
                             })}
@@ -1944,19 +2970,33 @@ function Main() {
 
                     <div className="ultimate-section">
                         <h4>Ultimate</h4>
+                        {(() => {
+                            const rawUltimate = currentPlayerCharacter?.ultimate;
+                            const resolvedUltimate = typeof rawUltimate === 'string'
+                                ? getAbility(rawUltimate)
+                                : rawUltimate;
+                            const hasUltimate = !!resolvedUltimate?.id;
+
+                            return (
                         <button 
                             className="ultimate-card" 
-                            disabled={!isMyTurn || actionUsed || !isPlayerAlive}
+                            disabled={!isMyTurn || actionUsed || !isPlayerAlive || !hasUltimate}
                             onClick={() => {
-                                console.log('[ULTIMATE CLICK] Ultimate clicked:', currentPlayerCharacter.ultimate);
-                                handleAbilityClick(currentPlayerCharacter.ultimate);
+                                if (!hasUltimate) {
+                                    console.warn('[ABILITY DEBUG] Ultimate click blocked - invalid or missing ultimate:', rawUltimate);
+                                    return;
+                                }
+                                console.log('[ULTIMATE CLICK] Ultimate clicked:', resolvedUltimate);
+                                handleAbilityClick(resolvedUltimate);
                             }}
                         >
                             <div className="ultimate-header">
-                                <div className="ultimate-name">{currentPlayerCharacter.ultimate.name}</div>
+                                <div className="ultimate-name">{hasUltimate ? resolvedUltimate.name : 'No Ultimate Selected'}</div>
                             </div>
-                            <div className="ultimate-desc">{currentPlayerCharacter.ultimate.description}</div>
+                            <div className="ultimate-desc">{hasUltimate ? resolvedUltimate.description : 'Select an ultimate in Choose Abilities.'}</div>
                         </button>
+                            );
+                        })()}
                     </div>
                 </>
             ) : (

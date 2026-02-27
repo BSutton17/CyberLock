@@ -115,22 +115,6 @@ function CharacterBuilder() {
     };
 
     const handleReady = () => {
-        if (remainingPoints !== 0) {
-            alert('You must use all 45 points before readying up!');
-            return;
-        }
-        if (hasDuplicateValues()) {
-            alert('No two attributes can have the same point value!');
-            return;
-        }
-        if (hasTeamConflict()) {
-            alert('Your primary or secondary conflicts with another team member!');
-            return;
-        }
-        if (hasInvalidMedicAssignment()) {
-            alert('Only Support characters can have Medic as their primary or secondary!');
-            return;
-        }
         
         // Sort attributes from most points to least points
         const sortedAttributes = Object.entries(attributePoints)

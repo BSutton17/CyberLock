@@ -142,18 +142,6 @@ function isCellInDangerZone(cell, activeEffects = [], enemy) {
     const behavior = enemy.behavior || 'aggressive';
     const role = enemy.role || 'DPS';
     
-    // Check for black hole zones (all enemies avoid)
-    const inBlackHoleZone = activeEffects.some(effect => {
-        if (effect.type !== 'black_hole_zone' || effect.turnsRemaining <= 0 || !effect.center) {
-            return false;
-        }
-        const radius = effect.radius ?? 2;
-        return Math.abs(effect.center.row - cell.row) <= radius &&
-               Math.abs(effect.center.col - cell.col) <= radius;
-    });
-    
-    if (inBlackHoleZone) return true;
-    
     // Check for blizzard zones (selective avoidance)
     const inBlizzardZone = activeEffects.some(effect => {
         if (effect.type !== 'blizzard_field' || effect.turnsRemaining <= 0 || !effect.center) {
@@ -204,11 +192,24 @@ function getValidMovementCells(position, maxMovement, characterPositions, ROWS =
     return validCells;
 }
 
+function isCellBlockedByBarrier(cell, activeEffects = []) {
+    if (!activeEffects || activeEffects.length === 0) return false;
+
+    return activeEffects.some(effect =>
+        effect.type === 'blue_barrier' &&
+        effect.turnsRemaining > 0 &&
+        effect.cell &&
+        effect.cell.row === cell.row &&
+        effect.cell.col === cell.col
+    );
+}
+
 /**
  * BFS pathfinding to find reachable cells within movement range
  * Returns all reachable cells with their actual path distance
  */
-function getReachableCells(startPos, maxMovement, characterPositions, activeEffects = [], enemy = null, ROWS = 7, COLS = 10) {
+function getReachableCells(startPos, maxMovement, characterPositions, activeEffects = [], enemy = null, ROWS = 7, COLS = 10, options = {}) {
+    const { ignoreDangerZones = false } = options;
     const visited = new Set();
     const queue = [{ pos: startPos, distance: 0 }];
     const reachable = [];
@@ -247,11 +248,14 @@ function getReachableCells(startPos, maxMovement, characterPositions, activeEffe
             const isOccupied = Object.values(characterPositions).some(
                 p => p.row === neighbor.row && p.col === neighbor.col
             );
+            const blockedByBarrier = isCellBlockedByBarrier(neighbor, activeEffects);
             
             // Check if in danger zone (and should be avoided)
-            const inDangerZone = enemy ? isCellInDangerZone(neighbor, activeEffects, enemy) : false;
+            const inDangerZone = !ignoreDangerZones && enemy
+                ? isCellInDangerZone(neighbor, activeEffects, enemy)
+                : false;
             
-            if (!isOccupied && !inDangerZone) {
+            if (!isOccupied && !inDangerZone && !blockedByBarrier) {
                 visited.add(key);
                 queue.push({ pos: neighbor, distance: distance + 1 });
             }
@@ -280,7 +284,16 @@ function calculateAggressiveMovement(enemy, allies, characterPositions, activeEf
     
     const targetPos = characterPositions[closest.targetId];
     // Use BFS pathfinding to get reachable cells
-    const reachableCells = getReachableCells(enemyPos, maxMovement, characterPositions, activeEffects, enemy);
+    const reachableCells = getReachableCells(
+        enemyPos,
+        maxMovement,
+        characterPositions,
+        activeEffects,
+        enemy,
+        7,
+        10,
+        { ignoreDangerZones: true }
+    );
     
     if (reachableCells.length === 0) return null;
     
@@ -399,33 +412,6 @@ export function calculateEnemyMovement(enemy, allies, alliedEnemies, playerChara
     return null;
 }
 
-function calculatePullMovementToCenter(enemy, center, characterPositions, activeEffects = []) {
-    const enemyPos = characterPositions[enemy.id];
-    if (!enemyPos || !center) return null;
-
-    const maxMovement = Math.floor(enemy.stats.speed / 10);
-    if (maxMovement <= 0) return null;
-
-    const reachableCells = getReachableCells(enemyPos, maxMovement, characterPositions, activeEffects, enemy);
-    if (reachableCells.length === 0) return null;
-
-    const currentDistance = getDistance(enemyPos, center);
-    const closerCells = reachableCells.filter(cell => getDistance(cell, center) < currentDistance);
-
-    if (closerCells.length === 0) {
-        return null;
-    }
-
-    const bestMove = closerCells.reduce((best, cell) => {
-        const distance = getDistance(cell, center);
-        const bestDistance = getDistance(best, center);
-        return distance < bestDistance ? cell : best;
-    });
-
-    return { row: bestMove.row, col: bestMove.col };
-}
-
-
 export function executeEnemyTurn(enemy, allies, alliedEnemies, playerCharacters, characterPositions, activeEffects = []) {
     console.log(`[ENEMY TURN] ${enemy.name} (${enemy.id}) starting turn`);
     console.log(`[ENEMY TURN] Enemy abilities:`, enemy.abilities);
@@ -433,12 +419,6 @@ export function executeEnemyTurn(enemy, allies, alliedEnemies, playerCharacters,
     
     // Check for status effects on this enemy
     const enemyEffects = activeEffects.filter(effect => effect.target === enemy.id);
-    const blackHolePullEffect = enemyEffects.find(effect =>
-        effect.type === 'status_effect' &&
-        effect.status === 'black_hole_pull' &&
-        effect.turnsRemaining > 0 &&
-        effect.center
-    );
     const immobilizeEffects = enemyEffects.filter(effect =>
         effect.type === 'status_effect' && 
         effect.status === 'immobilized' && 
@@ -473,9 +453,7 @@ export function executeEnemyTurn(enemy, allies, alliedEnemies, playerCharacters,
     // Calculate movement
     const newPosition = movementPrevented
         ? null
-        : blackHolePullEffect
-            ? calculatePullMovementToCenter(enemy, blackHolePullEffect.center, characterPositions, activeEffects)
-            : calculateEnemyMovement(enemy, allies, alliedEnemies, playerCharacters, characterPositions, activeEffects);
+        : calculateEnemyMovement(enemy, allies, alliedEnemies, playerCharacters, characterPositions, activeEffects);
     
     // Create updated positions to check attack range AFTER moving
     const updatedPositions = newPosition ? {

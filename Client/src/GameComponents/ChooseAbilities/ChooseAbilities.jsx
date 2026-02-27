@@ -186,7 +186,7 @@ function ChooseAbilities(){
                                                             setExpandedCategory(null);
                                                         }}
                                                     >
-                                                        {ability.name}
+                                                        {ability.name} - <span className="ability-description">{ability.description}</span>
                                                     </button>
                                                 ))}
                                             </div>
@@ -218,7 +218,7 @@ function ChooseAbilities(){
                                                             setExpandedCategory(null);
                                                         }}
                                                     >
-                                                        {ability.name}
+                                                        {ability.name} - <span className="ability-description">{ability.description}</span>
                                                     </button>
                                                 ))}
                                             </div>
@@ -250,7 +250,7 @@ function ChooseAbilities(){
                                                             setExpandedCategory(null);
                                                         }}
                                                     >
-                                                        {ability.name}
+                                                        {ability.name} - <span className="ability-description">{ability.description}</span>
                                                     </button>
                                                 ))}
                                             </div>
@@ -282,7 +282,7 @@ function ChooseAbilities(){
                                                             setExpandedCategory(null);
                                                         }}
                                                     >
-                                                        {ability.name}
+                                                       {ability.name} - <span className="ability-description">{ability.description}</span>
                                                     </button>
                                                 ))}
                                             </div>

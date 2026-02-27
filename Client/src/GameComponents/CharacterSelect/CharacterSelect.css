@@ -211,7 +211,8 @@
 
 .character-cards {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(23.3vmin, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: repeat(3, minmax(0, 1fr));
     gap: 2vmin;
     overflow-y: auto;
     padding-right: 0.6vmin;
@@ -242,15 +243,16 @@
     background: linear-gradient(135deg, rgba(40, 40, 60, 0.8) 0%, rgba(30, 30, 40, 0.8) 100%);
     border: 0.15vmin solid rgba(139, 92, 246, 0.3);
     border-radius: 0.75vmin;
-    padding: 2vmin 2vmin;
     cursor: pointer;
     display: flex;
     flex-direction: column;
+    align-items: center;
+    justify-content: center;
     gap: 1.187vmin;
     transition: all 0.2s ease;
     position: relative;
     overflow: hidden;
-    min-height: 20vmin;
+    height: 23.5vmin;
 }
 
 .character-card:hover {
@@ -291,6 +293,16 @@
     text-shadow: 0 0 0.6vmin rgba(59, 130, 246, 0.5);
 }
 
+.character-card-image {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    object-fit:contain;
+    border-radius: 0.6vmin;
+    border: 0.075vmin solid rgba(139, 92, 246, 0.35);
+    margin: 0 auto;
+}
+
 .mini-stats {
     display: flex;
     flex-wrap: wrap;
@@ -314,6 +326,10 @@
     padding: 0; /* Reset default padding to allow scrolling container */
 }
 
+.weapon-stats{
+    font-size: 1.5vmin;
+}
+
 .placeholder-info {
     display: flex;
     align-items: center;
@@ -321,8 +337,8 @@
     height: 100%;
     color: #6b7280;
     font-style: italic;
-    font-size: 1.32vmin;
-    text-shadow: 0 0.075vmin 0.15vmin rgba(0,0,0,0.5);
+    font-size: 1.82vmin;
+    text-shadow: 0 0.575vmin 0.65vmin rgba(0,0,0,0.5);
 }
 
 .character-info {
@@ -331,67 +347,68 @@
     height: 100%;
     max-height: 100%;
     overflow-y: auto;
-    padding: 1.2vmin;
+    padding: 1.7vmin;
 }
 
 .character-details h4 {
-    font-size: 2.16vmin; /* Larger Title */
-    margin: 0 0 0.6vmin 0;
+    font-size: 2.66vmin; /* Larger Title */
+    margin: 0 0 1.1vmin 0;
     background: linear-gradient(90deg, #a78bfa, #c4b5fd);
+    background-clip: text;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     text-transform: uppercase;
     font-weight: 900;
-    filter: drop-shadow(0 0 0.6vmin rgba(167, 139, 250, 0.5));
+    filter: drop-shadow(0 0 1.1vmin rgba(167, 139, 250, 0.5));
 }
 
 .detail-role {
     color: #93c5fd;
-    font-size: 1.2vmin;
-    margin-bottom: 0.6vmin;
-    text-shadow: 0 0 0.75vmin rgba(59, 130, 246, 0.4);
+    font-size: 1.7vmin;
+    margin-bottom: 1.1vmin;
+    text-shadow: 0 0 1.25vmin rgba(59, 130, 246, 0.4);
 }
 
 .detail-desc {
-    font-size: 1.08vmin;
+    font-size: 1.58vmin;
     color: #d1d5db;
-    margin-bottom: 1.8vmin;
+    margin-bottom: 2.3vmin;
     line-height: 1.5;
     font-style: italic;
     opacity: 0.9;
     background: rgba(0,0,0,0.2);
-    padding: 0.9vmin;
-    border-left: 0.225vmin solid rgba(139, 92, 246, 0.5);
-    border-radius: 0 0.6vmin 0.6vmin 0;
+    padding: 1.4vmin;
+    border-left: 0.725vmin solid rgba(139, 92, 246, 0.5);
+    border-radius: 0 1.1vmin 1.1vmin 0;
 }
 
 .stats-detail, .weapon-detail, .abilities-detail, .ultimate-detail {
-    margin-bottom: 1.8vmin;
+    margin-bottom: 2.3vmin;
     background: rgba(30, 30, 50, 0.5);
-    padding: 1.5vmin;
-    border-radius: 0.75vmin;
-    border: 0.075vmin solid rgba(139, 92, 246, 0.2);
-    box-shadow: 0 0.3vmin 1.125vmin rgba(0,0,0,0.2);
+    padding: 2vmin;
+    border-radius: 1.25vmin;
+    border: 0.575vmin solid rgba(139, 92, 246, 0.2);
+    box-shadow: 0 0.8vmin 1.625vmin rgba(0,0,0,0.2);
 }
 
 .stats-detail h5, .weapon-detail h5, .abilities-detail h5, .ultimate-detail h5 {
-    margin: 0 0 1.2vmin 0;
-    font-size: 1.08vmin;
+    margin: 0 0 1.7vmin 0;
+    font-size: 1.58vmin;
     text-transform: uppercase;
     color: #a78bfa;
-    letter-spacing: 0.113vmin;
+    letter-spacing: 0.613vmin;
     font-weight: 800;
-    text-shadow: 0 0 0.75vmin rgba(167, 139, 250, 0.4);
-    border-bottom: 0.075vmin solid rgba(139, 92, 246, 0.3);
-    padding-bottom: 0.6vmin;
+    text-shadow: 0 0 1.25vmin rgba(167, 139, 250, 0.4);
+    border-bottom: 0.575vmin solid rgba(139, 92, 246, 0.3);
+    padding-bottom: 1.1vmin;
 }
 
 .stat-row {
     display: flex;
     justify-content: space-between;
-    padding: 0.48vmin 0;
-    border-bottom: 0.075vmin solid rgba(255, 255, 255, 0.05);
-    font-size: 1.14vmin;
+    padding: 0.98vmin 0;
+    border-bottom: 0.575vmin solid rgba(255, 255, 255, 0.05);
+    font-size: 1.64vmin;
 }
 
 .stat-row span:first-child {
@@ -401,13 +418,13 @@
 .stat-row span:last-child {
     color: #fff;
     font-weight: 700;
-    text-shadow: 0 0 0.375vmin rgba(255,255,255,0.3);
+    text-shadow: 0 0 0.875vmin rgba(255,255,255,0.3);
 }
 
 .ability {
-    margin-bottom: 1.5vmin;
-    padding-bottom: 1.5vmin;
-    border-bottom: 0.075vmin dashed rgba(139, 92, 246, 0.3);
+    margin-bottom: 2vmin;
+    padding-bottom: 2vmin;
+    border-bottom: 0.575vmin dashed rgba(139, 92, 246, 0.3);
 }
 
 .ability:last-child {
@@ -420,26 +437,26 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 0.48vmin;
+    margin-bottom: 0.98vmin;
 }
 
 .ability-header strong {
     color: #e9d5ff;
-    font-size: 1.2vmin;
-    text-shadow: 0 0 0.6vmin rgba(167, 139, 250, 0.5);
+    font-size: 1.7vmin;
+    text-shadow: 0 0 1.1vmin rgba(167, 139, 250, 0.5);
 }
 
 .cooldown {
-    font-size: 0.9vmin;
+    font-size: 1.4vmin;
     color: #bfdbfe;
     background: rgba(59, 130, 246, 0.3);
-    padding: 0.24vmin 0.72vmin;
-    border-radius: 0.45vmin;
+    padding: 0.74vmin 1.22vmin;
+    border-radius: 0.95vmin;
     font-weight: 600;
 }
 
 .ability p {
-    font-size: 1.02vmin;
+    font-size: 1.52vmin;
     color: #e2e8f0;
     margin: 0;
     line-height: 1.5;
@@ -447,20 +464,20 @@
 
 .ultimate-detail {
     background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(30, 30, 60, 0.4) 100%);
-    border: 0.15vmin solid rgba(139, 92, 246, 0.4);
-    box-shadow: 0 0 1.5vmin rgba(139, 92, 246, 0.15);
+    border: 0.65vmin solid rgba(139, 92, 246, 0.4);
+    box-shadow: 0 0 2vmin rgba(139, 92, 246, 0.15);
 }
 
 .ultimate-detail strong {
     display: block;
     color: #d8b4fe;
-    margin-bottom: 0.6vmin;
-    font-size: 1.32vmin;
-    text-shadow: 0 0 0.9vmin rgba(167, 139, 250, 0.8);
+    margin-bottom: 1.1vmin;
+    font-size: 1.82vmin;
+    text-shadow: 0 0 1.4vmin rgba(167, 139, 250, 0.8);
 }
 
 .ultimate-detail p {
-    font-size: 1.08vmin;
+    font-size: 1.58vmin;
     color: #f1f5f9;
     line-height: 1.5;
 }

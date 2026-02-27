@@ -1,7 +1,5 @@
 import "../App.css";
 import "./HomeScreen.css";
-
-import App from "../App";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../Components/AuthContext";

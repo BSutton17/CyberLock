@@ -183,6 +183,20 @@ export function applyAbilityEffects(result, gameState) {
                 appliedThisTurn: !effect.tickOnCastTurn, // Most effects skip first tick; some visuals should expire on caster end-turn
                 ownerTurnId: effect.ownerTurnId ?? effectOwnerTurnId ?? result.ownerTurnId ?? result.casterId ?? null
             };
+
+            if (newEffect.source === 'power_boost') {
+                console.log('[POWER BOOST DEBUG] Added effect:', {
+                    target: newEffect.target,
+                    stat: newEffect.stat,
+                    value: newEffect.value,
+                    duration: newEffect.duration,
+                    turnsRemaining: newEffect.turnsRemaining,
+                    appliedThisTurn: newEffect.appliedThisTurn,
+                    ownerTurnId: newEffect.ownerTurnId,
+                    tickOnCastTurn: effect.tickOnCastTurn
+                });
+            }
+
             updates.activeEffects.push(newEffect);
             console.log('[APPLY EFFECTS] Added to activeEffects:', newEffect);
 
@@ -242,7 +256,19 @@ export function tickActiveEffects(activeEffects, playerCharacters, enemies, endi
     activeEffects.forEach((effect, index) => {
         // Create new effect object to avoid mutation
         const updatedEffect = { ...effect };
-        
+
+        if (effect.source === 'power_boost') {
+            console.log('[POWER BOOST DEBUG] Tick start:', {
+                index,
+                target: effect.target,
+                stat: effect.stat,
+                turnsRemaining: effect.turnsRemaining,
+                appliedThisTurn: effect.appliedThisTurn,
+                ownerTurnId: effect.ownerTurnId,
+                endingTurnOwnerId
+            });
+        }
+
         console.log(`[TICK EFFECTS] Processing effect ${index}:`, {
             type: effect.type,
             target: effect.target,
@@ -256,6 +282,14 @@ export function tickActiveEffects(activeEffects, playerCharacters, enemies, endi
 
         const shouldTickThisTurn = !endingTurnOwnerId || !effect.ownerTurnId || effect.ownerTurnId === endingTurnOwnerId;
         if (!shouldTickThisTurn) {
+            if (effect.source === 'power_boost') {
+                console.log('[POWER BOOST DEBUG] Skipping tick (owner mismatch):', {
+                    target: effect.target,
+                    stat: effect.stat,
+                    ownerTurnId: effect.ownerTurnId,
+                    endingTurnOwnerId
+                });
+            }
             updatedEffects.push(updatedEffect);
             return;
         }
@@ -284,6 +318,14 @@ export function tickActiveEffects(activeEffects, playerCharacters, enemies, endi
                 }
             }
             updatedEffect.appliedThisTurn = false;
+            if (effect.source === 'power_boost') {
+                console.log('[POWER BOOST DEBUG] Armed for next owner turn tick:', {
+                    target: effect.target,
+                    stat: effect.stat,
+                    turnsRemaining: updatedEffect.turnsRemaining,
+                    ownerTurnId: updatedEffect.ownerTurnId
+                });
+            }
             updatedEffects.push(updatedEffect);
             return;
         }
@@ -383,10 +425,25 @@ export function tickActiveEffects(activeEffects, playerCharacters, enemies, endi
         }
         
         updatedEffect.turnsRemaining--;
+        if (effect.source === 'power_boost') {
+            console.log('[POWER BOOST DEBUG] Ticked down:', {
+                target: effect.target,
+                stat: effect.stat,
+                turnsRemaining: updatedEffect.turnsRemaining,
+                endingTurnOwnerId
+            });
+        }
         console.log(`[TICK EFFECTS] Ticked down to ${updatedEffect.turnsRemaining} turns remaining`);
 
         // If effect expires, bonuses are automatically removed (they were never added to base stats)
         if (updatedEffect.turnsRemaining <= 0) {
+            if (effect.source === 'power_boost') {
+                console.log('[POWER BOOST DEBUG] Effect expired:', {
+                    target: effect.target,
+                    stat: effect.stat,
+                    endingTurnOwnerId
+                });
+            }
             console.log(`[TICK EFFECTS] Effect expired - removing from activeEffects`);
             // Player stat buffs don't need to be removed from stats since they were never added to base stats
             // Enemy stat buffs/debuffs DO need to be removed since they modify enemy stats directly

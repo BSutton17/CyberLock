@@ -192,6 +192,18 @@ function getValidMovementCells(position, maxMovement, characterPositions, ROWS =
     return validCells;
 }
 
+function isCellBlockedByBarrier(cell, activeEffects = []) {
+    if (!activeEffects || activeEffects.length === 0) return false;
+
+    return activeEffects.some(effect =>
+        effect.type === 'blue_barrier' &&
+        effect.turnsRemaining > 0 &&
+        effect.cell &&
+        effect.cell.row === cell.row &&
+        effect.cell.col === cell.col
+    );
+}
+
 /**
  * BFS pathfinding to find reachable cells within movement range
  * Returns all reachable cells with their actual path distance
@@ -236,13 +248,14 @@ function getReachableCells(startPos, maxMovement, characterPositions, activeEffe
             const isOccupied = Object.values(characterPositions).some(
                 p => p.row === neighbor.row && p.col === neighbor.col
             );
+            const blockedByBarrier = isCellBlockedByBarrier(neighbor, activeEffects);
             
             // Check if in danger zone (and should be avoided)
             const inDangerZone = !ignoreDangerZones && enemy
                 ? isCellInDangerZone(neighbor, activeEffects, enemy)
                 : false;
             
-            if (!isOccupied && !inDangerZone) {
+            if (!isOccupied && !inDangerZone && !blockedByBarrier) {
                 visited.add(key);
                 queue.push({ pos: neighbor, distance: distance + 1 });
             }

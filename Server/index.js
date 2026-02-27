@@ -641,9 +641,19 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on("enemy_turn_complete", ({ room, updatedEnemies, updatedPlayerCharacters, updatedActiveEffects }) => {
+  socket.on("enemy_turn_complete", ({ room, enemyId, updatedEnemies, updatedPlayerCharacters, updatedActiveEffects }) => {
     const combat = combatSessions[room];
     if (!combat) return;
+
+    const activeTurn = combat.turnOrder?.[combat.currentTurnIndex];
+    if (!activeTurn || activeTurn.type !== 'enemy' || activeTurn.id !== enemyId) {
+      console.warn('[SERVER] Ignoring stale enemy_turn_complete:', {
+        room,
+        incomingEnemyId: enemyId,
+        activeTurn
+      });
+      return;
+    }
 
     if (updatedEnemies && Array.isArray(updatedEnemies)) {
       combat.enemies = normalizeEnemiesForCombat(updatedEnemies, combat.enemies || []);

@@ -17,11 +17,13 @@ function Main() {
     const [weaponSelected, setWeaponSelected] = useState(false);
     const [selectedAbility, setSelectedAbility] = useState(null);
     const [selectedTargets, setSelectedTargets] = useState([]);
+    const [pendingRelocateTarget, setPendingRelocateTarget] = useState(null);
     const [cooldowns, setCooldowns] = useState({});
     const [activeEffects, setActiveEffects] = useState([]);
     const [turnStartPosition, setTurnStartPosition] = useState(null);
     const [movementUsed, setMovementUsed] = useState(0);
     const [actionUsed, setActionUsed] = useState(false);
+    const [turnTimeLeft, setTurnTimeLeft] = useState(null);
     const [aiLog, setAiLog] = useState([]);
     // const [aiInput, setAiInput] = useState('');
     const [aiBusy, setAiBusy] = useState(false);
@@ -53,6 +55,15 @@ function Main() {
     const playerCharactersRef = useRef(playerCharacters);
     const enemiesRef = useRef(enemies);
     const gameOverRef = useRef(gameOver);
+    const movementUsedRef = useRef(movementUsed);
+    const currentPlayerCharacterRef = useRef(currentPlayerCharacter);
+    const actionUsedRef = useRef(actionUsed);
+    const currentTurnRef = useRef(currentTurn);
+    const currentTurnCycleRef = useRef(0);
+    const completedEnemyTurnCyclesRef = useRef(new Set());
+    const completedAllyTurnCyclesRef = useRef(new Set());
+    const turnTimerIntervalRef = useRef(null);
+    const turnTimerAutoEndedRef = useRef(false);
 
     const isEnemyDeadBody = (enemy) => {
         return !!enemy && (enemy.isDeadBody || (enemy.stats?.health || 0) <= 0);
@@ -96,6 +107,45 @@ function Main() {
     useEffect(() => {
         gameOverRef.current = gameOver;
     }, [gameOver]);
+
+    useEffect(() => {
+        if (!selectedAbility) {
+            setPendingRelocateTarget(null);
+        }
+    }, [selectedAbility]);
+
+    useEffect(() => {
+        movementUsedRef.current = movementUsed;
+    }, [movementUsed]);
+
+    useEffect(() => {
+        currentPlayerCharacterRef.current = currentPlayerCharacter;
+    }, [currentPlayerCharacter]);
+
+    useEffect(() => {
+        actionUsedRef.current = actionUsed;
+    }, [actionUsed]);
+
+    useEffect(() => {
+        currentTurnRef.current = currentTurn;
+    }, [currentTurn]);
+
+    useEffect(() => {
+        currentTurnCycleRef.current += 1;
+    }, [currentTurn?.type, currentTurn?.id]);
+
+    const getMovementRemainingForAutoEnd = () => {
+        const playerCharacter = currentPlayerCharacterRef.current;
+        if (!playerCharacter) return 0;
+
+        const totalSpeed = calculateTotalStat(playerCharacter, playerName, 'speed', activeEffectsRef.current || []);
+        const maxMovement = Math.floor(totalSpeed / 10);
+        return Math.max(0, maxMovement - (movementUsedRef.current || 0));
+    };
+
+    const shouldAutoEndTurn = () => {
+        return actionUsedRef.current === true && getMovementRemainingForAutoEnd() <= 0;
+    };
 
     const appendAiLog = (entry) => {
         const logEntry = {
@@ -285,6 +335,50 @@ function Main() {
         }
     }, [isMyTurn, playerName]);
 
+    useEffect(() => {
+        if (turnTimerIntervalRef.current) {
+            clearInterval(turnTimerIntervalRef.current);
+            turnTimerIntervalRef.current = null;
+        }
+
+        if (!isMyTurn) {
+            turnTimerAutoEndedRef.current = false;
+            setTurnTimeLeft(null);
+            return;
+        }
+
+        turnTimerAutoEndedRef.current = false;
+        setTurnTimeLeft(30);
+
+        turnTimerIntervalRef.current = setInterval(() => {
+            setTurnTimeLeft(prev => {
+                if (prev === null) return null;
+                return Math.max(0, prev - 1);
+            });
+        }, 1000);
+
+        return () => {
+            if (turnTimerIntervalRef.current) {
+                clearInterval(turnTimerIntervalRef.current);
+                turnTimerIntervalRef.current = null;
+            }
+        };
+    }, [isMyTurn, currentTurn?.id]);
+
+    useEffect(() => {
+        if (!isMyTurn || turnTimeLeft !== 0 || turnTimerAutoEndedRef.current) {
+            return;
+        }
+
+        if (!shouldAutoEndTurn()) {
+            return;
+        }
+
+        turnTimerAutoEndedRef.current = true;
+        console.log('[AUTO END TURN TIMER] Timer reached 0, ending turn');
+        handleEndTurn();
+    }, [isMyTurn, turnTimeLeft]);
+
     // Check if current player is alive
     const isPlayerAlive = currentPlayerCharacter && currentPlayerCharacter.stats.health > 0;
 
@@ -293,6 +387,67 @@ function Main() {
         effect.target === playerName &&
         effect.turnsRemaining > 0
     );
+
+    const getPlayerIdByCharacterName = (characterName) => {
+        if (!characterName || !playerCharacters) return null;
+
+        const matchingPlayerIds = Object.keys(playerCharacters).filter(
+            id => playerCharacters[id]?.name === characterName
+        );
+
+        if (matchingPlayerIds.length === 1) {
+            return matchingPlayerIds[0];
+        }
+
+        return null;
+    };
+
+    const getCanonicalUnitId = (unitId) => {
+        if (!unitId) return null;
+        if (playerCharacters?.[unitId]) return unitId;
+
+        const matchingPlayerId = getPlayerIdByCharacterName(unitId);
+        return matchingPlayerId || unitId;
+    };
+
+    const getCurrentPlayerPosition = () => {
+        const byPlayerId = characterPositions[playerName];
+        if (byPlayerId) return byPlayerId;
+
+        const byCharacterName = currentPlayerCharacter?.name
+            ? characterPositions[currentPlayerCharacter.name]
+            : null;
+
+        return byCharacterName || null;
+    };
+
+    const resolveUnitIdFromCell = (rawId, row, col) => {
+        if (!rawId) return rawId;
+
+        if (playerCharacters?.[rawId]) return rawId;
+        if (enemies?.some(enemy => enemy.id === rawId)) return rawId;
+
+        const playerAtCell = players.find(playerId => {
+            const pos = characterPositions[playerId];
+            return pos?.row === row && pos?.col === col;
+        });
+
+        if (playerAtCell) return playerAtCell;
+
+        const byCharacterName = getPlayerIdByCharacterName(rawId);
+        if (byCharacterName) return byCharacterName;
+
+        return rawId;
+    };
+
+    const getResolvedUnitsAtCell = (row, col) => {
+        const rawUnits = Object.entries(characterPositions)
+            .filter(([, pos]) => pos.row === row && pos.col === col)
+            .map(([id]) => id);
+
+        const resolved = rawUnits.map(id => resolveUnitIdFromCell(id, row, col));
+        return [...new Set(resolved)];
+    };
 
     const getEnemySpawnDepth = (enemy) => {
         const behavior = enemy.behavior || 'aggressive';
@@ -566,8 +721,14 @@ function Main() {
                 .map(([, pos]) => `${pos.row},${pos.col}`)
         );
 
+        const barrierCells = new Set(
+            (activeEffects || [])
+                .filter(effect => effect.type === 'blue_barrier' && effect.turnsRemaining > 0 && effect.cell)
+                .map(effect => `${effect.cell.row},${effect.cell.col}`)
+        );
+
         const endKey = `${end.row},${end.col}`;
-        if (occupied.has(endKey)) return null;
+        if (occupied.has(endKey) || barrierCells.has(endKey)) return null;
 
         const startKey = `${start.row},${start.col}`;
         const queue = [{ row: start.row, col: start.col, path: [] }];
@@ -589,7 +750,7 @@ function Main() {
                 if (nextRow < 0 || nextRow >= ROWS || nextCol < 0 || nextCol >= COLS) continue;
 
                 const nextKey = `${nextRow},${nextCol}`;
-                if (visited.has(nextKey) || occupied.has(nextKey)) continue;
+                if (visited.has(nextKey) || occupied.has(nextKey) || barrierCells.has(nextKey)) continue;
 
                 const nextPath = [...current.path, { row: nextRow, col: nextCol }];
                 if (nextRow === end.row && nextCol === end.col) {
@@ -772,7 +933,7 @@ function Main() {
             if (turnAction.movement) {
                 const startPos = characterPositions[enemyId];
                 const endPos = { row: turnAction.movement.row, col: turnAction.movement.col };
-                const path = calculatePath(startPos, endPos);
+                const path = findShortestWalkablePath(startPos, endPos, characterPositions, enemyId) || calculatePath(startPos, endPos);
                 const stepDelay = 10000 / enemy.stats.speed;
                 movementDelay = path.length * stepDelay;
                 
@@ -954,7 +1115,27 @@ function Main() {
 
             // Delay before completing turn (movement + attack + visual feedback)
             const totalDelay = movementDelay + (turnAction.target ? 500 : 0) + 1000;
+            const turnCycleAtSchedule = currentTurnCycleRef.current;
             setTimeout(() => {
+                const liveTurn = currentTurnRef.current;
+                if (!liveTurn || liveTurn.type !== 'enemy' || liveTurn.id !== enemyId) {
+                    console.log('[ENEMY TURN] Skipping stale completion callback:', {
+                        enemyId,
+                        liveTurn
+                    });
+                    return;
+                }
+
+                if (completedEnemyTurnCyclesRef.current.has(turnCycleAtSchedule)) {
+                    console.log('[ENEMY TURN] Skipping duplicate completion for turn cycle:', {
+                        enemyId,
+                        turnCycleAtSchedule
+                    });
+                    return;
+                }
+
+                completedEnemyTurnCyclesRef.current.add(turnCycleAtSchedule);
+
                 console.log('[ENEMY TURN] Completing turn for', enemyId);
                 
                 // Tick down cooldowns for ALL enemies
@@ -985,6 +1166,7 @@ function Main() {
                 setEnemies(normalizeEnemiesState(tickResult.updatedEnemies));
                 socket.emit('enemy_turn_complete', {
                     room,
+                    enemyId,
                     updatedEnemies: tickResult.updatedEnemies,
                     updatedPlayerCharacters: tickResult.updatedCharacters,
                     updatedActiveEffects: tickResult.updatedEffects
@@ -1021,15 +1203,6 @@ function Main() {
                             (typeof incomingUltimate === 'string' && incomingUltimate.trim().length > 0) ||
                             (incomingUltimate && typeof incomingUltimate === 'object' && !!incomingUltimate.id);
 
-                        console.log('[ABILITY DEBUG] Incoming character payload:', {
-                            player: name,
-                            incomingAbilitiesType: Array.isArray(character?.abilities) ? 'array' : typeof character?.abilities,
-                            incomingAbilitiesLength: Array.isArray(character?.abilities) ? character.abilities.length : null,
-                            previousAbilitiesType: Array.isArray(prevCharacter?.abilities) ? 'array' : typeof prevCharacter?.abilities,
-                            previousAbilitiesLength: Array.isArray(prevCharacter?.abilities) ? prevCharacter.abilities.length : null,
-                            incomingUltimateType: typeof character?.ultimate,
-                            previousUltimateType: typeof prevCharacter?.ultimate
-                        });
                         const mergedCharacter = {
                             ...prevCharacter,
                             ...character,
@@ -1067,8 +1240,29 @@ function Main() {
 
         const handleEnemyMoved = ({ enemyId, path, stepDelay }) => {
             if (!path || path.length === 0) return;
+
+            setActiveEffects(prevEffects => prevEffects.filter(effect => {
+                if (effect.type === 'gtg_target_marker' && effect.target === enemyId) {
+                    return false;
+                }
+
+                if (effect.type === 'gtg_origin_marker' && (effect.target === enemyId || !effect.target)) {
+                    return false;
+                }
+
+                return true;
+            }));
+
             const startingPosition = characterPositions[enemyId] || null;
             const finalPosition = path[path.length - 1] || null;
+
+            console.log('[TELEPORT DEBUG] Enemy movement received:', {
+                enemyId,
+                from: startingPosition,
+                to: finalPosition,
+                path,
+                stepDelay
+            });
 
             console.log('[BLACK HOLE TELEPORT] Before enemy_moved apply:', {
                 enemyId,
@@ -1112,11 +1306,43 @@ function Main() {
         };
 
         const handlePlayerMoved = ({ playerName: movedPlayer, position }) => {
-            console.log('[PLAYER MOVED] Received:', movedPlayer, 'to', position);
-            setCharacterPositions(prev => ({
-                ...prev,
-                [movedPlayer]: position
+            const canonicalPlayerId = getCanonicalUnitId(movedPlayer);
+            const beforePosition =
+                characterPositions[canonicalPlayerId] ||
+                (movedPlayer !== canonicalPlayerId ? characterPositions[movedPlayer] : null) ||
+                null;
+            console.log('[PLAYER MOVED] Received:', movedPlayer, 'canonical:', canonicalPlayerId, 'to', position);
+            console.log('[TELEPORT DEBUG] Player movement received:', {
+                incomingId: movedPlayer,
+                canonicalId: canonicalPlayerId,
+                from: beforePosition,
+                to: position
+            });
+
+            setActiveEffects(prevEffects => prevEffects.filter(effect => {
+                if (effect.type === 'gtg_target_marker' && (effect.target === movedPlayer || effect.target === canonicalPlayerId)) {
+                    return false;
+                }
+
+                if (effect.type === 'gtg_origin_marker' && (effect.target === movedPlayer || effect.target === canonicalPlayerId || !effect.target)) {
+                    return false;
+                }
+
+                return true;
             }));
+
+            setCharacterPositions(prev => {
+                const updated = {
+                    ...prev,
+                    [canonicalPlayerId]: position
+                };
+
+                if (movedPlayer !== canonicalPlayerId && updated[movedPlayer]) {
+                    delete updated[movedPlayer];
+                }
+
+                return updated;
+            });
         };
 
         const handleCooldownReduced = ({ targetPlayer, value }) => {
@@ -1210,9 +1436,72 @@ function Main() {
             return;
         }
         
+        const characterOnCell = Object.entries(characterPositions).find(
+            ([, pos]) => pos.row === row && pos.col === col
+        );
+
         // Handle ground-target abilities
         if (selectedAbility) {
             const abilityData = getAbility(selectedAbility);
+
+            if (abilityData?.targetType === 'relocate') {
+                if (!pendingRelocateTarget) {
+                    const resolvedUnitsOnCell = getResolvedUnitsAtCell(row, col);
+
+                    if (resolvedUnitsOnCell.length === 0) {
+                        console.log('[RELOCATE] Select an ally or enemy first');
+                        return;
+                    }
+
+                    const validTargets = resolvedUnitsOnCell.filter(id => {
+                        const isAllyTarget = !!playerCharacters[id];
+                        const isEnemyTarget = enemies.some(e => e.id === id && !isEnemyDeadBody(e));
+                        return isAllyTarget || isEnemyTarget;
+                    });
+
+                    if (validTargets.length === 0) {
+                        console.log('[RELOCATE] Invalid target selected');
+                        return;
+                    }
+
+                    const targetId = validTargets.find(id => id !== playerName) || validTargets[0];
+                    const allyTarget = !!playerCharacters[targetId];
+                    const enemyTarget = enemies.find(e => e.id === targetId && !isEnemyDeadBody(e));
+
+                    if (!allyTarget && !enemyTarget) {
+                        console.log('[RELOCATE] Invalid target selected');
+                        return;
+                    }
+
+                    const currentPos = getCurrentPlayerPosition();
+                    const targetPos = characterPositions[targetId];
+                    if (currentPos && targetPos && abilityData.range) {
+                        const distance = Math.abs(currentPos.row - targetPos.row) + Math.abs(currentPos.col - targetPos.col);
+                        if (distance > abilityData.range) {
+                            console.log(`[RELOCATE] Target out of range! Distance: ${distance}, Max Range: ${abilityData.range}`);
+                            return;
+                        }
+                    }
+
+                    setPendingRelocateTarget(targetId);
+                    console.log('[RELOCATE] Target selected. Click an empty destination tile.');
+                    return;
+                }
+
+                const pendingTargetCanonicalId = getCanonicalUnitId(pendingRelocateTarget);
+
+                const isOccupied = Object.entries(characterPositions).some(
+                    ([id, pos]) => getCanonicalUnitId(id) !== pendingTargetCanonicalId && pos.row === row && pos.col === col
+                );
+
+                if (isOccupied) {
+                    console.log('[RELOCATE] Destination must be empty');
+                    return;
+                }
+
+                executeRelocateAbility(selectedAbility, pendingRelocateTarget, { row, col });
+                return;
+            }
             
             if (abilityData?.targetType === 'ground-target') {
                 console.log('[GROUND TARGET] Executing ground-target ability at:', { row, col });
@@ -1236,10 +1525,6 @@ function Main() {
         }
         
         // Check if clicking on an enemy with weapon selected
-        const characterOnCell = Object.entries(characterPositions).find(
-            ([, pos]) => pos.row === row && pos.col === col
-        );
-        
         // Handle ability targeting
         if (selectedAbility && characterOnCell) {
             const targetId = characterOnCell[0];
@@ -1280,8 +1565,8 @@ function Main() {
             if (enemy) {
                 // Check range for abilities with range requirement
                 if (abilityData.range) {
-                    const currentPos = characterPositions[playerName];
-                    const targetPos = characterPositions[targetId];
+                    const currentPos = getCurrentPlayerPosition();
+                    const targetPos = characterPositions[getCanonicalUnitId(targetId)];
                     
                     if (currentPos && targetPos) {
                         const distance = Math.abs(currentPos.row - targetPos.row) + Math.abs(currentPos.col - targetPos.col);
@@ -1322,7 +1607,7 @@ function Main() {
             
             if (enemy && currentPlayerCharacter) {
                 // Check weapon range
-                const currentPos = characterPositions[playerName];
+                const currentPos = getCurrentPlayerPosition();
                 const enemyPos = characterPositions[enemyId];
                 
                 if (!currentPos || !enemyPos) return;
@@ -1390,9 +1675,11 @@ function Main() {
                 setWeaponSelected(false);
                 setActionUsed(true);
                 
-                // Auto-end turn after 1.5 seconds
+                // Auto-end only if movement is exhausted
                 setTimeout(() => {
-                    handleEndTurn();
+                    if (isMyTurn && shouldAutoEndTurn()) {
+                        handleEndTurn();
+                    }
                 }, 1500);
                 return;
             }
@@ -1437,13 +1724,15 @@ function Main() {
         }
 
         if (movementThisStep <= movementRemaining && movementThisStep > 0 && !isOccupied) {
+            const movementRemainingAfterMove = movementRemaining - movementThisStep;
+
             console.log('Movement:', {
                 character: currentPlayerCharacter.name,
                 speed: currentPlayerCharacter.stats.speed,
                 maxMovement: maxMovement,
                 movementUsed: movementUsed,
                 movementThisStep: movementThisStep,
-                movementRemaining: movementRemaining - movementThisStep,
+                movementRemaining: movementRemainingAfterMove,
                 from: currentPos,
                 to: { row, col }
             });
@@ -1461,6 +1750,15 @@ function Main() {
                 playerName,
                 position: newPosition
             });
+
+            if (movementRemainingAfterMove <= 0) {
+                setTimeout(() => {
+                    if (isMyTurn && shouldAutoEndTurn()) {
+                        console.log('[AUTO END TURN MOVE] Action used and no movement remaining, ending turn');
+                        handleEndTurn();
+                    }
+                }, 250);
+            }
         } else if (movementThisStep > movementRemaining) {
             console.log('Not enough movement remaining:', {
                 movementThisStep: movementThisStep,
@@ -1499,6 +1797,16 @@ function Main() {
             effect.type === 'toxic_mist_field' &&
             effect.turnsRemaining > 0 &&
             effect.center
+        );
+        const activeBlueBarriers = activeEffects.filter(effect =>
+            effect.type === 'blue_barrier' &&
+            effect.turnsRemaining > 0 &&
+            effect.cell
+        );
+        const activeGtgOriginMarkers = activeEffects.filter(effect =>
+            effect.type === 'gtg_origin_marker' &&
+            effect.turnsRemaining > 0 &&
+            effect.cell
         );
         
         for (let row = 0; row < ROWS; row++) {
@@ -1546,10 +1854,27 @@ function Main() {
                         Math.abs(field.center.col - col) <= radius
                     );
                 });
+                const isBlueBarrierCell = activeBlueBarriers.some(barrier =>
+                    barrier.cell.row === row && barrier.cell.col === col
+                );
+                const isGtgOriginCell = activeGtgOriginMarkers.some(marker =>
+                    marker.cell.row === row && marker.cell.col === col
+                );
                 const isWhitePhospherusEnemy = isEnemy && enemyOnCell && activeEffects.some(effect =>
                     effect.type === 'damage_over_time' &&
                     effect.source === 'white_phospherus' &&
                     effect.target === enemyOnCell.id &&
+                    effect.turnsRemaining > 0
+                );
+                const isGuardedBreathAlly = !isEnemy && !!characterOnCell && activeEffects.some(effect =>
+                    effect.type === 'stat_buff' &&
+                    effect.source === 'guarded_breath' &&
+                    effect.target === characterOnCell[0] &&
+                    effect.turnsRemaining > 0
+                );
+                const isGtgTeleportedTarget = !!characterOnCell && activeEffects.some(effect =>
+                    effect.type === 'gtg_target_marker' &&
+                    effect.target === characterOnCell[0] &&
                     effect.turnsRemaining > 0
                 );
 
@@ -1558,7 +1883,7 @@ function Main() {
                         key={`${row}-${col}`}
                         className={`grid-cell ${
                             characterOnCell ? 'occupied' : ''
-                        } ${isPlayerCharacter ? 'player-controlled' : ''} ${isEnemy ? (isCorpse ? 'enemy-corpse-cell' : 'enemy-cell') : ''} ${isHealingFieldCell ? 'healing-field-cell' : ''} ${isFireballZoneCell ? 'fireball-zone-cell' : ''} ${isBlackHoleZoneCell ? 'black-hole-zone-cell' : ''} ${isBlizzardFieldCell ? 'blizzard-field-cell' : ''} ${isToxicMistCell ? 'toxic-mist-cell' : ''} ${isWhitePhospherusEnemy ? 'white-phospherus-glow' : ''}`}
+                        } ${isPlayerCharacter ? 'player-controlled' : ''} ${isEnemy ? (isCorpse ? 'enemy-corpse-cell' : 'enemy-cell') : ''} ${isHealingFieldCell ? 'healing-field-cell' : ''} ${isFireballZoneCell ? 'fireball-zone-cell' : ''} ${isBlackHoleZoneCell ? 'black-hole-zone-cell' : ''} ${isBlizzardFieldCell ? 'blizzard-field-cell' : ''} ${isToxicMistCell ? 'toxic-mist-cell' : ''} ${isBlueBarrierCell ? 'blue-barrier-cell' : ''} ${isGtgOriginCell ? 'gtg-origin-cell' : ''} ${isWhitePhospherusEnemy ? 'white-phospherus-glow' : ''} ${isGuardedBreathAlly ? 'guarded-breath-glow' : ''} ${isGtgTeleportedTarget ? 'gtg-target-glow' : ''}`}
                         onClick={() => handleGridClick(row, col)}
                     >
                         {characterOnCell && (
@@ -1639,9 +1964,136 @@ function Main() {
             // For other abilities, select and wait for target
             setSelectedAbility(ability.id);
             setSelectedTargets([]);
+            setPendingRelocateTarget(null);
             setWeaponSelected(false);
             console.log(`Selected ability: ${ability.name}. Click a target.`);
         }
+    };
+
+    const executeRelocateAbility = (abilityId, target, targetPosition) => {
+        const result = executeAbility(abilityId, {
+            caster: currentPlayerCharacter,
+            playerName,
+            target,
+            targetPosition,
+            enemies,
+            playerCharacters,
+            characterPositions,
+            cooldowns
+        });
+
+        if (!result.success) {
+            console.log('Relocate ability failed:', result.message);
+            return;
+        }
+
+        const updates = applyAbilityEffects(result, {
+            enemies,
+            playerCharacters,
+            activeEffects,
+            effectOwnerTurnId: playerName
+        });
+
+        setEnemies(normalizeEnemiesState(updates.enemies));
+        setPlayerCharacters(updates.playerCharacters);
+        setActiveEffects(updates.activeEffects);
+
+        if (result.forcedMovement && result.forcedMovement.length > 0) {
+            result.forcedMovement.forEach(({ enemyId, path, to }) => {
+                const movementPath = path && path.length > 0 ? path : (to ? [to] : []);
+                if (movementPath.length === 0) return;
+
+                const movedUnitId = getCanonicalUnitId(enemyId);
+                const destination = movementPath[movementPath.length - 1];
+                const isPlayerUnit = !!playerCharacters[movedUnitId];
+                const unitType = isPlayerUnit ? 'player' : 'enemy';
+
+                const preTeleportPosition =
+                    characterPositions[movedUnitId] ||
+                    (enemyId !== movedUnitId ? characterPositions[enemyId] : null) ||
+                    null;
+
+                console.log('[TELEPORT DEBUG] Before teleport apply:', {
+                    abilityId,
+                    unitType,
+                    unitId: movedUnitId,
+                    incomingId: enemyId,
+                    from: preTeleportPosition,
+                    to: destination,
+                    path: movementPath
+                });
+
+                setCharacterPositions(prev => {
+                    const latestFrom =
+                        prev[movedUnitId] ||
+                        (enemyId !== movedUnitId ? prev[enemyId] : null) ||
+                        null;
+
+                    const updated = {
+                        ...prev,
+                        [movedUnitId]: destination
+                    };
+
+                    if (enemyId !== movedUnitId && updated[enemyId]) {
+                        delete updated[enemyId];
+                    }
+
+                    console.log('[TELEPORT DEBUG] After teleport apply:', {
+                        abilityId,
+                        unitType,
+                        unitId: movedUnitId,
+                        incomingId: enemyId,
+                        from: latestFrom,
+                        to: updated[movedUnitId]
+                    });
+
+                    return updated;
+                });
+
+                if (isPlayerUnit) {
+                    socket.emit('player_moved', {
+                        room,
+                        playerName: movedUnitId,
+                        position: destination
+                    });
+                } else {
+                    socket.emit('enemy_moved', {
+                        room,
+                        enemyId: movedUnitId,
+                        path: movementPath,
+                        stepDelay: 1
+                    });
+                }
+            });
+        }
+
+        if (result.newCooldown) {
+            setCooldowns(prev => ({
+                ...prev,
+                [abilityId]: result.newCooldown
+            }));
+        }
+
+        socket.emit('ability_used', {
+            room,
+            playerName,
+            abilityId,
+            result,
+            updatedPlayerCharacters: updates.playerCharacters,
+            updatedEnemies: updates.enemies,
+            updatedActiveEffects: updates.activeEffects
+        });
+
+        setSelectedAbility(null);
+        setSelectedTargets([]);
+        setPendingRelocateTarget(null);
+        setActionUsed(true);
+
+        setTimeout(() => {
+            if (isMyTurn && shouldAutoEndTurn()) {
+                handleEndTurn();
+            }
+        }, 300);
     };
 
     const executeAbilityOnTarget = (abilityId, target) => {
@@ -1662,6 +2114,7 @@ function Main() {
             targets: target ? [target] : undefined, // For multi-target abilities
             enemies: enemies,
             playerCharacters: playerCharacters,
+            characterPositions: characterPositions,
             cooldowns: cooldowns
         });
         
@@ -1692,8 +2145,24 @@ function Main() {
             activeEffects,
             effectOwnerTurnId: playerName
         });
-        
-        setEnemies(normalizeEnemiesState(updates.enemies));
+
+        const normalizedEnemies = normalizeEnemiesState(updates.enemies);
+        const shouldRemoveDeadBodiesImmediately = abilityId === 'charge';
+        const finalEnemies = shouldRemoveDeadBodiesImmediately
+            ? normalizedEnemies.filter(enemy => !isEnemyDeadBody(enemy))
+            : normalizedEnemies;
+
+        if (shouldRemoveDeadBodiesImmediately) {
+            const removedEnemyIds = normalizedEnemies
+                .filter(enemy => isEnemyDeadBody(enemy))
+                .map(enemy => enemy.id);
+
+            if (removedEnemyIds.length > 0) {
+                setTurnOrder(prevOrder => prevOrder.filter(turn => !removedEnemyIds.includes(turn.id)));
+            }
+        }
+
+        setEnemies(finalEnemies);
         setPlayerCharacters(updates.playerCharacters);
         setActiveEffects(updates.activeEffects);
 
@@ -1774,7 +2243,7 @@ function Main() {
             abilityId,
             result,
             updatedPlayerCharacters: updates.playerCharacters,
-            updatedEnemies: updates.enemies,
+            updatedEnemies: finalEnemies,
             updatedActiveEffects: updates.activeEffects
         });
         
@@ -1784,13 +2253,13 @@ function Main() {
         setSelectedTargets([]);
         setActionUsed(true);
         
-        // Auto-end turn after 1.5 seconds - but only if it's still our turn
+        // Auto-end only if movement is exhausted
         setTimeout(() => {
-            if (isMyTurn) {
-                console.log('[AUTO END TURN] Executing after ability use');
+            if (isMyTurn && shouldAutoEndTurn()) {
+                console.log('[AUTO END TURN] Action used and no movement remaining after ability use, ending turn');
                 handleEndTurn();
             } else {
-                console.log('[AUTO END TURN] CANCELLED - No longer our turn');
+                console.log('[AUTO END TURN] Skipped - action not used, movement remains, or no longer our turn');
             }
         }, 1500);
     };
@@ -1884,13 +2353,13 @@ function Main() {
         setSelectedTargets([]);
         setActionUsed(true);
         
-        // Auto-end turn after 1.5 seconds - but only if it's still our turn
+        // Auto-end only if movement is exhausted
         setTimeout(() => {
-            if (isMyTurn) {
-                console.log('[AUTO END TURN MULTI] Executing after ability use');
+            if (isMyTurn && shouldAutoEndTurn()) {
+                console.log('[AUTO END TURN MULTI] Action used and no movement remaining after ability use, ending turn');
                 handleEndTurn();
             } else {
-                console.log('[AUTO END TURN MULTI] CANCELLED - No longer our turn');
+                console.log('[AUTO END TURN MULTI] Skipped - action not used, movement remains, or no longer our turn');
             }
         }, 1500);
     };
@@ -2000,19 +2469,43 @@ function Main() {
         setSelectedAbility(null);
         setActionUsed(true);
         
-        // Auto-end turn after 1.5 seconds
+        // Auto-end only if movement is exhausted
         setTimeout(() => {
-            if (isMyTurn) {
-                console.log('[AUTO END TURN GROUND] Executing after ability use');
+            if (isMyTurn && shouldAutoEndTurn()) {
+                console.log('[AUTO END TURN GROUND] Action used and no movement remaining after ability use, ending turn');
                 handleEndTurn();
             } else {
-                console.log('[AUTO END TURN GROUND] CANCELLED - No longer our turn');
+                console.log('[AUTO END TURN GROUND] Skipped - action not used, movement remains, or no longer our turn');
             }
         }, 1500);
     };
 
     const handleEndTurn = () => {
         if (!isMyTurn) return;
+
+        const liveTurn = currentTurnRef.current;
+        const turnCycle = currentTurnCycleRef.current;
+        const isCurrentPlayersTurn = liveTurn?.type === 'ally' && liveTurn?.id === playerName;
+
+        if (!isCurrentPlayersTurn) {
+            console.log('[END TURN] Ignored stale end-turn request:', {
+                playerName,
+                liveTurn,
+                turnCycle
+            });
+            return;
+        }
+
+        if (completedAllyTurnCyclesRef.current.has(turnCycle)) {
+            console.log('[END TURN] Duplicate end-turn ignored for turn cycle:', {
+                playerName,
+                turnCycle
+            });
+            return;
+        }
+
+        completedAllyTurnCyclesRef.current.add(turnCycle);
+
         console.log('END TURN clicked');
         console.log('Player Name:', playerName);
         console.log('Room:', room);
@@ -2134,7 +2627,12 @@ function Main() {
             <h2>Location</h2>
             <h2>
                 {isMyTurn ? (
-                    <div className="turn">YOUR TURN</div>
+                    <div className="turn">
+                        YOUR TURN
+                        {turnTimeLeft !== null && turnTimeLeft < 16 && (
+                            <span className="turn-timer">{turnTimeLeft}s</span>
+                        )}
+                    </div>
                 ) : (
                     <div className="turn">
                     {currentTurn?.type === 'ally' 

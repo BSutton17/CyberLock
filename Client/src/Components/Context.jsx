@@ -8,7 +8,9 @@ export const useGameContext = () => {
 };
 
 export const GameProvider = ({ children }) => {
-  const SOCKET_BASE_URL = import.meta.env.VITE_API_URL || "https://cs-capstone-491b8f4e8664.herokuapp.com";
+  const SOCKET_BASE_URL = import.meta.env.MODE === 'production' 
+    ? undefined
+    : (import.meta.env.VITE_API_URL || "http://localhost:5000");
     const [players, setPlayers] = useState([]);
     const [isAdmin, setAdmin] = useState(false);
     const [room, setRoom] = useState("");

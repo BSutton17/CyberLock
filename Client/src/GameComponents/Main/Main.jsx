@@ -10,7 +10,7 @@ import { assignEnemyAbilities } from '../../Utils/enemyAbilityUtils';
 import './Main.css';
 
 function Main() {
-    const { players, playerCharacters, setPlayerCharacters, playerName, room, socket, attributeAllocations, setGamePhase, isMyTurn, currentTurn, enemies, setEnemies, turnOrder, setTurnOrder, isAdmin, setScreen } = useGameContext();
+    const { players, playerCharacters, setPlayerCharacters, playerName, room, socket, attributeAllocations, setGamePhase, isMyTurn, currentTurn, enemies, setEnemies, turnOrder, setTurnOrder, isAdmin, setScreen, getCharacterImage } = useGameContext();
     const [currentPlayerCharacter, setCurrentPlayerCharacter] = useState(null);
     const [ultimateReady, setUltimateReady] = useState(false);
     const [characterPositions, setCharacterPositions] = useState({});
@@ -31,6 +31,10 @@ function Main() {
     const [pendingPostEncounterChoice, setPendingPostEncounterChoice] = useState(false);
     const [pendingNextEncounterChoice, setPendingNextEncounterChoice] = useState(false);
     const [aiText, setAiText] = useState('');
+    const [aiSentences, setAiSentences] = useState([]);
+    const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0);
+    const [displayText, setDisplayText] = useState('');
+    const [typingIndex, setTypingIndex] = useState(0);
     const aiLogRef = useRef(null);
     const hasRequestedIntroRef = useRef(false);
     const pendingStartCombatRef = useRef(false);
@@ -228,11 +232,58 @@ function Main() {
     }, [playerCharacters, playerName]);
 
     useEffect(() => {
-        if (aiLog.length > 0) {
-            const latestEntry = aiLog[aiLog.length - 1];
-            setAiText(latestEntry.text);
+        const message = (aiText || '').trim();
+        if (!message) {
+            setAiSentences([]);
+            setCurrentSentenceIndex(0);
+            setDisplayText('');
+            setTypingIndex(0);
+            return;
         }
-    }, [aiLog]);
+
+        const segments = message
+            .split(/(?<=[.!?])\s+|\n+/)
+            .map(segment => segment.trim())
+            .filter(Boolean);
+
+        setAiSentences(segments.length > 0 ? segments : [message]);
+        setCurrentSentenceIndex(0);
+        setDisplayText('');
+        setTypingIndex(0);
+    }, [aiText]);
+
+    useEffect(() => {
+        const currentSentence = aiSentences[currentSentenceIndex] || '';
+        if (!currentSentence || typingIndex >= currentSentence.length) {
+            return;
+        }
+
+        const interval = setInterval(() => {
+            setDisplayText((prevText) => prevText + currentSentence.charAt(typingIndex));
+            setTypingIndex((prevIndex) => prevIndex + 1);
+        }, 20);
+
+        return () => clearInterval(interval);
+    }, [aiSentences, currentSentenceIndex, typingIndex]);
+
+    useEffect(() => {
+        const currentSentence = aiSentences[currentSentenceIndex] || '';
+        if (!currentSentence || typingIndex < currentSentence.length) {
+            return;
+        }
+
+        if (currentSentenceIndex >= aiSentences.length - 1) {
+            return;
+        }
+
+        const timer = setTimeout(() => {
+            setCurrentSentenceIndex((prevIndex) => prevIndex + 1);
+            setDisplayText('');
+            setTypingIndex(0);
+        }, currentSentence.length * 12);
+
+        return () => clearTimeout(timer);
+    }, [aiSentences, currentSentenceIndex, typingIndex]);
 
     useEffect(() => {
         if (!isAdmin || !room || hasRequestedIntroRef.current) return;
@@ -256,6 +307,7 @@ function Main() {
         const handleAiMessage = ({ eventType, response }) => {
             setAiBusy(false);
             appendAiLog({ role: 'ai', text: response, eventType });
+            setAiText(response || '');
 
             if (eventType === 'game_start') {
                 setPendingFactionChoice(true);
@@ -1116,6 +1168,7 @@ function Main() {
             // Delay before completing turn (movement + attack + visual feedback)
             const totalDelay = movementDelay + (turnAction.target ? 500 : 0) + 1000;
             const turnCycleAtSchedule = currentTurnCycleRef.current;
+            const completionKey = `${enemyId}:${turnCycleAtSchedule}`;
             setTimeout(() => {
                 const liveTurn = currentTurnRef.current;
                 if (!liveTurn || liveTurn.type !== 'enemy' || liveTurn.id !== enemyId) {
@@ -1126,15 +1179,16 @@ function Main() {
                     return;
                 }
 
-                if (completedEnemyTurnCyclesRef.current.has(turnCycleAtSchedule)) {
+                if (completedEnemyTurnCyclesRef.current.has(completionKey)) {
                     console.log('[ENEMY TURN] Skipping duplicate completion for turn cycle:', {
                         enemyId,
-                        turnCycleAtSchedule
+                        turnCycleAtSchedule,
+                        completionKey
                     });
                     return;
                 }
 
-                completedEnemyTurnCyclesRef.current.add(turnCycleAtSchedule);
+                completedEnemyTurnCyclesRef.current.add(completionKey);
 
                 console.log('[ENEMY TURN] Completing turn for', enemyId);
                 
@@ -1887,7 +1941,7 @@ function Main() {
                         onClick={() => handleGridClick(row, col)}
                     >
                         {characterOnCell && (
-                            <div className="grid-character">
+                            <div className={`grid-character ${!isEnemy ? 'player-grid-character' : ''}`}>
                                 {isEnemy ? (
                                     isCorpse ? (
                                         <div className="enemy-corpse-icon">
@@ -1906,7 +1960,13 @@ function Main() {
                                         </>
                                     )
                                 ) : (
-                                    playerCharacters[characterOnCell[0]]?.name || '?'
+                                    playerCharacters[characterOnCell[0]] ? (
+                                        <img
+                                            className="grid-character-image"
+                                            src={getCharacterImage(playerCharacters[characterOnCell[0]])}
+                                            alt={playerCharacters[characterOnCell[0]].name}
+                                        />
+                                    ) : '?'
                                 )}
                             </div>
                         )}
@@ -2660,7 +2720,12 @@ function Main() {
                         >
                             {character ? (
                                 <>
-                                    <div className="character-icon"></div>
+                                    <div className="character-icon">
+                                        <img
+                                            src={getCharacterImage(character)}
+                                            alt={character.name}
+                                        />
+                                    </div>
                                     <div className="character-info">
                                         <div className="character-name">{character.name}</div>
                                         <div className="character-stats">
@@ -2732,14 +2797,21 @@ function Main() {
         {/* <button style={{ width: '150px' }} onClick={handleLevelUp}>Level Up</button> */}
         <button style={{ width: '150px' }} onClick={() => handleStoryComplete()}>Combat</button>
             </div>
-            <span className="ai-text">{aiText}</span>
+            <span className="ai-text">
+                {displayText}
+            </span>
        </div>
         <div className="inventory">
             {currentPlayerCharacter ? (
                 <>
                     <div className="character-sheet-header">
                         <div className="character-portrait">
-                            <div className="portrait-icon"></div>
+                            <div className="portrait-icon">
+                                <img
+                                    src={getCharacterImage(currentPlayerCharacter)}
+                                    alt={currentPlayerCharacter.name}
+                                />
+                            </div>
                             <div className="character-title">
                                 <div className="char-name">{currentPlayerCharacter.name}</div>
                                 <div className="char-role">{currentPlayerCharacter.role}</div>

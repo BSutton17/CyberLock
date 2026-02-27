@@ -1,4 +1,4 @@
-import sqlite3 from 'sqlite3';
+// import sqlite3 from 'sqlite3';  // Dynamic import below instead
 import mysql from 'mysql2/promise';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -15,8 +15,17 @@ const DB_TYPE = process.env.DB_TYPE || 'sqlite';
 
 let db = null;
 
-// Initialize SQLite Database
+// Initialize SQLite Database (Dynamic import - only loads when needed)
 const initSQLite = async () => {
+  // Dynamically import sqlite3 only when using SQLite
+  let sqlite3;
+  try {
+    const sqlite3Module = await import('sqlite3');
+    sqlite3 = sqlite3Module.default;
+  } catch (error) {
+    throw new Error('SQLite not available. Please install sqlite3 or switch to MySQL (DB_TYPE=mysql)');
+  }
+
   const dbPath = path.join(__dirname, '../data/database.db');
   
   // Create data directory if it doesn't exist
@@ -45,7 +54,7 @@ const initMySQL = async () => {
     database: process.env.MYSQL_DB || 'capstone',
   });
 
-  console.log('✓ Connected to MySQL database');
+  console.log('Connected to MySQL database');
   return connection;
 };
 
@@ -130,7 +139,7 @@ export const initializeDatabase = async () => {
     }
     return db;
   } catch (error) {
-    console.error('✗ Database initialization error:', error);
+    console.error('Database initialization error:', error);
     throw error;
   }
 };

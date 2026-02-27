@@ -8,7 +8,9 @@ export const useGameContext = () => {
 };
 
 export const GameProvider = ({ children }) => {
-  const SOCKET_BASE_URL = import.meta.env.VITE_API_URL || "https://cs-capstone-491b8f4e8664.herokuapp.com";
+  const SOCKET_BASE_URL = import.meta.env.MODE === 'production' 
+    ? undefined
+    : (import.meta.env.VITE_API_URL || "http://localhost:5000");
     const [players, setPlayers] = useState([]);
     const [isAdmin, setAdmin] = useState(false);
     const [room, setRoom] = useState("");
@@ -26,6 +28,23 @@ export const GameProvider = ({ children }) => {
     const [storyText, setStoryText] = useState('The adventure begins...');
     const [combatRewards, setCombatRewards] = useState(null);
     const [attributeAllocations, setAttributeAllocations] = useState({});
+
+    const characterImageMap = {
+      offensive_tank_1: '/Offensive_Tank_1.png',
+      defensive_tank_2: '/Defensive_Tank_2.png',
+      spellcaster_dps_1: '/Spell_Caster_DPS_1.png',
+      aggressive_dps_2: '/Aggressive_DPS_2.png',
+      traditional_warrior_dps_3: '/Traditional_Warrior_3.png',
+      healing_support_1: '/Healing_Support.png',
+      offensive_support_2: '/Offensive_Support.png',
+      jack_of_all_trades_support_3: '/Spell_Caster_DPS_2.png',
+      hacker_support_4: '/Hacker.png'
+    };
+
+    const getCharacterImage = (character) => {
+      if (!character?.id) return '/vite.svg';
+      return characterImageMap[character.id] || '/vite.svg';
+    };
 
 
   return (
@@ -47,7 +66,9 @@ export const GameProvider = ({ children }) => {
         turnOrder, setTurnOrder,
         isMyTurn, setIsMyTurn,
         enemies, setEnemies,
-        attributeAllocations, setAttributeAllocations
+        attributeAllocations, setAttributeAllocations,
+        characterImageMap,
+        getCharacterImage
       }}
     >
       {children}

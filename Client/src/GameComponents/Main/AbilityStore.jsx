@@ -268,7 +268,7 @@ export const ABILITIES = {
     black_hole: {
         id: 'black_hole',
         name: 'Black Hole',
-        description: 'Click on a square, all enemies in a 5x5 area are sucked in and cannot move for 2 turns',
+        description: 'Click on a square to instantly teleport enemies in a 5x5 area into the center spiral and immobilize them for 2 turns',
         role: "DPS",
         cooldown: 0,
         isUltimate: true,
@@ -294,6 +294,49 @@ export const ABILITIES = {
                 Object.values(characterPositions || {}).map(pos => `${pos.row},${pos.col}`)
             );
             const withinBounds = (r, c) => r >= 0 && r < 7 && c >= 0 && c < 10;
+
+            const buildSpiralPositions = (centerRow, centerCol, maxCells = 70) => {
+                const positions = [];
+                const seen = new Set();
+
+                const pushIfValid = (r, c) => {
+                    if (!withinBounds(r, c)) return;
+                    const key = `${r},${c}`;
+                    if (seen.has(key)) return;
+                    seen.add(key);
+                    positions.push({ row: r, col: c });
+                };
+
+                pushIfValid(centerRow, centerCol);
+
+                let currentRow = centerRow;
+                let currentCol = centerCol;
+                let stepLength = 1;
+                const directions = [
+                    { row: -1, col: 0 }, // up
+                    { row: 0, col: -1 }, // left
+                    { row: 1, col: 0 },  // down
+                    { row: 0, col: 1 }   // right
+                ];
+
+                while (positions.length < maxCells && stepLength < 20) {
+                    for (let directionIndex = 0; directionIndex < directions.length; directionIndex++) {
+                        const direction = directions[directionIndex];
+                        for (let step = 0; step < stepLength; step++) {
+                            currentRow += direction.row;
+                            currentCol += direction.col;
+                            pushIfValid(currentRow, currentCol);
+                            if (positions.length >= maxCells) break;
+                        }
+                        if (positions.length >= maxCells) break;
+                        if (directionIndex % 2 === 1) {
+                            stepLength++;
+                        }
+                    }
+                }
+
+                return positions;
+            };
             
             // Find all enemies in 5x5 area (2 squares in each direction)
             const enemiesInArea = [];
@@ -308,15 +351,6 @@ export const ABILITIES = {
                 if (rowDiff <= 2 && colDiff <= 2) {
                     affectedEnemies.push(enemy.name);
                     enemiesInArea.push({ enemy, enemyPos });
-                    effects.push({
-                        type: 'status_effect',
-                        target: enemy.id,
-                        status: 'black_hole_pull',
-                        center: { row, col },
-                        duration: 2,
-                        preventMovement: false,
-                        preventActions: false
-                    });
                 }
             });
 
@@ -327,61 +361,59 @@ export const ABILITIES = {
                 duration: 2
             });
 
-            // Pull enemies toward center, up to 2 cells, without passing through occupied cells
+            // Remove affected enemies from occupied map so they can be reassigned into the spiral
+            enemiesInArea.forEach(({ enemyPos }) => {
+                occupied.delete(`${enemyPos.row},${enemyPos.col}`);
+            });
+
+            // Deterministic enemy ordering for tie-breaks
             const sortedTargets = enemiesInArea.sort((a, b) => {
                 const distA = Math.abs(a.enemyPos.row - row) + Math.abs(a.enemyPos.col - col);
                 const distB = Math.abs(b.enemyPos.row - row) + Math.abs(b.enemyPos.col - col);
-                return distB - distA;
+                if (distA !== distB) return distB - distA;
+                return a.enemy.id.localeCompare(b.enemy.id);
             });
 
-            sortedTargets.forEach(({ enemy, enemyPos }) => {
-                let current = { ...enemyPos };
-                const path = [];
-                occupied.delete(`${enemyPos.row},${enemyPos.col}`);
+            const spiralSlots = buildSpiralPositions(row, col).filter(pos => {
+                const key = `${pos.row},${pos.col}`;
+                return !occupied.has(key);
+            });
 
-                for (let step = 0; step < 2; step++) {
-                    const currentDistance = Math.abs(current.row - row) + Math.abs(current.col - col);
-                    if (currentDistance === 0) break;
+            sortedTargets.forEach(({ enemy }, index) => {
+                const destination = spiralSlots[index];
+                if (!destination) return;
 
-                    const candidateMoves = [
-                        { row: current.row - 1, col: current.col },
-                        { row: current.row + 1, col: current.col },
-                        { row: current.row, col: current.col - 1 },
-                        { row: current.row, col: current.col + 1 }
-                    ].filter(next => {
-                        if (!withinBounds(next.row, next.col)) return false;
-                        const key = `${next.row},${next.col}`;
-                        if (occupied.has(key)) return false;
-                        const nextDistance = Math.abs(next.row - row) + Math.abs(next.col - col);
-                        return nextDistance < currentDistance;
-                    });
+                const source = characterPositions?.[enemy.id] || null;
+                console.log('[BLACK HOLE TELEPORT] Before teleport:', {
+                    enemyId: enemy.id,
+                    enemyName: enemy.name,
+                    from: source,
+                    to: destination
+                });
 
-                    if (candidateMoves.length === 0) break;
+                occupied.add(`${destination.row},${destination.col}`);
+                effects.push({
+                    type: 'status_effect',
+                    target: enemy.id,
+                    status: 'immobilized',
+                    duration: 2,
+                    preventMovement: true,
+                    preventActions: false
+                });
 
-                    candidateMoves.sort((first, second) => {
-                        const firstDistance = Math.abs(first.row - row) + Math.abs(first.col - col);
-                        const secondDistance = Math.abs(second.row - row) + Math.abs(second.col - col);
-                        if (firstDistance !== secondDistance) return firstDistance - secondDistance;
-                        const firstRowDelta = Math.abs(first.row - row);
-                        const secondRowDelta = Math.abs(second.row - row);
-                        if (firstRowDelta !== secondRowDelta) return firstRowDelta - secondRowDelta;
-                        return Math.abs(first.col - col) - Math.abs(second.col - col);
-                    });
-
-                    const nextCell = candidateMoves[0];
-                    path.push(nextCell);
-                    current = nextCell;
-                }
-
-                occupied.add(`${current.row},${current.col}`);
-
-                if (path.length > 0) {
+                if (characterPositions?.[enemy.id]) {
                     forcedMovement.push({
                         enemyId: enemy.id,
-                        path,
-                        to: current
+                        path: [destination],
+                        to: destination
                     });
                 }
+
+                console.log('[BLACK HOLE TELEPORT] After teleport assignment:', {
+                    enemyId: enemy.id,
+                    enemyName: enemy.name,
+                    finalTile: destination
+                });
             });
             
             if (affectedEnemies.length === 0) {
@@ -396,7 +428,7 @@ export const ABILITIES = {
                 effects: effects,
                 forcedMovement,
                 aoePosition: targetPosition,
-                message: `${caster.name} creates a Black Hole! ${affectedEnemies.join(', ')} are pulled inward and cannot move for 2 turns!`
+                message: `${caster.name} creates a Black Hole! ${affectedEnemies.join(', ')} are teleported into the center spiral and immobilized for 2 turns!`
             };
         }
     },
@@ -775,75 +807,53 @@ export const ABILITIES = {
     guarded_breath: {
         id: 'guarded_breath',
         name: 'Guarded Breath',
-        description: 'Gain +10 Resistance for 1 turn',
+        description: 'Guard one ally, doubling their resistance for one turn',
         role: "Tank",
         level: 1,
-        cooldown: 1,
-        targetType: 'self',
-        type: 'buff',
-
-        execute: ({ caster, playerName }) => {
-            return {
-                success: true,
-                effects: [{
-                    type: 'stat_buff',
-                    target: playerName,
-                    stat: 'resistance',
-                    value: 10,
-                    duration: 1,
-                    stackable: false
-                }],
-                message: `${caster.name} takes a Guarded Breath and gains +4 Resistance for 1 turn!`
-            };
-        }
-    },
-    diamond_body: {
-        id: 'diamond_body',
-        name: 'Diamond Body',
-        description: 'Tanks in your party receive +5 resistance for 1 turn',
-        role: "Support",
-        level: 1,
-        cooldown: 1,
-        targetType: 'all-allies',
+        cooldown: 2,
+        targetType: 'ally',
         type: 'buff',
         
         /**
          * @param {Object} params
          * @param {Object} params.caster - Character using ability
+         * @param {string} params.target - Ally player name/ID
          * @param {Object} params.playerCharacters - All player characters
          * @returns {Object} Effect data
          */
-        execute: ({ caster, playerCharacters }) => {
-            const effects = [];
-            const TankNames = [];
-            
-            Object.keys(playerCharacters).forEach(playerName => {
-                const character = playerCharacters[playerName];
-                if (character.role === 'Tank') {
-                    TankNames.push(character.name);
-                    effects.push({
-                        type: 'stat_buff',
-                        target: playerName,
-                        stat: 'resistance',
-                        value: 5,
-                        duration: 1
-                    });
-                }
+        execute: ({ caster, target, playerCharacters }) => {
+            console.log('[GUARDED BREATH] Execute params:', {
+                casterName: caster?.name,
+                target,
+                playerCharacterKeys: Object.keys(playerCharacters || {})
             });
             
-            if (TankNames.length === 0) {
-                return {
-                    success: false,
-                    message: 'No Tanks in party to buff!'
-                };
-            }
+            const ally = playerCharacters[target];
+
             
-            return {
+            if (!ally) {
+                console.log('[GUARDED BREATH] Target not found!');
+                return { success: false, message: 'Target not found' };
+            }
+
+            const result = {
                 success: true,
-                effects: effects,
-                message: `${caster.name} uses Diamond Boy! ${TankNames.join(', ')} gain +5 Resistance for 1 turn!`
+                effects: [
+                {
+                    type: 'stat_buff',
+                    target: target,
+                    source: 'guarded_breath',
+                    stat: 'resistance',
+                    value: ally.stats.resistance, 
+                    duration: 1,
+                    stackable: false
+                }],
+                message: `${caster.name} gave ${ally.name} doubled resistance for 1 turn!`
             };
-        }
+            
+            console.log('[GUARDED BREATH] Returning result:', result);
+            return result;
+            }
     },
     eagle_eye: {
         id: 'eagle_eye',
@@ -1024,68 +1034,6 @@ export const ABILITIES = {
             };
         }
     },
-    toxic_mist: {
-        id: 'toxic_mist',
-        name: 'Toxic Mist',
-        description: 'Place a toxic field that deals 10 damage to enemies inside it for 2 turns',
-        role: "Tank",
-        level: 3,
-        cooldown: 2,
-        targetType: 'ground-target',
-        type: 'damage',
-        range: 3,
-        aoeSize: 3,
-
-        /**
-         * @param {Object} params
-         * @param {Object} params.caster - Character using ability
-         * @param {Object} params.targetPosition - {row, col} of clicked square
-         * @param {Array} params.enemies - Enemy list for the caster's perspective
-         * @param {Object} params.characterPositions - Positions of all characters
-         * @returns {Object} Effect data
-         */
-        execute: ({ caster, targetPosition, enemies, characterPositions }) => {
-            const { row, col } = targetPosition;
-            const effects = [];
-            const affectedNames = [];
-
-            effects.push({
-                type: 'toxic_mist_field',
-                center: { row, col },
-                radius: 1,
-                duration: 2
-            });
-
-            enemies.forEach(enemy => {
-                const enemyPos = characterPositions?.[enemy.id];
-                if (!enemyPos) return;
-
-                const rowDiff = Math.abs(enemyPos.row - row);
-                const colDiff = Math.abs(enemyPos.col - col);
-
-                if (rowDiff <= 1 && colDiff <= 1) {
-                    affectedNames.push(enemy.name);
-                    effects.push({
-                        type: 'damage_over_time',
-                        target: enemy.id,
-                        amount: 10,
-                        duration: 2
-                    });
-                }
-            });
-
-            const damageMessage = affectedNames.length > 0
-                ? `${affectedNames.join(', ')} will take 10 damage for 2 turns!`
-                : 'No enemies are currently in the toxic field.';
-
-            return {
-                success: true,
-                effects,
-                aoePosition: targetPosition,
-                message: `${caster.name} releases Toxic Mist! ${damageMessage}`
-            };
-        }
-    },
     flood_of_frost: {
         id: 'flood_of_frost',
         name: 'Flood of Frost',
@@ -1262,11 +1210,83 @@ export const ABILITIES = {
             };
         }
     },
+    gtg: {
+        id: 'gtg',
+        name: 'G.T.G.',
+        description: 'Deploy a Grid-Transportation-Gate that teleports an ally or enemy to a vacant location on the battlefield',
+        role: 'Tank',
+        level: 5,
+        cooldown: 6,
+        targetType: 'relocate',
+        type: 'utility',
+        range: 1,
+
+        execute: ({ caster, playerName, target, targetPosition, playerCharacters, enemies, characterPositions }) => {
+            const casterPos = characterPositions?.[playerName];
+            const targetPos = characterPositions?.[target];
+
+            if (!casterPos || !targetPos || !targetPosition) {
+                return { success: false, message: 'Missing target or destination' };
+            }
+
+            const targetEnemy = enemies?.find(enemy => enemy.id === target && !enemy.isDeadBody && (enemy.stats?.health || 0) > 0);
+            const targetAlly = playerCharacters?.[target];
+            const targetName = targetEnemy?.name || targetAlly?.name;
+
+            if (!targetName) {
+                return { success: false, message: 'Target not found' };
+            }
+
+            const distanceToTarget = Math.abs(casterPos.row - targetPos.row) + Math.abs(casterPos.col - targetPos.col);
+            if (distanceToTarget > 2) {
+                return { success: false, message: 'Target is out of range' };
+            }
+
+            const isSameTile = targetPosition.row === targetPos.row && targetPosition.col === targetPos.col;
+            if (isSameTile) {
+                return { success: false, message: 'Choose a different destination tile' };
+            }
+
+            const isOccupied = Object.entries(characterPositions || {}).some(([id, pos]) => {
+                if (id === target) return false;
+                return pos.row === targetPosition.row && pos.col === targetPosition.col;
+            });
+
+            if (isOccupied) {
+                return { success: false, message: 'Destination tile is occupied' };
+            }
+
+            return {
+                success: true,
+                effects: [
+                    {
+                        type: 'gtg_origin_marker',
+                        target,
+                        cell: { row: targetPos.row, col: targetPos.col },
+                        duration: 1
+                    },
+                    {
+                        type: 'gtg_target_marker',
+                        target,
+                        duration: 1
+                    }
+                ],
+                forcedMovement: [
+                    {
+                        enemyId: target,
+                        path: [targetPosition],
+                        to: targetPosition
+                    }
+                ],
+                message: `${caster.name} uses G.T.G.! ${targetName} is teleported.`
+            };
+        }
+    },
     humble: {
         id: 'humble',
         name: 'Humble',
         description: 'Grants yourself +10 ta for 2 turns',
-        role: "support",
+        role: "Support",
         level: 1,
         cooldown: 1,
         targetType: 'self',
@@ -1334,7 +1354,7 @@ export const ABILITIES = {
         name: 'Here We Go Again',
         description: 'All allies have all of their cooldowns set to 0',
         role: "Support",
-        isUltimate: true,
+        level: 5,
         cooldown: 5,
         targetType: 'all-allies',
         type: 'buff',
@@ -1671,7 +1691,10 @@ export const ABILITIES = {
                         stat: 'strength',
                         value: 50,
                         duration: 1,
-                        stackable: false
+                        stackable: false,
+                        source: 'power_boost',
+                        ownerTurnId: playerName,
+                        tickOnCastTurn: false
                     },
                     {
                         type: 'stat_debuff',
@@ -1679,7 +1702,10 @@ export const ABILITIES = {
                         stat: 'speed',
                         value: -(caster.stats.speed || 0),
                         duration: 1,
-                        stackable: false
+                        stackable: false,
+                        source: 'power_boost',
+                        ownerTurnId: playerName,
+                        tickOnCastTurn: false
                     }
                 ],
                 message: `${caster.name} activates Power Boost! +50 Strength, but Speed drops to 0 for 1 turn!`
@@ -1734,7 +1760,7 @@ export const ABILITIES = {
     rallying_guard: {
         id: 'rallying_guard',
         name: 'Rallying Guard',
-        description: 'Gain +5 Speed and +5 Resistance for 1 turn',
+        description: 'Gain +5 Speed and +15 Resistance for 1 turn',
         role: "Tank",
         level: 1,
         cooldown: 2,
@@ -1749,7 +1775,7 @@ export const ABILITIES = {
                         type: 'stat_buff',
                         target: playerName,
                         stat: 'speed',
-                        value: 4,
+                        value: 5,
                         duration: 1,
                         stackable: false
                     },
@@ -1757,12 +1783,12 @@ export const ABILITIES = {
                         type: 'stat_buff',
                         target: playerName,
                         stat: 'resistance',
-                        value: 4,
+                        value: 15,
                         duration: 1,
                         stackable: false
                     }
                 ],
-                message: `${caster.name} uses Rallying Guard and gains +4 Speed and +4 Resistance for 1 turn!`
+                message: `${caster.name} uses Rallying Guard and gains +5 Speed and +15 Resistance for 1 turn!`
             };
         }
     },
@@ -1845,7 +1871,7 @@ export const ABILITIES = {
                     type: 'stat_debuff',
                     target: enemy.id,
                     stat: 'speed',
-                    value: -2,
+                    value: -5,
                     duration: 1,
                     stackable: false
                 });
@@ -2118,10 +2144,75 @@ export const ABILITIES = {
             };
         }
     },
+    toxic_mist: {
+        id: 'toxic_mist',
+        name: 'Toxic Mist',
+        description: 'Place a toxic field that deals damage to enemies inside it for 2 turns',
+        role: "Tank",
+        level: 3,
+        cooldown: 2,
+        targetType: 'ground-target',
+        type: 'damage',
+        range: 3,
+        aoeSize: 3,
+
+        /**
+         * @param {Object} params
+         * @param {Object} params.caster - Character using ability
+         * @param {Object} params.targetPosition - {row, col} of clicked square
+         * @param {Array} params.enemies - Enemy list for the caster's perspective
+         * @param {Object} params.characterPositions - Positions of all characters
+         * @returns {Object} Effect data
+         */
+        execute: ({ caster, targetPosition, enemies, characterPositions }) => {
+            const { row, col } = targetPosition;
+            const effects = [];
+            const affectedNames = [];
+            const totalDamage = Math.max(1, Math.round(
+                (caster.stats.ta / 10) * 10  - (enemies.reduce((maxRes, enemy) => Math.max(maxRes, enemy.stats.resistance), 0) / 10)
+            ));
+
+            effects.push({
+                type: 'toxic_mist_field',
+                center: { row, col },
+                radius: 1,
+                duration: 2
+            });
+
+            enemies.forEach(enemy => {
+                const enemyPos = characterPositions?.[enemy.id];
+                if (!enemyPos) return;
+
+                const rowDiff = Math.abs(enemyPos.row - row);
+                const colDiff = Math.abs(enemyPos.col - col);
+
+                if (rowDiff <= 1 && colDiff <= 1) {
+                    affectedNames.push(enemy.name);
+                    effects.push({
+                        type: 'damage_over_time',
+                        target: enemy.id,
+                        amount: totalDamage,
+                        duration: 2
+                    });
+                }
+            });
+
+            const damageMessage = affectedNames.length > 0
+                ? `${affectedNames.join(', ')} will take ${totalDamage} damage for 2 turns!`
+                : 'No enemies are currently in the toxic field.';
+
+            return {
+                success: true,
+                effects,
+                aoePosition: targetPosition,
+                message: `${caster.name} releases Toxic Mist! ${damageMessage}`
+            };
+        }
+    },
     white_phospherus: {
         id: 'white_phospherus',
         name: 'White Phospherus',
-        description: 'Ultimate: Burns all enemies for 10 damage per turn over 5 turns',
+        description: 'Burns all enemies for 10 damage per turn over 5 turns',
         role: "Tank",
         cooldown: 0,
         isUltimate: true,
@@ -2158,11 +2249,88 @@ export const ABILITIES = {
             };
         }
     },
+    way_too_close: {
+        id: 'way_too_close',
+        name: 'Way Too Close!',
+        description: 'Push a nearby enemy away and place a barrier between you for 2 turns',
+        role: "Tank",
+        level: 1,
+        cooldown: 4,
+        targetType: 'single-enemy',
+        type: 'debuff',
+        range: 1,
+
+        execute: ({ caster, playerName, target, enemies, characterPositions }) => {
+            const enemy = enemies.find(e => e.id === target);
+            if (!enemy) {
+                return { success: false, message: 'Target not found' };
+            }
+
+            const casterPos = characterPositions?.[playerName];
+            const targetPos = characterPositions?.[target];
+            if (!casterPos || !targetPos) {
+                return { success: false, message: 'Target position unavailable' };
+            }
+
+            const currentDistance = Math.abs(targetPos.row - casterPos.row) + Math.abs(targetPos.col - casterPos.col);
+            if (currentDistance > 1) {
+                return { success: false, message: 'Target is out of range' };
+            }
+
+            if (currentDistance !== 1) {
+                return { success: false, message: 'Way Too Close requires an adjacent target' };
+            }
+
+            const occupied = new Set(
+                Object.entries(characterPositions || {})
+                    .filter(([id]) => id !== target)
+                    .map(([, pos]) => `${pos.row},${pos.col}`)
+            );
+
+            const inBounds = (row, col) => row >= 0 && row < 7 && col >= 0 && col < 10;
+            const pushDelta = {
+                row: targetPos.row - casterPos.row,
+                col: targetPos.col - casterPos.col
+            };
+
+            const destination = {
+                row: targetPos.row + pushDelta.row,
+                col: targetPos.col + pushDelta.col
+            };
+
+            if (!inBounds(destination.row, destination.col)) {
+                return { success: false, message: `${enemy.name} cannot be pushed further in that direction.` };
+            }
+
+            if (occupied.has(`${destination.row},${destination.col}`)) {
+                return { success: false, message: `${enemy.name} has no space to be pushed.` };
+            }
+
+            return {
+                success: true,
+                forcedMovement: [
+                    {
+                        enemyId: target,
+                        path: [destination],
+                        to: destination
+                    }
+                ],
+                effects: [
+                    {
+                        type: 'blue_barrier',
+                        cell: { row: targetPos.row, col: targetPos.col },
+                        duration: 2
+                    }
+                ],
+                message: `${caster.name} uses Way Too Close! ${enemy.name} is pushed back and a barrier forms between you.`
+            };
+        }
+    },
     zen: {
         id: 'zen',
         name: 'Zen',
-        description: 'All supports receive +10 ta for one turn',
-        role: "support",
+        description: 'All supports heal 25% and receive +10 ta for one turn',
+        role: "Support",
         level: 3,
         cooldown: 2,
         targetType: 'all-allies',
@@ -2189,6 +2357,12 @@ export const ABILITIES = {
                         value: 10,
                         duration: 1
                     });
+                    effects.push({
+                        type: 'heal',
+                        target: playerName,
+                        amount: Math.round(character.stats.health * 0.25),
+                        duration: 1
+                    });
                 }
             });
             
@@ -2202,7 +2376,7 @@ export const ABILITIES = {
             return {
                 success: true,
                 effects: effects,
-                message: `${caster.name} uses Zen! ${supportNames.join(', ')} gain +10 Technical Ability for 1 turn!`
+                message: `${caster.name} uses Zen! ${supportNames.join(', ')} heal 25% and gain +10 Technical Ability for 1 turn!`
             };
         }
     }

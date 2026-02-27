@@ -728,9 +728,37 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on("enemy_turn_complete", ({ room }) => {
+  socket.on("enemy_turn_complete", ({ room, enemyId, updatedEnemies, updatedPlayerCharacters, updatedActiveEffects }) => {
     const combat = combatSessions[room];
     if (!combat) return;
+
+    const activeTurn = combat.turnOrder?.[combat.currentTurnIndex];
+    if (!activeTurn || activeTurn.type !== 'enemy' || activeTurn.id !== enemyId) {
+      console.warn('[SERVER] Ignoring stale enemy_turn_complete:', {
+        room,
+        incomingEnemyId: enemyId,
+        activeTurn
+      });
+      return;
+    }
+
+    if (updatedEnemies && Array.isArray(updatedEnemies)) {
+      combat.enemies = normalizeEnemiesForCombat(updatedEnemies, combat.enemies || []);
+      removeDeadEnemiesFromTurnOrder(combat);
+      io.to(room).emit("enemies_updated", { enemies: combat.enemies });
+    }
+
+    if (rooms[room] && updatedPlayerCharacters) {
+      rooms[room].characterSelections = {
+        ...rooms[room].characterSelections,
+        ...updatedPlayerCharacters
+      };
+      io.to(room).emit("characters_updated", updatedPlayerCharacters);
+    }
+
+    if (updatedActiveEffects) {
+      io.to(room).emit("active_effects_updated", updatedActiveEffects);
+    }
 
     combat.currentTurnIndex++;
     if(combat.currentTurnIndex >= combat.turnOrder.length) {

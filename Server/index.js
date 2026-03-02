@@ -12,10 +12,20 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const AI_API_URL = process.env.AI_API_URL || 'http://localhost:8000';
 const AI_API_KEY = process.env.AI_API_KEY || '';
+const CF_ACCESS_CLIENT_ID = process.env.CF_ACCESS_CLIENT_ID || '';
+const CF_ACCESS_CLIENT_SECRET = process.env.CF_ACCESS_CLIENT_SECRET || '';
 
 // Middleware
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: process.env.NODE_ENV === 'production' 
+    ? false  // Same origin in production - no CORS needed
+    : [
+        process.env.CLIENT_URL || 'http://localhost:5173',
+        'http://localhost:5173',
+        'http://10.255.255.2:5173',
+        'https://cyber-lock.online',
+        'http://cyber-lock.online'
+      ],
   credentials: true,
 }));
 app.use(express.json());
@@ -28,8 +38,14 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? process.env.CLIENT_URL 
-    : 'http://localhost:5173',
+    ? false  // Same origin in production
+    : [
+        process.env.CLIENT_URL || 'http://localhost:5173',
+        'http://localhost:5173',
+        'http://10.255.255.2:5173',
+        'https://cyber-lock.online',
+        'http://cyber-lock.online'
+      ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -38,7 +54,14 @@ app.use(cors({
 // Socket.io setup
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    origin: process.env.NODE_ENV === 'production' 
+      ? false  // Same origin in production
+      : [
+          process.env.CLIENT_URL || 'http://localhost:5173',
+          'http://localhost:5173',
+          'http://10.255.255.2:5173',
+          'https://cyber-lock.online'
+        ],
     methods: ['GET', 'POST'],
     credentials: true,
   },
@@ -59,6 +82,32 @@ app.use('/api/auth', authRoutes);
 app.get('/api/health', (req, res) => {
   res.json({ status: 'Server is running' });
 });
+
+// Serve static files from React build (Production only)
+if (process.env.NODE_ENV === 'production') {
+  const path = await import('path');
+  const { fileURLToPath } = await import('url');
+  
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  
+  // Serve static files from Client/dist
+  app.use(express.static(path.join(__dirname, '../Client/dist')));
+  
+  // Catch-all handler for React Router (must be after API routes)
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../Client/dist/index.html'));
+  });
+  
+  console.log('✅ Serving React app from /Client/dist');
+} else {
+  app.get('/', (req, res) => {
+    res.json({ 
+      message: 'Server running in development mode',
+      clientUrl: process.env.CLIENT_URL || 'http://localhost:5173'
+    });
+  });
+}
 
 let rooms = {};
 let playerNames = {};
@@ -426,21 +475,59 @@ async function requestAiNarration(payload) {
     throw new Error('AI_API_URL is not configured');
   }
 
-  const response = await fetch(`${AI_API_URL}/game/event`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(AI_API_KEY ? { 'x-api-key': AI_API_KEY } : {})
-    },
-    body: JSON.stringify(payload)
-  });
+  console.log(`[AI] Making request to: ${AI_API_URL}/game/event`);
+  
+  try {
+    const response = await fetch(`${AI_API_URL}/game/event`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(AI_API_KEY ? { 'x-api-key': AI_API_KEY } : {}),
+        ...(CF_ACCESS_CLIENT_ID && CF_ACCESS_CLIENT_SECRET ? {
+          'CF-Access-Client-Id': CF_ACCESS_CLIENT_ID,
+          'CF-Access-Client-Secret': CF_ACCESS_CLIENT_SECRET
+        } : {})
+      },
+      body: JSON.stringify(payload),
+    });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`AI API error ${response.status}: ${errorText}`);
+    console.log(`[AI] Response status: ${response.status} ${response.statusText}`);
+
+    // Read response as text first, then parse as needed
+    const responseText = await response.text();
+
+    if (!response.ok) {
+      console.error(`[AI] Error response body:`, responseText);
+      
+      // Check if we got HTML instead of JSON
+      if (responseText.includes('<!DOCTYPE') || responseText.includes('<html')) {
+        throw new Error(`AI API returned HTML error page (${response.status}). URL: ${AI_API_URL}/game/event. This suggests the AI service is not running or the URL is incorrect.`);
+      }
+      
+      // Try to parse as JSON for better error messages
+      try {
+        const errorJson = JSON.parse(responseText);
+        throw new Error(`AI API error ${response.status}: ${errorJson.detail || responseText}`);
+      } catch (parseError) {
+        throw new Error(`AI API error ${response.status}: ${responseText}`);
+      }
+    }
+
+    // Parse successful response as JSON
+    try {
+      const jsonResponse = JSON.parse(responseText);
+      console.log(`[AI] Success - received response`);
+      return jsonResponse;
+    } catch (parseError) {
+      throw new Error(`Failed to parse AI response as JSON. Response was: ${responseText.substring(0, 200)}...`);
+    }
+    
+  } catch (error) {
+    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      throw new Error(`Failed to connect to AI API at ${AI_API_URL}. Check if the service is running and the URL is correct. Original error: ${error.message}`);
+    }
+    throw error;
   }
-
-  return response.json();
 }
 
 function calculateTurnOrder(room) {
@@ -1406,6 +1493,6 @@ io.on('connection', (socket) => {
 
 
 // Start Server
-server.listen(PORT, () => {
-  console.log(`✓ Server is running on http://localhost:${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server is running on http://0.0.0.0:${PORT}`);
 });

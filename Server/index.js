@@ -15,22 +15,6 @@ const AI_API_KEY = process.env.AI_API_KEY || '';
 const CF_ACCESS_CLIENT_ID = process.env.CF_ACCESS_CLIENT_ID || '';
 const CF_ACCESS_CLIENT_SECRET = process.env.CF_ACCESS_CLIENT_SECRET || '';
 
-// Middleware
-app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? false  // Same origin in production - no CORS needed
-    : [
-        process.env.CLIENT_URL || 'http://localhost:5173',
-        'http://localhost:5173',
-        'http://10.255.255.2:5173',
-        'https://cyber-lock.online',
-        'http://cyber-lock.online'
-      ],
-  credentials: true,
-}));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
 const server = http.createServer(app);
 
 // Middleware
@@ -759,6 +743,7 @@ io.on('connection', (socket) => {
       rooms[room].attributePoints = {};
       rooms[room].attributeReadyPlayers = [];
       rooms[room].sortedAttributeAllocations = {};
+      rooms[room].selectedFaction = null;
       
       // Clear combat session
       if (combatSessions[room]) {
@@ -769,6 +754,16 @@ io.on('connection', (socket) => {
       // Notify all clients to reset
       io.to(room).emit("game_reset");
     }
+  });
+
+  socket.on('faction_selected', ({ room, faction }) => {
+    if (!rooms[room]) return;
+
+    const normalizedFaction = faction === 'enforcers' || faction === 'rebels' ? faction : null;
+    if (!normalizedFaction) return;
+
+    rooms[room].selectedFaction = normalizedFaction;
+    io.to(room).emit('faction_selected', normalizedFaction);
   });
 
   socket.on("character_selected", ({ room, playerName, character }) => {
@@ -1301,6 +1296,10 @@ io.on('connection', (socket) => {
     }
 
     socket.emit('restore_screen', { screen: rooms[room].playerScreens[name] || 'waiting' });
+
+    if (rooms[room].selectedFaction) {
+      socket.emit('faction_selected', rooms[room].selectedFaction);
+    }
 
     const combat = combatSessions[room];
     if (combat?.turnOrder) {

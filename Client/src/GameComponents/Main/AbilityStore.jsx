@@ -553,6 +553,28 @@ export const ABILITIES = {
             };
         }
     },
+    counter: {
+        id: 'counter',
+        name: 'Counter',
+        description: 'Deflect all incoming damage back to attackers for 1 turn',
+        role: "DPS",
+        level: 5,
+        cooldown: 3,
+        targetType: 'self',
+        type: 'buff',
+
+        execute: ({ caster, playerName }) => {
+            return {
+                success: true,
+                effects: [{
+                    type: 'damage_reflection',
+                    target: playerName,
+                    duration: 1
+                }],
+                message: `${caster.name} activates Counter! All incoming damage will be reflected for 1 turn!`
+            };
+        }
+    },
     count_me_out: {
         id: 'count_me_out',
         name: 'Count me Out',
@@ -623,6 +645,47 @@ export const ABILITIES = {
                     stackable: false
                 }],
                 message: `${caster.name} curses ${enemy.name}! All incoming damage is amplified by 30% for 2 turns!`
+            };
+        }
+    },
+    dead_calm: {
+        id: 'dead_calm',
+        name: 'Dead Calm',
+        description: 'Gain +50 Strength but your Speed becomes 0 for 1 turn',
+        role: "DPS",
+        isUltimate: true,
+        cooldown: 0,
+        targetType: 'self',
+        type: 'buff',
+
+        execute: ({ caster, playerName }) => {
+            return {
+                success: true,
+                effects: [
+                    {
+                        type: 'stat_buff',
+                        target: playerName,
+                        stat: 'strength',
+                        value: 50,
+                        duration: 1,
+                        stackable: false,
+                        source: 'dead_calm',
+                        ownerTurnId: playerName,
+                        tickOnCastTurn: false
+                    },
+                    {
+                        type: 'stat_debuff',
+                        target: playerName,
+                        stat: 'speed',
+                        value: -(caster.stats.speed || 0),
+                        duration: 1,
+                        stackable: false,
+                        source: 'dead_calm',
+                        ownerTurnId: playerName,
+                        tickOnCastTurn: false
+                    }
+                ],
+                message: `${caster.name} activates Dead Calm! +50 Strength, but Speed drops to 0 for 1 turn!`
             };
         }
     },
@@ -1613,25 +1676,32 @@ export const ABILITIES = {
             };
         }
     },
-    counter: {
-        id: 'counter',
-        name: 'Counter',
-        description: 'Deflect all incoming damage back to attackers for 1 turn',
+    no_limits: {
+        id: 'no_limits',
+        name: 'No Limits',
+        description: 'Allows you to use your weapon 3 times in one turn',
         role: "DPS",
-        level: 5,
-        cooldown: 3,
+        cooldown: 0,
+        isUltimate: true,
         targetType: 'self',
         type: 'buff',
-
+        
+        /**
+         * @param {Object} params
+         * @param {Object} params.caster - Character using ability
+         * @param {string} params.playerName - Player using the ability
+         * @returns {Object} Effect data
+         */
         execute: ({ caster, playerName }) => {
             return {
                 success: true,
                 effects: [{
-                    type: 'damage_reflection',
+                    type: 'extra_weapon_attacks',
                     target: playerName,
-                    duration: 1
+                    value: 3, // Can attack 3 times total
+                    duration: 1 // Lasts this turn only
                 }],
-                message: `${caster.name} activates Counter! All incoming damage will be reflected for 1 turn!`
+                message: `${caster.name} activates No Limits! Can use weapon 3 times this turn!`
             };
         }
     },
@@ -1668,47 +1738,6 @@ export const ABILITIES = {
                     duration: 1
                 }],
                 message: `${caster.name} casts Poison Apple on ${enemy.name}! Healing prevented for 1 turn!`
-            };
-        }
-    },
-    power_boost: {
-        id: 'power_boost',
-        name: 'Power Boost',
-        description: 'Ultimate: Gain +50 Strength but your Speed becomes 0 for 1 turn',
-        role: "DPS",
-        isUltimate: true,
-        cooldown: 0,
-        targetType: 'self',
-        type: 'buff',
-
-        execute: ({ caster, playerName }) => {
-            return {
-                success: true,
-                effects: [
-                    {
-                        type: 'stat_buff',
-                        target: playerName,
-                        stat: 'strength',
-                        value: 50,
-                        duration: 1,
-                        stackable: false,
-                        source: 'power_boost',
-                        ownerTurnId: playerName,
-                        tickOnCastTurn: false
-                    },
-                    {
-                        type: 'stat_debuff',
-                        target: playerName,
-                        stat: 'speed',
-                        value: -(caster.stats.speed || 0),
-                        duration: 1,
-                        stackable: false,
-                        source: 'power_boost',
-                        ownerTurnId: playerName,
-                        tickOnCastTurn: false
-                    }
-                ],
-                message: `${caster.name} activates Power Boost! +50 Strength, but Speed drops to 0 for 1 turn!`
             };
         }
     },
@@ -1871,7 +1900,7 @@ export const ABILITIES = {
                     type: 'stat_debuff',
                     target: enemy.id,
                     stat: 'speed',
-                    value: -5,
+                    value: -10,
                     duration: 1,
                     stackable: false
                 });
@@ -1955,8 +1984,8 @@ export const ABILITIES = {
         targetType: 'single-enemy',
         type: 'damage',
         damageType: 'physical',
-        damageScaling: 'strength', // Uses strength stat for damage
-        abilityDamage: 15, // Base ability damage multiplier
+        damageScaling: 'strength', 
+        abilityDamage: 15, 
         range: 1,
         
         /**
@@ -1988,39 +2017,10 @@ export const ABILITIES = {
             };
         }
     },
-    no_limits: {
-        id: 'no_limits',
-        name: 'No Limits',
-        description: 'Allows you to use your weapon 3 times in one turn',
-        role: "DPS",
-        cooldown: 0,
-        isUltimate: true,
-        targetType: 'self',
-        type: 'buff',
-        
-        /**
-         * @param {Object} params
-         * @param {Object} params.caster - Character using ability
-         * @param {string} params.playerName - Player using the ability
-         * @returns {Object} Effect data
-         */
-        execute: ({ caster, playerName }) => {
-            return {
-                success: true,
-                effects: [{
-                    type: 'extra_weapon_attacks',
-                    target: playerName,
-                    value: 3, // Can attack 3 times total
-                    duration: 1 // Lasts this turn only
-                }],
-                message: `${caster.name} activates No Limits! Can use weapon 3 times this turn!`
-            };
-        }
-    },
     sword_slash: {
         id: 'sword_slash',
         name: 'Sword Slash',
-        description: 'Deal high AOE damage to enemies in front and to the sides',
+        description: 'Deal AOE damage to enemies in front of you and to the sides',
         role: "DPS",
         level: 1,
         cooldown: 1,
@@ -2028,7 +2028,7 @@ export const ABILITIES = {
         type: 'damage',
         damageType: 'physical',
         damageScaling: 'strength',
-        abilityDamage: 10, 
+        abilityDamage: 8, 
         range: 1,
         
         /**

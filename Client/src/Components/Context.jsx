@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState } from 'react';
+import { IoLogoElectron } from "react-icons/io5";
+import { FaFistRaised } from "react-icons/fa";
 import io from 'socket.io-client';
 
 const GameContext = createContext();
@@ -10,7 +12,9 @@ export const useGameContext = () => {
 export const GameProvider = ({ children }) => {
   const SOCKET_BASE_URL =
     import.meta.env.VITE_SOCKET_URL ||
-    'https://cs-capstone-491b8f4e8664.herokuapp.com';
+    (import.meta.env.DEV
+      ? 'http://localhost:5000'
+      : 'https://cs-capstone-491b8f4e8664.herokuapp.com');
     const [players, setPlayers] = useState([]);
     const [isAdmin, setAdmin] = useState(false);
     const [room, setRoom] = useState("");
@@ -46,6 +50,10 @@ export const GameProvider = ({ children }) => {
       return characterImageMap[character.id] || '/vite.svg';
     };
 
+    const getAbilityScaler = (ability) => {
+      const icon = ability?.damageScaling == "strength" ? <FaFistRaised /> : ability?.damageScaling == undefined ? null : <IoLogoElectron  />;
+      return icon;
+    }
 
   return (
     <GameContext.Provider
@@ -68,7 +76,8 @@ export const GameProvider = ({ children }) => {
         enemies, setEnemies,
         attributeAllocations, setAttributeAllocations,
         characterImageMap,
-        getCharacterImage
+        getCharacterImage,
+        getAbilityScaler
       }}
     >
       {children}

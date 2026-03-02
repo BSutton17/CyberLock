@@ -3,6 +3,7 @@
     opacity: 0.8;
     background-color: transparent;
     color: white;
+    z-index: 10;
 }
 
 .leave:hover, .leave-main:hover{

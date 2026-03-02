@@ -1988,9 +1988,9 @@ export const ABILITIES = {
             };
         }
     },
-    starward_sword: {
-        id: 'starward_sword',
-        name: 'Starward Sword',
+    no_limits: {
+        id: 'no_limits',
+        name: 'No Limits',
         description: 'Allows you to use your weapon 3 times in one turn',
         role: "DPS",
         cooldown: 0,
@@ -2013,7 +2013,7 @@ export const ABILITIES = {
                     value: 3, // Can attack 3 times total
                     duration: 1 // Lasts this turn only
                 }],
-                message: `${caster.name} activates Starward Sword! Can use weapon 3 times this turn!`
+                message: `${caster.name} activates No Limits! Can use weapon 3 times this turn!`
             };
         }
     },

@@ -46,6 +46,11 @@ function Main() {
         return owner || null;
     };
 
+    const arePositionsEqual = (firstPosition, secondPosition) => {
+        if (!firstPosition || !secondPosition) return false;
+        return firstPosition.row === secondPosition.row && firstPosition.col === secondPosition.col;
+    };
+
     const canPlayerDecide = (requiredAttribute) => {
         const owner = getDecisionOwner(requiredAttribute);
         if (!owner) return isAdmin;
@@ -672,6 +677,30 @@ function Main() {
 
     // Initialize character positions at bottom of grid
     useEffect(() => {
+        const storedPlayerPositions = sessionStorage.getItem(`playerPositions_${room}`);
+        if (storedPlayerPositions) {
+            try {
+                const serverPlayerPositions = JSON.parse(storedPlayerPositions);
+                const restoredPlayerPositions = {};
+
+                players.forEach((player) => {
+                    const serverPosition = serverPlayerPositions[player];
+                    if (!serverPosition) return;
+
+                    if (!arePositionsEqual(characterPositions[player], serverPosition)) {
+                        restoredPlayerPositions[player] = serverPosition;
+                    }
+                });
+
+                if (Object.keys(restoredPlayerPositions).length > 0) {
+                    setCharacterPositions(prev => ({ ...prev, ...restoredPlayerPositions }));
+                    return;
+                }
+            } catch (error) {
+                console.error('[POSITION RESTORE] Failed to parse stored player positions:', error);
+            }
+        }
+
         const newPositions = {};
         const bottomRow = 6; 
         players.forEach((player, index) => {
@@ -682,7 +711,7 @@ function Main() {
         if (Object.keys(newPositions).length > 0) {
             setCharacterPositions(prev => ({ ...prev, ...newPositions }));
         }
-    }, [players]);
+    }, [players, room, characterPositions]);
 
     useEffect(() => {
         if (enemies && enemies.length > 0) {
@@ -982,9 +1011,11 @@ function Main() {
             }
 
             let movementDelay = 0;
+            let enemyFinalPositionForTurn = null;
             if (turnAction.movement) {
                 const startPos = characterPositions[enemyId];
                 const endPos = { row: turnAction.movement.row, col: turnAction.movement.col };
+                enemyFinalPositionForTurn = endPos;
                 const path = findShortestWalkablePath(startPos, endPos, characterPositions, enemyId) || calculatePath(startPos, endPos);
                 const stepDelay = 10000 / enemy.stats.speed;
                 movementDelay = path.length * stepDelay;
@@ -1223,7 +1254,8 @@ function Main() {
                     enemyId,
                     updatedEnemies: tickResult.updatedEnemies,
                     updatedPlayerCharacters: tickResult.updatedCharacters,
-                    updatedActiveEffects: tickResult.updatedEffects
+                    updatedActiveEffects: tickResult.updatedEffects,
+                    enemyFinalPosition: enemyFinalPositionForTurn
                 });
             }, totalDelay);
         };
@@ -1397,6 +1429,11 @@ function Main() {
 
                 return updated;
             });
+
+            const storedPlayerPositions = sessionStorage.getItem(`playerPositions_${room}`);
+            const parsedPlayerPositions = storedPlayerPositions ? JSON.parse(storedPlayerPositions) : {};
+            parsedPlayerPositions[canonicalPlayerId] = position;
+            sessionStorage.setItem(`playerPositions_${room}`, JSON.stringify(parsedPlayerPositions));
         };
 
         const handleCooldownReduced = ({ targetPlayer, value }) => {
@@ -1804,6 +1841,11 @@ function Main() {
                 playerName,
                 position: newPosition
             });
+
+            const storedPlayerPositions = sessionStorage.getItem(`playerPositions_${room}`);
+            const parsedPlayerPositions = storedPlayerPositions ? JSON.parse(storedPlayerPositions) : {};
+            parsedPlayerPositions[playerName] = newPosition;
+            sessionStorage.setItem(`playerPositions_${room}`, JSON.stringify(parsedPlayerPositions));
 
             if (movementRemainingAfterMove <= 0) {
                 setTimeout(() => {
@@ -2697,7 +2739,7 @@ function Main() {
                     <div className="turn">
                     {currentTurn?.type === 'ally' 
                         ? `${currentTurn.id}'s Turn` 
-                        : `${currentTurn?.id || 'Enemy'}'s Turn`}
+                        : "Enemy's Turn"}
                     </div>
                 )}
             </h2>

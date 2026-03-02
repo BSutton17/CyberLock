@@ -161,7 +161,6 @@
     border-radius: 0;
 }
 
-/* Mobile responsive */
 @media (max-width: 600px) {
   .user-header {
     flex-direction: column;

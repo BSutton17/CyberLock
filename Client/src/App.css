@@ -1,8 +1,25 @@
-.leave{
+.leave, .leave-main{
     position: fixed;
-    bottom: 0;
-    left: 0;
     opacity: 0.8;
     background-color: transparent;
     color: white;
+    z-index: 10;
+}
+
+.leave:hover, .leave-main:hover{
+   border: 1px solid rgba(255, 255, 255, 0.682);;
+}
+
+.leave{
+    bottom: 0;
+    left: 0;
+}
+
+.leave-main {
+    bottom: 0;
+    right: 0;
+    min-width: 3vmin;
+    min-height: 1.5vmin;
+    border: 1px solid rgba(255, 255, 255, 0.38);
+    font-size: 1vmin;
 }

@@ -15,7 +15,7 @@ const NON_COMBAT_ATTRIBUTES = [
     { id: 'electrician', name: 'Electrician', description: 'Electricians are experts in power systems and circuitry. They thrive when repairing, sabotaging, or rerouting electrical systems and technology.' }
 ];
 
-const TOTAL_POINTS = 45;
+const TOTAL_POINTS = 1;
 const MAX_POINTS_PER_ATTRIBUTE = 9;
 
 function CharacterBuilder() {
@@ -55,7 +55,22 @@ function CharacterBuilder() {
         const myPrimary = Object.entries(attributePoints).find(([, points]) => points === 9);
         const mySecondary = Object.entries(attributePoints).find(([, points]) => points === 8);
         
-        if (!myPrimary || !mySecondary) return false;
+        if (!myPrimary) return false;
+
+        if (players.length === 6) {
+            const myPrimaryId = myPrimary[0];
+
+            for (const [player, points] of Object.entries(allPlayerPoints)) {
+                if (player === playerName) continue;
+
+                const theirPrimary = Object.entries(points).find(([, p]) => p === 9);
+                if (theirPrimary && theirPrimary[0] === myPrimaryId) return true;
+            }
+
+            return false;
+        }
+
+        if (!mySecondary) return false;
         
         const myPrimaryId = myPrimary[0];
         const mySecondaryId = mySecondary[0];

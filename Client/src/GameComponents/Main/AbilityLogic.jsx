@@ -184,7 +184,7 @@ export function applyAbilityEffects(result, gameState) {
                 ownerTurnId: effect.ownerTurnId ?? effectOwnerTurnId ?? result.ownerTurnId ?? result.casterId ?? null
             };
 
-            if (newEffect.source === 'power_boost') {
+            if (newEffect.source === 'dead_calm') {
                 console.log('[POWER BOOST DEBUG] Added effect:', {
                     target: newEffect.target,
                     stat: newEffect.stat,
@@ -257,7 +257,7 @@ export function tickActiveEffects(activeEffects, playerCharacters, enemies, endi
         // Create new effect object to avoid mutation
         const updatedEffect = { ...effect };
 
-        if (effect.source === 'power_boost') {
+        if (effect.source === 'dead_calm') {
             console.log('[POWER BOOST DEBUG] Tick start:', {
                 index,
                 target: effect.target,
@@ -282,7 +282,7 @@ export function tickActiveEffects(activeEffects, playerCharacters, enemies, endi
 
         const shouldTickThisTurn = !endingTurnOwnerId || !effect.ownerTurnId || effect.ownerTurnId === endingTurnOwnerId;
         if (!shouldTickThisTurn) {
-            if (effect.source === 'power_boost') {
+            if (effect.source === 'dead_calm') {
                 console.log('[POWER BOOST DEBUG] Skipping tick (owner mismatch):', {
                     target: effect.target,
                     stat: effect.stat,
@@ -318,7 +318,7 @@ export function tickActiveEffects(activeEffects, playerCharacters, enemies, endi
                 }
             }
             updatedEffect.appliedThisTurn = false;
-            if (effect.source === 'power_boost') {
+            if (effect.source === 'dead_calm') {
                 console.log('[POWER BOOST DEBUG] Armed for next owner turn tick:', {
                     target: effect.target,
                     stat: effect.stat,
@@ -425,7 +425,7 @@ export function tickActiveEffects(activeEffects, playerCharacters, enemies, endi
         }
         
         updatedEffect.turnsRemaining--;
-        if (effect.source === 'power_boost') {
+        if (effect.source === 'dead_calm') {
             console.log('[POWER BOOST DEBUG] Ticked down:', {
                 target: effect.target,
                 stat: effect.stat,
@@ -437,7 +437,7 @@ export function tickActiveEffects(activeEffects, playerCharacters, enemies, endi
 
         // If effect expires, bonuses are automatically removed (they were never added to base stats)
         if (updatedEffect.turnsRemaining <= 0) {
-            if (effect.source === 'power_boost') {
+            if (effect.source === 'dead_calm') {
                 console.log('[POWER BOOST DEBUG] Effect expired:', {
                     target: effect.target,
                     stat: effect.stat,

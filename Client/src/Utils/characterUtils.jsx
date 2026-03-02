@@ -25,7 +25,8 @@ export const enrichCharacterAbilities = (character) => {
                 description: abilityData.description,
                 cooldown: abilityData.cooldown,
                 range: abilityData.range,
-                targetType: abilityData.targetType
+                targetType: abilityData.targetType,
+                damageScaling: abilityData.damageScaling
             };
         });
     }
@@ -48,7 +49,8 @@ export const enrichCharacterAbilities = (character) => {
                 description: ultimateData.description,
                 cooldown: ultimateData.cooldown,
                 range: ultimateData.range,
-                targetType: ultimateData.targetType
+                targetType: ultimateData.targetType,
+                damageScaling: ultimateData.damageScaling
             };
         }
     }

@@ -61,6 +61,7 @@ function LevelUp(){
             ...playerCharacters,
             [playerName]: {
                 ...playerInfo,
+                level: (playerInfo?.level || 1) + 1,
                 stats: {
                     ...stats,
                     health: currentCharacter.stats.maxHealth

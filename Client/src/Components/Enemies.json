@@ -1,104 +1,254 @@
 {
   "enemies": [
     {
-      "id": "goblin_scout",
-      "name": "Goblin",
+      "id": "enforcer_soldier",
+      "name": "Enforcer Soldier",
       "tier": "generic",
       "role": "DPS",
       "level": 1,
       "behavior": "aggressive",
       "stats": {
-        "health": 70,
-        "maxHealth": 70,
+        "health": 40,
+        "maxHealth": 40,
         "speed": 30,
         "resistance": 20,
-        "strength": 15,
-        "ta": 5
+        "strength": 40,
+        "ta": 20
       },
       "weapon": {
-        "name": "Rusty Dagger",
-        "damage": 8,
+        "name": "Shock Baton",
+        "damage": 7,
         "range": 1
       }
     },
     {
-      "id": "kobold_warrior",
-      "name": "Bad Guy",
+      "id": "enforcer_drone",
+      "name": "Enforcer Drone",
       "tier": "generic",
-      "role": "Tank",
-      "behavior": "defensive",
+      "role": "DPS",
       "level": 1,
-      "stats": {
-        "health": 80,
-        "maxHealth": 80,
-        "speed": 25,
-        "resistance": 35,
-        "strength": 20,
-        "ta": 10
-      },
-      "weapon": {
-        "name": "rock",
-        "damage": 10,
-        "range": 2
-      }
-    },
-    {
-      "id": "orc_soldier",
-      "name": "Orc Soldier",
-      "tier": "mid-tier",
-      "role": "Tank",
-      "behavior": "intelligent",
-      "stats": {
-        "health": 80,
-        "maxHealth": 80,
-        "speed": 20,
-        "resistance": 25,
-        "strength": 35,
-        "ta": 15
-      },
-      "weapon": {
-        "name": "War Axe",
-        "damage": 12,
-        "range": 1
-      }
-    },
-    {
-      "id": "dark_mage",
-      "name": "Dark Mage",
-      "tier": "mid-tier",
-      "role": "Support",
       "behavior": "defensive",
       "stats": {
-        "health": 60,
-        "maxHealth": 60,
-        "speed": 25,
+        "health": 30,
+        "maxHealth": 30,
+        "speed": 35,
         "resistance": 20,
-        "strength": 10,
-        "ta": 25
+        "strength": 20,
+        "ta": 45
       },
       "weapon": {
-        "name": "Dark Staff",
+        "name": "Pulse Carbine",
         "damage": 6,
         "range": 3
       }
     },
     {
-      "id": "golem_guardian",
-      "name": "Golem Guardian",
-      "tier": "boss",
-      "role": "Tank",
+      "id": "rebel_initiate",
+      "name": "Rebel Initiate",
+      "tier": "generic",
+      "role": "DPS",
+      "level": 1,
       "behavior": "aggressive",
       "stats": {
-        "health": 300,
-        "maxHealth": 300,
-        "speed": 10,
-        "resistance": 50,
+        "health": 35,
+        "maxHealth": 35,
+        "speed": 35,
+        "resistance": 15,
+        "strength": 50,
+        "ta": 15
+      },
+      "weapon": {
+        "name": "Scrap Blade",
+        "damage": 7,
+        "range": 1
+      }
+    },
+    {
+      "id": "rebel_field_tech",
+      "name": "Rebel Field Tech",
+      "tier": "generic",
+      "role": "DPS",
+      "level": 1,
+      "behavior": "defensive",
+      "stats": {
+        "health": 30,
+        "maxHealth": 30,
+        "speed": 30,
+        "resistance": 20,
+        "strength": 20,
+        "ta": 50
+      },
+      "weapon": {
+        "name": "Arc Launcher",
+        "damage": 6,
+        "range": 3
+      }
+    },
+    {
+      "id": "division_command",
+      "name": "Division Command",
+      "tier": "mid-tier",
+      "role": "Support",
+      "level": 1,
+      "behavior": "support",
+      "stats": {
+        "health": 70,
+        "maxHealth": 70,
+        "speed": 55,
+        "resistance": 80,
+        "strength": 30,
+        "ta": 65
+      },
+      "weapon": {
+        "name": "Command Uplink",
+        "damage": 7,
+        "range": 3
+      }
+    },
+    {
+      "id": "division_strategist",
+      "name": "Division Strategist",
+      "tier": "mid-tier",
+      "role": "Support",
+      "level": 1,
+      "behavior": "support",
+      "stats": {
+        "health": 80,
+        "maxHealth": 80,
+        "speed": 30,
+        "resistance": 75,
+        "strength": 35,
+        "ta": 60
+      },
+      "weapon": {
+        "name": "Tactical Railcaster",
+        "damage": 8,
+        "range": 4
+      }
+    },
+    {
+      "id": "vanguard_captain",
+      "name": "Vanguard Captain",
+      "tier": "mid-tier",
+      "role": "Tank",
+      "level": 1,
+      "behavior": "intelligent",
+      "stats": {
+        "health": 90,
+        "maxHealth": 90,
+        "speed": 30,
+        "resistance": 85,
+        "strength": 80,
+        "ta": 15
+      },
+      "weapon": {
+        "name": "Siege Gauntlets",
+        "damage": 11,
+        "range": 1
+      }
+    },
+    {
+      "id": "field_captain",
+      "name": "Field Captain",
+      "tier": "mid-tier",
+      "role": "Tank",
+      "level": 1,
+      "behavior": "intelligent",
+      "stats": {
+        "health": 120,
+        "maxHealth": 120,
+        "speed": 50,
+        "resistance": 80,
+        "strength": 45,
+        "ta": 20
+      },
+      "weapon": {
+        "name": "Command Sabre",
+        "damage": 10,
+        "range": 1
+      }
+    },
+    {
+      "id": "rebel_coordinator",
+      "name": "Rebel Coordinator",
+      "tier": "mid-tier",
+      "role": "Tank",
+      "level": 1,
+      "behavior": "aggressive",
+      "stats": {
+        "health": 110,
+        "maxHealth": 110,
+        "speed": 60,
+        "resistance": 70,
         "strength": 40,
         "ta": 20
       },
       "weapon": {
-        "name": "Stone Fist",
-        "damage": 15,
+        "name": "Breaker Hammer",
+        "damage": 11,
+        "range": 1
+      }
+    },
+    {
+      "id": "operations_handler",
+      "name": "Operations Handler",
+      "tier": "mid-tier",
+      "role": "Support",
+      "level": 1,
+      "behavior": "support",
+      "stats": {
+        "health": 100,
+        "maxHealth": 100,
+        "speed": 30,
+        "resistance": 50,
+        "strength": 35,
+        "ta": 75
+      },
+      "weapon": {
+        "name": "Signal Rifle",
+        "damage": 8,
+        "range": 3
+      }
+    },
+    {
+      "id": "division_chief",
+      "name": "Division Chief",
+      "tier": "boss",
+      "role": "Tank",
+      "level": 1,
+      "behavior": "intelligent",
+      "stats": {
+        "health": 215,
+        "maxHealth": 215,
+        "speed": 55,
+        "resistance": 130,
+        "strength": 50,
+        "ta": 50
+      },
+      "weapon": {
+        "name": "Compliance Blade",
+        "damage": 13,
+        "range": 1
+      }
+    },
+    {
+      "id": "rebellion_chief",
+      "name": "Rebellion Chief",
+      "tier": "boss",
+      "role": "Tank",
+      "level": 1,
+      "behavior": "intelligent",
+      "stats": {
+        "health": 210,
+        "maxHealth": 210,
+        "speed": 35,
+        "resistance": 115,
+        "strength": 80,
+        "ta": 65
+      },
+      "weapon": {
+        "name": "Liberator Halberd",
+        "damage": 13,
         "range": 1
       }
     }

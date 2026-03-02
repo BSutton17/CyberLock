@@ -20,6 +20,11 @@ function CharacterSelect() {
     };
 
     const handleRemoveFromTeam = () => {
+        setPlayerCharacters(prev => {
+            const updated = { ...prev };
+            delete updated[playerName];
+            return updated;
+        });
         socket.emit("character_removed", { room, playerName });
     };
 
@@ -76,7 +81,6 @@ function CharacterSelect() {
                                     }}
                                     onDoubleClick={() => handleAddToTeam(character)}
                                 >
-                                    {/* <h4>{character.name}</h4> */}
                                     <img
                                         className='character-card-image'
                                         src={getCharacterImage(character)}
@@ -107,10 +111,16 @@ function CharacterSelect() {
                                 <div className='weapon-detail'>
                                     <h5>Weapon: {selectedCharacter.weapon.name}</h5>
                                     {selectedCharacter.weapon.damage && (
-                                        <>
-                                        <p className='weapon-stats'>Damage: {selectedCharacter.weapon.damage}</p>
-                                        <p className='weapon-stats'>{selectedCharacter.weapon.range == 1 ? "Range: Melee" : `Range: ${selectedCharacter.weapon.range}`}</p>
-                                        </>
+                                        <div className='weapon-stats-grid'>
+                                            <div className='weapon-stats'>
+                                                <span className='weapon-stat-label'>Damage</span>
+                                                <span className='weapon-stat-value'>{selectedCharacter.weapon.damage}</span>
+                                            </div>
+                                            <div className='weapon-stats'>
+                                                <span className='weapon-stat-label'>Range</span>
+                                                <span className='weapon-stat-value'>{selectedCharacter.weapon.range == 1 ? "Melee" : selectedCharacter.weapon.range}</span>
+                                            </div>
+                                        </div>
                                     )}
                                 </div>
                             </div>

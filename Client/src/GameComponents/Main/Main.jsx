@@ -10,7 +10,7 @@ import { assignEnemyAbilities } from '../../Utils/enemyAbilityUtils';
 import './Main.css';
 
 function Main() {
-    const { players, playerCharacters, setPlayerCharacters, playerName, room, socket, attributeAllocations, setGamePhase, isMyTurn, currentTurn, enemies, setEnemies, turnOrder, setTurnOrder, isAdmin, setScreen, getCharacterImage } = useGameContext();
+    const { players, playerCharacters, setPlayerCharacters, playerName, room, socket,getAbilityScaler, attributeAllocations, setGamePhase, isMyTurn, currentTurn, enemies, setEnemies, turnOrder, setTurnOrder, isAdmin, setScreen, getCharacterImage } = useGameContext();
     const [currentPlayerCharacter, setCurrentPlayerCharacter] = useState(null);
     const [ultimateReady, setUltimateReady] = useState(false);
     const [characterPositions, setCharacterPositions] = useState({});
@@ -25,9 +25,9 @@ function Main() {
     const [actionUsed, setActionUsed] = useState(false);
     const [turnTimeLeft, setTurnTimeLeft] = useState(null);
     const [aiLog, setAiLog] = useState([]);
-    // const [aiInput, setAiInput] = useState('');
     const [aiBusy, setAiBusy] = useState(false);
     const [pendingFactionChoice, setPendingFactionChoice] = useState(false);
+    const [selectedFaction, setSelectedFaction] = useState(null);
     const [pendingPostEncounterChoice, setPendingPostEncounterChoice] = useState(false);
     const [pendingNextEncounterChoice, setPendingNextEncounterChoice] = useState(false);
     const [aiText, setAiText] = useState('');
@@ -44,6 +44,11 @@ function Main() {
         if (!requiredAttribute) return null;
         const owner = players.find(player => attributeAllocations[player]?.[0] === requiredAttribute);
         return owner || null;
+    };
+
+    const arePositionsEqual = (firstPosition, secondPosition) => {
+        if (!firstPosition || !secondPosition) return false;
+        return firstPosition.row === secondPosition.row && firstPosition.col === secondPosition.col;
     };
 
     const canPlayerDecide = (requiredAttribute) => {
@@ -175,22 +180,30 @@ function Main() {
         });
     };
 
-    // const handleAiChatSubmit = (event) => {
-    //     event.preventDefault();
-    //     const trimmed = aiInput.trim();
-    //     if (!trimmed) return;
-
-    //     appendAiLog({ role: 'user', text: trimmed, eventType: 'chat' });
-    //     emitAiEvent('chat', trimmed, { playerName });
-    //     setAiInput('');
-    // };
-
     const handleFactionChoice = (choice) => {
         if (!canPlayerDecide('politician')) return;
+
+        const normalizedChoice = choice?.toLowerCase().includes('enforcer') ? 'enforcers' : 'rebels';
+        setSelectedFaction(normalizedChoice);
+        socket.emit('faction_selected', { room, faction: normalizedChoice });
+
         setPendingFactionChoice(false);
         pendingStartCombatRef.current = true;
         emitAiEvent('choice_made', `The party chooses to fight with ${choice}.`, { choice });
     };
+
+    useEffect(() => {
+        const handleFactionSelected = (faction) => {
+            if (faction === 'enforcers' || faction === 'rebels') {
+                setSelectedFaction(faction);
+            }
+        };
+
+        socket.on('faction_selected', handleFactionSelected);
+        return () => {
+            socket.off('faction_selected', handleFactionSelected);
+        };
+    }, [socket]);
 
     const handlePostEncounterChoice = (choice) => {
         const requiredAttribute = choice === 'shop' ? 'banker' : 'navigator';
@@ -603,14 +616,27 @@ function Main() {
         return positions;
     };
 
-    const createEnemyInstance = (enemyTemplate, instanceNumber, partySize) => {
+    const createEnemyInstance = (enemyTemplate, instanceNumber, partySize, partyLevel = 1) => {
         const resistanceMultiplier = partySize / 3;
+        const normalizedEnemyLevel = Math.max(1, partyLevel || 1);
+        const levelBonus = (normalizedEnemyLevel - 1) * 3;
+
+        const scaledStats = {
+            health: (enemyTemplate.stats.health || 0) + levelBonus,
+            maxHealth: (enemyTemplate.stats.maxHealth || enemyTemplate.stats.health || 0) + levelBonus,
+            speed: (enemyTemplate.stats.speed || 0) + levelBonus,
+            resistance: (enemyTemplate.stats.resistance || 0) + levelBonus,
+            strength: (enemyTemplate.stats.strength || 0) + levelBonus,
+            ta: (enemyTemplate.stats.ta || 0) + levelBonus
+        };
 
         const enemyInstance = {
             ...enemyTemplate,
+            level: normalizedEnemyLevel,
             stats: {
-                ...enemyTemplate.stats,
-                resistance: enemyTemplate.stats.resistance * resistanceMultiplier
+                ...scaledStats,
+                health: scaledStats.maxHealth,
+                resistance: scaledStats.resistance * resistanceMultiplier
             },
             weapon: { ...enemyTemplate.weapon },
             id: `${enemyTemplate.id}_${instanceNumber + 1}`
@@ -633,14 +659,58 @@ function Main() {
         return enemyInstance;
     };
 
-    const selectEnemiesByTier = (tier, count, partySize) => {
-        const tierEnemies = EnemiesData.enemies.filter(enemy => enemy.tier === tier);
+    const getPartyLevel = () => {
+        const levels = players
+            .map(player => playerCharacters[player]?.level)
+            .filter(level => Number.isFinite(level) && level > 0);
+
+        if (levels.length === 0) return 1;
+        return Math.max(...levels);
+    };
+
+    const selectEnemiesByTier = (tier, count, partySize, partyLevel) => {
+        const getEnemyFaction = (enemy) => {
+            const enemyId = (enemy?.id || '').toLowerCase();
+
+            const isEnforcer =
+                enemyId.startsWith('enforcer_') ||
+                enemyId.startsWith('division_') ||
+                enemyId.startsWith('vanguard_');
+
+            if (isEnforcer) return 'enforcers';
+
+            const isRebel =
+                enemyId.startsWith('rebel_') ||
+                enemyId === 'field_captain' ||
+                enemyId.startsWith('operations_') ||
+                enemyId.startsWith('rebellion_');
+
+            if (isRebel) return 'rebels';
+            return null;
+        };
+
+        const opposingFaction =
+            selectedFaction === 'enforcers'
+                ? 'rebels'
+                : selectedFaction === 'rebels'
+                    ? 'enforcers'
+                    : null;
+
+        let tierEnemies = EnemiesData.enemies.filter(enemy => enemy.tier === tier);
+
+        if (opposingFaction) {
+            const factionTierEnemies = tierEnemies.filter(enemy => getEnemyFaction(enemy) === opposingFaction);
+            if (factionTierEnemies.length > 0) {
+                tierEnemies = factionTierEnemies;
+            }
+        }
+
         if (tierEnemies.length === 0) return [];
 
         const selectedEnemies = [];
         for (let index = 0; index < count; index++) {
             const randomIndex = Math.floor(Math.random() * tierEnemies.length);
-            selectedEnemies.push(createEnemyInstance(tierEnemies[randomIndex], index, partySize));
+            selectedEnemies.push(createEnemyInstance(tierEnemies[randomIndex], index, partySize, partyLevel));
         }
 
         return selectedEnemies;
@@ -648,30 +718,55 @@ function Main() {
 
     const generateEnemies = (spawnType = 'low') => {
         const partySize = players.length;
+        const partyLevel = getPartyLevel();
 
         if (spawnType === 'medium') {
             const mediumCount = partySize <= 3 ? 2 : 3;
-            const mediumEnemies = selectEnemiesByTier('mid-tier', mediumCount, partySize);
-            return mediumEnemies.length > 0 ? mediumEnemies : selectEnemiesByTier('generic', mediumCount, partySize);
+            const mediumEnemies = selectEnemiesByTier('mid-tier', mediumCount, partySize, partyLevel);
+            return mediumEnemies.length > 0 ? mediumEnemies : selectEnemiesByTier('generic', mediumCount, partySize, partyLevel);
         }
 
         if (spawnType === 'boss') {
-            const bossEnemies = selectEnemiesByTier('boss', 1, partySize);
+            const bossEnemies = selectEnemiesByTier('boss', 1, partySize, partyLevel);
             if (bossEnemies.length > 0) return bossEnemies;
 
             const fallbackCount = partySize <= 3 ? 2 : 3;
-            const mediumEnemies = selectEnemiesByTier('mid-tier', fallbackCount, partySize);
-            return mediumEnemies.length > 0 ? mediumEnemies : selectEnemiesByTier('generic', fallbackCount, partySize);
+            const mediumEnemies = selectEnemiesByTier('mid-tier', fallbackCount, partySize, partyLevel);
+            return mediumEnemies.length > 0 ? mediumEnemies : selectEnemiesByTier('generic', fallbackCount, partySize, partyLevel);
         }
 
         // Default: low spawn
         const lowCount = partySize + 2;
-        const genericEnemies = selectEnemiesByTier('generic', lowCount, partySize);
+        const genericEnemies = selectEnemiesByTier('generic', lowCount, partySize, partyLevel);
         return genericEnemies;
     };
 
     // Initialize character positions at bottom of grid
     useEffect(() => {
+        const storedPlayerPositions = sessionStorage.getItem(`playerPositions_${room}`);
+        if (storedPlayerPositions) {
+            try {
+                const serverPlayerPositions = JSON.parse(storedPlayerPositions);
+                const restoredPlayerPositions = {};
+
+                players.forEach((player) => {
+                    const serverPosition = serverPlayerPositions[player];
+                    if (!serverPosition) return;
+
+                    if (!arePositionsEqual(characterPositions[player], serverPosition)) {
+                        restoredPlayerPositions[player] = serverPosition;
+                    }
+                });
+
+                if (Object.keys(restoredPlayerPositions).length > 0) {
+                    setCharacterPositions(prev => ({ ...prev, ...restoredPlayerPositions }));
+                    return;
+                }
+            } catch (error) {
+                console.error('[POSITION RESTORE] Failed to parse stored player positions:', error);
+            }
+        }
+
         const newPositions = {};
         const bottomRow = 6; 
         players.forEach((player, index) => {
@@ -682,7 +777,7 @@ function Main() {
         if (Object.keys(newPositions).length > 0) {
             setCharacterPositions(prev => ({ ...prev, ...newPositions }));
         }
-    }, [players]);
+    }, [players, room, characterPositions]);
 
     useEffect(() => {
         if (enemies && enemies.length > 0) {
@@ -857,6 +952,7 @@ function Main() {
                 enemy,
                 allies,
                 alliedEnemies,
+                latestEnemies,
                 latestPlayerCharacters,
                 characterPositions,
                 latestActiveEffects
@@ -982,9 +1078,11 @@ function Main() {
             }
 
             let movementDelay = 0;
+            let enemyFinalPositionForTurn = null;
             if (turnAction.movement) {
                 const startPos = characterPositions[enemyId];
                 const endPos = { row: turnAction.movement.row, col: turnAction.movement.col };
+                enemyFinalPositionForTurn = endPos;
                 const path = findShortestWalkablePath(startPos, endPos, characterPositions, enemyId) || calculatePath(startPos, endPos);
                 const stepDelay = 10000 / enemy.stats.speed;
                 movementDelay = path.length * stepDelay;
@@ -1223,7 +1321,8 @@ function Main() {
                     enemyId,
                     updatedEnemies: tickResult.updatedEnemies,
                     updatedPlayerCharacters: tickResult.updatedCharacters,
-                    updatedActiveEffects: tickResult.updatedEffects
+                    updatedActiveEffects: tickResult.updatedEffects,
+                    enemyFinalPosition: enemyFinalPositionForTurn
                 });
             }, totalDelay);
         };
@@ -1397,6 +1496,11 @@ function Main() {
 
                 return updated;
             });
+
+            const storedPlayerPositions = sessionStorage.getItem(`playerPositions_${room}`);
+            const parsedPlayerPositions = storedPlayerPositions ? JSON.parse(storedPlayerPositions) : {};
+            parsedPlayerPositions[canonicalPlayerId] = position;
+            sessionStorage.setItem(`playerPositions_${room}`, JSON.stringify(parsedPlayerPositions));
         };
 
         const handleCooldownReduced = ({ targetPlayer, value }) => {
@@ -1805,6 +1909,11 @@ function Main() {
                 position: newPosition
             });
 
+            const storedPlayerPositions = sessionStorage.getItem(`playerPositions_${room}`);
+            const parsedPlayerPositions = storedPlayerPositions ? JSON.parse(storedPlayerPositions) : {};
+            parsedPlayerPositions[playerName] = newPosition;
+            sessionStorage.setItem(`playerPositions_${room}`, JSON.stringify(parsedPlayerPositions));
+
             if (movementRemainingAfterMove <= 0) {
                 setTimeout(() => {
                     if (isMyTurn && shouldAutoEndTurn()) {
@@ -1983,10 +2092,6 @@ function Main() {
         setEnemies(normalizeEnemiesState(generatedEnemies));
         setGamePhase('combat');
         socket.emit('start_combat', { room, generatedEnemies, spawnType: normalizedSpawnType });
-    }
-
-    function handleLevelUp(){
-        socket.emit('level_up', {room});
     }
 
     function handleCombatComplete(rewards) {
@@ -2650,6 +2755,7 @@ function Main() {
                                 setSelectedTargets([]);
                                 setWeaponSelected(false);
                                 setCharacterPositions({});
+                                setSelectedFaction(null);
                                 
                                 // Request server to reset game state for all players
                                 socket.emit('reset_game', { room });
@@ -2697,7 +2803,7 @@ function Main() {
                     <div className="turn">
                     {currentTurn?.type === 'ally' 
                         ? `${currentTurn.id}'s Turn` 
-                        : `${currentTurn?.id || 'Enemy'}'s Turn`}
+                        : "Enemy's Turn"}
                     </div>
                 )}
             </h2>
@@ -2783,18 +2889,6 @@ function Main() {
                     <button onClick={handleNextEncounter} disabled={!canPlayerDecide('navigator')}>Next Encounter</button>
                 </div>
             )}
-            {/* <form className="ai-chat" onSubmit={handleAiChatSubmit}>
-                <input
-                    type="text"
-                    placeholder="Ask the DM about the story or NPCs..."
-                    value={aiInput}
-                    onChange={(event) => setAiInput(event.target.value)}
-                    disabled={aiBusy}
-                />
-                <button type="submit" disabled={aiBusy || !aiInput.trim()}>Send</button>
-            </form> */}
-            
-        {/* <button style={{ width: '150px' }} onClick={handleLevelUp}>Level Up</button> */}
         <button style={{ width: '150px' }} onClick={() => handleStoryComplete()}>Combat</button>
             </div>
             <span className="ai-text">
@@ -2914,8 +3008,7 @@ function Main() {
                             style={{ cursor: (isMyTurn && !actionUsed && isPlayerAlive) ? 'pointer' : 'not-allowed' }}
                         >
                             <div className="weapon-info">
-                                <div className="weapon-name">{currentPlayerCharacter.weapon.name}</div>
-                                <div className="weapon-damage">DMG: {currentPlayerCharacter.weapon.damage}</div>
+                                <i><div className="weapon-name">{currentPlayerCharacter.weapon.name}</div></i>
                                 <div className="weapon-range">{currentPlayerCharacter.weapon.range == 1 ? "Melee" : "Range: " + currentPlayerCharacter.weapon.range}</div>
                             </div>
                         </div>
@@ -2940,6 +3033,15 @@ function Main() {
                                 const isOnCooldown = currentCooldown > 0;
                                 const isSelected = selectedAbility === resolvedAbility.id;
                                 const range = resolvedAbility.range === 1 ? "Melee" : resolvedAbility.range === undefined ? "" : "Range: " + resolvedAbility.range;
+                                const canonicalAbility = getAbility(resolvedAbility.id) || resolvedAbility;
+                                const scalerIcon = getAbilityScaler(canonicalAbility);
+
+                                console.log('[ABILITY SCALER]', {
+                                    abilityId: resolvedAbility.id,
+                                    abilityName: resolvedAbility.name,
+                                    damageScaling: canonicalAbility.damageScaling,
+                                    hasScalerIcon: !!scalerIcon
+                                });
                                 
                                 return (
                                     <button 
@@ -2952,6 +3054,7 @@ function Main() {
                                         }`}
                                         disabled={!isMyTurn || isOnCooldown || actionUsed || !isPlayerAlive}
                                     >
+                                        <div className='damage-scaling'>{scalerIcon}</div>
                                         <div className="ability-header">
                                             <div className="ability-name">{resolvedAbility.name}</div>
                                             <div className="ability-cd">
@@ -2991,9 +3094,9 @@ function Main() {
                             }}
                         >
                             <div className="ultimate-header">
-                                <div className="ultimate-name">{hasUltimate ? resolvedUltimate.name : 'No Ultimate Selected'}</div>
+                                <div className="ultimate-name">{hasUltimate ? resolvedUltimate.name : 'No Ultimate Available'}</div>
                             </div>
-                            <div className="ultimate-desc">{hasUltimate ? resolvedUltimate.description : 'Select an ultimate in Choose Abilities.'}</div>
+                            <div className="ultimate-desc">{hasUltimate ? resolvedUltimate.description : 'Reach level 5 to unlock your ultimate.'}</div>
                         </button>
                             );
                         })()}

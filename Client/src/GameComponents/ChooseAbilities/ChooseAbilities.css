@@ -78,6 +78,7 @@
 
 .ability-description{
 	font-size: 0.9vmin;
+	gap: 1vmin;
 }
 
 .character-section,
@@ -91,7 +92,7 @@
 }
 
 .current-abilities-section{
-	height: 50vmin;
+	height: 47vmin;
 }
 
 .character-section h3,
@@ -147,11 +148,12 @@
 	border-radius: 0.99vmin;
 	margin-bottom: 2vmin;
 	height: 6vmin;
-	padding: 1.188vmin 1.485vmin;
+	padding: 1.188vmin 4.5vmin 1.188vmin 1.485vmin;
 	display: flex;
 	align-items: flex-start;
 	gap: 1.2vmin;
 	transition: all 0.3s ease;
+	position: relative;
 }
 
 .current-ability-item.empty {
@@ -162,6 +164,18 @@
 .current-ability-item.ultimate {
 	border-color: rgba(147, 112, 219, 0.4);
 	background: rgba(147, 112, 219, 0.1);
+}
+
+.damage-scaling-list{
+	position: absolute;
+	top: 0.8vmin;
+	right: 1.1vmin;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 2vmin;
+	color: #9ca3af;
+	pointer-events: none;
 }
 
 .ability-level {
@@ -425,7 +439,7 @@
 	font-size: 1.624vmin;
 	text-transform: uppercase;
 	letter-spacing: 0.124vmin;
-
+}
 .character-panel::-webkit-scrollbar,
 .abilities-panel::-webkit-scrollbar,
 .dropdown-menu::-webkit-scrollbar {
@@ -485,7 +499,3 @@
 		width: 100%;
 	}
 }
-}
-
-
-

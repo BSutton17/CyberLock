@@ -208,20 +208,9 @@ function advancePastStalledEnemyTurn(io, room, combat, enemyId) {
 
   const availableHandlers = getEnemyTurnHandlers(room);
   if (availableHandlers.length === 0) {
-    console.warn('[ENEMY-TURN-DEBUG] Stalled enemy turn with no connected handlers; waiting for reconnect', {
-      room,
-      enemyId,
-      currentTurnIndex: combat.currentTurnIndex
-    });
     clearEnemyTurnWatchdog(room);
     return;
   }
-
-  console.warn('[ENEMY-TURN-DEBUG] Force-advancing stalled enemy turn', {
-    room,
-    enemyId,
-    currentTurnIndex: combat.currentTurnIndex
-  });
 
   clearEnemyTurnWatchdog(room);
 
@@ -246,11 +235,6 @@ function advancePastStalledEnemyTurn(io, room, combat, enemyId) {
 function dispatchEnemyTurn(io, room, combat, enemyId) {
   const allies = getEnemyTurnHandlers(room);
   if (allies.length === 0) {
-    console.warn('[ENEMY-TURN-DEBUG] Skipping enemy turn dispatch because no connected handlers', {
-      room,
-      enemyId,
-      currentTurnIndex: combat?.currentTurnIndex
-    });
     clearEnemyTurnWatchdog(room);
     return;
   }
@@ -260,14 +244,6 @@ function dispatchEnemyTurn(io, room, combat, enemyId) {
     ? existingWatchdog.retries
     : 0;
 
-  console.log('[ENEMY-TURN-DEBUG] Dispatching enemy turn', {
-    room,
-    enemyId,
-    allies,
-    currentTurnIndex: combat?.currentTurnIndex,
-    turnOrderLength: combat?.turnOrder?.length || 0,
-    retryCount: previousRetries
-  });
   io.to(room).emit('execute_enemy_turn', {
     enemyId,
     allies,
@@ -278,7 +254,6 @@ function dispatchEnemyTurn(io, room, combat, enemyId) {
   const timeoutId = setTimeout(() => {
     const latestCombat = combatSessions[room];
     if (!latestCombat?.turnOrder?.length) {
-      console.log('[ENEMY-TURN-DEBUG] Watchdog expired but no active combat turn order', { room, enemyId });
       clearEnemyTurnWatchdog(room);
       return;
     }
@@ -293,13 +268,6 @@ function dispatchEnemyTurn(io, room, combat, enemyId) {
         return;
       }
 
-      console.log('[ENEMY-TURN-DEBUG] Watchdog retrying enemy turn dispatch', {
-        room,
-        enemyId,
-        currentTurnIndex: latestCombat.currentTurnIndex,
-        retryCount: retries + 1
-      });
-
       enemyTurnWatchdogs[room] = {
         timeoutId: null,
         enemyId,
@@ -309,11 +277,6 @@ function dispatchEnemyTurn(io, room, combat, enemyId) {
       return;
     }
 
-    console.log('[ENEMY-TURN-DEBUG] Watchdog cleared because turn moved on', {
-      room,
-      expectedEnemyId: enemyId,
-      activeTurn
-    });
     clearEnemyTurnWatchdog(room);
   }, ENEMY_TURN_TIMEOUT_MS);
 
@@ -668,8 +631,6 @@ function finalizeDisconnectedPlayer(io, room, playerName) {
 }
 
 io.on('connection', (socket) => {
-  console.log('A user connected');
-
   socket.on('ai_request', async ({ room, eventType, message, data, scenarioType, characterName, playerName }) => {
     if (!room || !eventType) return;
 
@@ -701,7 +662,6 @@ io.on('connection', (socket) => {
   });
 
   socket.on("reset_game", ({ room }) => {
-    console.log(`[RESET] Resetting game for room: ${room}`);
     if (rooms[room]) {
       // Clear all game-related data but keep the room and players
       rooms[room].characterSelections = {};
@@ -721,7 +681,6 @@ io.on('connection', (socket) => {
       
       // Notify all clients to reset
       io.to(room).emit("game_reset");
-      console.log(`[RESET] Game reset complete for room: ${room}`);
     }
   });
 
@@ -841,7 +800,6 @@ io.on('connection', (socket) => {
   });
 
   socket.on("start_combat", ({ room, generatedEnemies }) => {
-    console.log('Starting combat for room:', room);
     if(!combatSessions[room]) {
       combatSessions[room] = {};
     }
@@ -901,7 +859,6 @@ io.on('connection', (socket) => {
       if (combatSessions[room]) {
         combatSessions[room].enemies = normalizeEnemiesForCombat(updatedEnemies, combatSessions[room].enemies || []);
         removeDeadEnemiesFromTurnOrder(combatSessions[room]);
-        console.log('[SERVER] Updated enemies in combatSession:', updatedEnemies.map(e => ({ id: e.id, speed: e.stats.speed })));
       }
       
       io.to(room).emit("enemies_updated", { enemies: combatSessions[room]?.enemies || updatedEnemies });
@@ -922,7 +879,6 @@ io.on('connection', (socket) => {
     if (updatedEnemies && Array.isArray(updatedEnemies)) {
       combat.enemies = normalizeEnemiesForCombat(updatedEnemies, combat.enemies || []);
       removeDeadEnemiesFromTurnOrder(combat);
-      console.log('[SERVER] Updated enemies on end_turn:', updatedEnemies.map(e => ({ id: e.id, speed: e.stats.speed, health: e.stats.health })));
     }
 
     if (rooms[room] && updatedPlayerCharacters) {
@@ -998,19 +954,8 @@ io.on('connection', (socket) => {
 
     const activeTurn = combat.turnOrder?.[combat.currentTurnIndex];
     if (!activeTurn || activeTurn.type !== 'enemy' || activeTurn.id !== enemyId) {
-      console.warn('[SERVER] Ignoring stale enemy_turn_complete:', {
-        room,
-        incomingEnemyId: enemyId,
-        activeTurn
-      });
       return;
     }
-
-    console.log('[ENEMY-TURN-DEBUG] enemy_turn_complete accepted', {
-      room,
-      enemyId,
-      currentTurnIndex: combat.currentTurnIndex
-    });
 
     clearEnemyTurnWatchdog(room);
 
@@ -1090,12 +1035,10 @@ io.on('connection', (socket) => {
   });
 
   socket.on("reduce_cooldown", ({ room, targetPlayer, value }) => {
-    console.log(`[SERVER] Cooldown reduction for ${targetPlayer} by ${value} in room ${room}`);
     io.to(room).emit("cooldown_reduced", { targetPlayer, value });
   });
 
   socket.on("reset_cooldowns", ({ room, targetPlayer }) => {
-    console.log(`[SERVER] Cooldown reset for ${targetPlayer} in room ${room}`);
     io.to(room).emit("cooldowns_reset", { targetPlayer });
   });
 
@@ -1125,7 +1068,6 @@ io.on('connection', (socket) => {
       }
 
       removeDeadEnemiesFromTurnOrder(combat);
-      console.log(`Enemy ${enemyId} defeated`);
       
       // If the dead enemy was the current turn, advance immediately
       if (wasCurrentTurn) {
@@ -1163,12 +1105,10 @@ io.on('connection', (socket) => {
       
       // Remove dead player from turn order
       combat.turnOrder = combat.turnOrder.filter(turn => turn.id !== playerName);
-      console.log(`Player ${playerName} died`);
       
       // Check if all players are dead (no ally turns left)
       const allyTurnsRemaining = combat.turnOrder.filter(turn => turn.type === 'ally').length;
       if (allyTurnsRemaining === 0) {
-        console.log('[SERVER] All players dead - ending combat');
         io.to(room).emit('combat_ended', { result: 'all_dead' });
         return;
       }
@@ -1321,28 +1261,13 @@ io.on('connection', (socket) => {
 
       if (currentTurn?.type === 'enemy') {
         if (!hasActiveEnemyTurnWatchdog(room, currentTurn.id)) {
-          console.log('[ENEMY-TURN-DEBUG] Rejoin during enemy turn, redispatching', {
-            room,
-            player: name,
-            enemyId: currentTurn.id,
-            currentTurnIndex: combat.currentTurnIndex
-          });
           dispatchEnemyTurn(io, room, combat, currentTurn.id);
-        } else {
-          console.log('[ENEMY-TURN-DEBUG] Rejoin during enemy turn, dispatch already active', {
-            room,
-            player: name,
-            enemyId: currentTurn.id,
-            currentTurnIndex: combat.currentTurnIndex
-          });
         }
       }
     }
   });
 
   socket.on('disconnect', () => {
-    console.log('A user disconnected:', socket.id);
-
     const playerName = playerNames[socket.id];
     const room = playerRooms[socket.id];
     const designatedEnemyHandlerBeforeDisconnect = room ? getEnemyTurnHandlers(room)[0] : null;
@@ -1403,20 +1328,7 @@ io.on('connection', (socket) => {
             const designatedEnemyHandlerAfterDisconnect = getEnemyTurnHandlers(room)[0];
             const handlerChanged = designatedEnemyHandlerBeforeDisconnect !== designatedEnemyHandlerAfterDisconnect;
 
-            console.log('[ENEMY-TURN-DEBUG] Disconnect during combat', {
-              room,
-              playerName,
-              activeTurn,
-              designatedEnemyHandlerBeforeDisconnect,
-              designatedEnemyHandlerAfterDisconnect,
-              handlerChanged
-            });
-
             if (activeTurn?.type === 'enemy' && handlerChanged) {
-              console.log('[ENEMY-TURN-DEBUG] Handler changed during enemy turn, redispatching', {
-                room,
-                enemyId: activeTurn.id
-              });
               dispatchEnemyTurn(io, room, combat, activeTurn.id);
             }
           }

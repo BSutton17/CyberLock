@@ -17,12 +17,14 @@ html, body {
   margin: 0;
   padding: 0;
   width: 100%;
-  min-height: 100%;
+  height: 100%;
+  overflow: hidden;
 }
 
 #root {
   width: 100%;
-  min-height: 100vh;
+  height: 100%;
+  overflow: hidden;
 }
 
 a {
@@ -34,9 +36,11 @@ a:hover {
   color: #535bf2;
 }
 
+html,
 body {
+  display: flex;
+  place-items: center;
   min-width: 320px;
-  overflow: hidden;
 }
 
 h1 {

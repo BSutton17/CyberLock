@@ -593,7 +593,7 @@ h3, h4, p {
     width: 185%;
     height: 185%;
     object-fit: cover;
-    object-position: center 2vmin;
+    object-position: center 2.5vmin;
     border-radius: 0.25rem;
 }
 

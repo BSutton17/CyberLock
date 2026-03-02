@@ -3,7 +3,7 @@ import axios from 'axios';
 
 const AuthContext = createContext();
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_URL = import.meta.env.VITE_API_URL || 'https://cs-capstone-491b8f4e8664.herokuapp.com';
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);

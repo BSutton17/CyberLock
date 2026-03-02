@@ -15,21 +15,29 @@ const AI_API_KEY = process.env.AI_API_KEY || '';
 const CF_ACCESS_CLIENT_ID = process.env.CF_ACCESS_CLIENT_ID || '';
 const CF_ACCESS_CLIENT_SECRET = process.env.CF_ACCESS_CLIENT_SECRET || '';
 
+const allowedOrigins = [
+  process.env.CLIENT_URL,
+  'http://localhost:5173',
+  'http://10.255.255.2:5173',
+  'https://cyber-lock.online',
+  'http://cyber-lock.online'
+].filter(Boolean);
+
+const isAllowedOrigin = (origin) => !origin || allowedOrigins.includes(origin);
+
 const server = http.createServer(app);
 
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? false  // Same origin in production
-    : [
-        process.env.CLIENT_URL || 'http://localhost:5173',
-        'http://localhost:5173',
-        'http://10.255.255.2:5173',
-        'https://cyber-lock.online',
-        'http://cyber-lock.online'
-      ],
+  origin: (origin, callback) => {
+    if (isAllowedOrigin(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -38,14 +46,13 @@ app.use(cors({
 // Socket.io setup
 const io = new Server(server, {
   cors: {
-    origin: process.env.NODE_ENV === 'production' 
-      ? false  // Same origin in production
-      : [
-          process.env.CLIENT_URL || 'http://localhost:5173',
-          'http://localhost:5173',
-          'http://10.255.255.2:5173',
-          'https://cyber-lock.online'
-        ],
+    origin: (origin, callback) => {
+      if (isAllowedOrigin(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     methods: ['GET', 'POST'],
     credentials: true,
   },
@@ -70,20 +77,39 @@ app.get('/api/health', (req, res) => {
 // Serve static files from React build (Production only)
 if (process.env.NODE_ENV === 'production') {
   const path = await import('path');
+  const fs = await import('fs');
   const { fileURLToPath } = await import('url');
   
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
   
-  // Serve static files from Client/dist
-  app.use(express.static(path.join(__dirname, '../Client/dist')));
-  
-  // Catch-all handler for React Router (must be after API routes)
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../Client/dist/index.html'));
-  });
-  
-  console.log('✅ Serving React app from /Client/dist');
+  const clientDistPath = path.join(__dirname, '../Client/dist');
+  const clientIndexPath = path.join(clientDistPath, 'index.html');
+
+  if (fs.existsSync(clientIndexPath)) {
+    app.use(express.static(clientDistPath));
+
+    app.get('*', (req, res) => {
+      res.sendFile(clientIndexPath);
+    });
+
+    console.log('✅ Serving React app from /Client/dist');
+  } else {
+    app.get('/', (req, res) => {
+      res.json({
+        status: 'Server is running',
+        message: 'No Client/dist bundle found on this deployment. Use frontend dev server or deploy client separately.',
+        clientUrl: process.env.CLIENT_URL || 'http://localhost:5713'
+      });
+    });
+
+    app.get('*', (req, res) => {
+      res.status(404).json({
+        error: 'Not Found',
+        message: 'Route not found on API server deployment.'
+      });
+    });
+  }
 } else {
   app.get('/', (req, res) => {
     res.json({ 

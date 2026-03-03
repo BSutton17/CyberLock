@@ -2889,7 +2889,8 @@ function Main() {
                     <button onClick={handleNextEncounter} disabled={!canPlayerDecide('navigator')}>Next Encounter</button>
                 </div>
             )}
-        <button style={{ width: '150px' }} onClick={() => handleStoryComplete()}>Combat</button>
+        {/* <button style={{ width: '150px' }} onClick={handleLevelUp}>Level Up</button> */}
+        <button style={{ width: '150px' }} onClick={() => handleStoryComplete("medium")}>Combat</button>
             </div>
             <span className="ai-text">
                 {displayText}

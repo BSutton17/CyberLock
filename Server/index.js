@@ -18,6 +18,7 @@ const CF_ACCESS_CLIENT_SECRET = process.env.CF_ACCESS_CLIENT_SECRET || '';
 const allowedOrigins = [
   process.env.CLIENT_URL,
   'http://localhost:5173',
+  'http://localhost:5713',
   'http://10.255.255.2:5173',
   'https://cyber-lock.online',
   'http://cyber-lock.online'

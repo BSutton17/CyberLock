@@ -129,12 +129,14 @@ function HomeScreen() {
   return (
     <div className="home-screen-container">
       <Events />
-      <div className="home-title-card-wrap">
+      {screen == "waiting" && <>
+       <div className="home-title-card-wrap">
         <img className="home-title-card" src="/TitleCard.png" alt="Cyber Lock" />
       </div>
+      </>}
+     
       {!isJoining ? (
         <div className="case">
-          {/* User Header */}
           <div className="name_input">
             <div className="user-header">
               <div className="user-info">

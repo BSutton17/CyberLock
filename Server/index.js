@@ -15,57 +15,45 @@ const AI_API_KEY = process.env.AI_API_KEY || '';
 const CF_ACCESS_CLIENT_ID = process.env.CF_ACCESS_CLIENT_ID || '';
 const CF_ACCESS_CLIENT_SECRET = process.env.CF_ACCESS_CLIENT_SECRET || '';
 
-const allowedOrigins = [
-  process.env.CLIENT_URL,
-  'http://localhost:5173',
-  'http://localhost:5713',
-  'http://10.255.255.2:5173',
-  'http://100.69.32.229:5173',
-  'https://cyber-lock.online',
-  'http://cyber-lock.online'
-].filter(Boolean);
-
-const localDevOriginPattern = /^https?:\/\/(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+):(5173|5713)$/;
-
-const normalizeOrigin = (origin) => {
-  if (!origin || typeof origin !== 'string') return origin;
-  return origin.endsWith('/') ? origin.slice(0, -1) : origin;
-};
-
-const isAllowedOrigin = (origin) => {
-  const normalizedOrigin = normalizeOrigin(origin);
-  if (!normalizedOrigin) return true;
-  return allowedOrigins.includes(normalizedOrigin) || localDevOriginPattern.test(normalizedOrigin);
-};
-
-const server = http.createServer(app);
-
 // Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 app.use(cors({
-  origin: (origin, callback) => {
-    if (isAllowedOrigin(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: process.env.NODE_ENV === 'production' 
+    ? [
+        'https://cyber-lock.online',
+        'http://localhost:5000',
+        'http://localhost:5173'
+      ]  // Allow specific origins in production for testing
+    : [
+        process.env.CLIENT_URL || 'http://localhost:5173',
+        'http://localhost:5173',
+        'http://10.255.255.2:5173',
+        'https://cyber-lock.online',
+        'http://cyber-lock.online'
+      ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+const server = http.createServer(app);
 
 // Socket.io setup
 const io = new Server(server, {
   cors: {
-    origin: (origin, callback) => {
-      if (isAllowedOrigin(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
+    origin: process.env.NODE_ENV === 'production' 
+      ? [
+          'https://cyber-lock.online',
+          'http://localhost:5000',
+          'http://localhost:5173'
+        ]  // Allow specific origins in production for testing
+      : [
+          process.env.CLIENT_URL || 'http://localhost:5173',
+          'http://localhost:5173',
+          'http://10.255.255.2:5173',
+          'https://cyber-lock.online'
+        ],
     methods: ['GET', 'POST'],
     credentials: true,
   },

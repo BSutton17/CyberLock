@@ -12,6 +12,7 @@
     flex-direction: column;
     overflow: hidden;
     position: relative;
+    image-rendering: pixelated;
 }
 
 .character-builder-container::before {

@@ -21,7 +21,6 @@
     z-index: 1;
 }
 
-/* Header */
 .header {
     text-align: center;
     padding: 1.125vmin;
@@ -56,17 +55,15 @@
     text-shadow: 0 0.188vmin 0.375vmin rgba(0, 0, 0, 0.8);
 }
 
-/* Main Layout Grid */
 .main-content {
     display: grid;
-    grid-template-columns: 22.5vmin 1fr 31.5vmin; /* Slightly wider columns */
+    grid-template-columns: 22.5vmin 1fr 31.5vmin;
     gap: 1.8vmin;
     flex: 0 0 auto;
     height: 85vmin;
     min-height: 0;
 }
 
-/* Common Section Styles */
 .left-section, .middle-section, .right-section {
     background: rgba(20, 20, 40, 0.7);
     box-shadow: 0 0.6vmin 2.4vmin rgba(0, 0, 0, 0.4);
@@ -103,7 +100,6 @@
 }
 
 
-/* Left Section - Team */
 .selected-team {
     background: rgba(20, 20, 40, 0.7);
     backdrop-filter: blur(1.125vmin);
@@ -139,7 +135,7 @@
     background: rgba(30, 30, 50, 0.7);
     border: 0.15vmin dashed rgba(139, 92, 246, 0.4);
     border-radius: 0.75vmin;
-    min-height: 5.25vmin; /* Taller slots */
+    min-height: 5.25vmin;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -197,7 +193,6 @@
 }
 
 
-/* Middle Section - Character Grid */
 .characters-grid h3 {
     margin: 0 0 1.5vmin 0;
     font-size: 1.32vmin;
@@ -217,12 +212,11 @@
     overflow-y: auto;
     padding-right: 0.6vmin;
     padding-bottom: 0.6vmin;
-    padding-top: 0.6vmin; /* Prevent clipping on hover */
-    padding-left: 0.6vmin; /* Prevent clipping on hover */
-    margin: 0.6vmin; /* Slight margins as requested */
+    padding-top: 0.6vmin;
+    padding-left: 0.6vmin;
+    margin: 0.6vmin;
 }
 
-/* Scrollbar Styling */
 ::-webkit-scrollbar {
     width: 0.6vmin;
 }
@@ -263,7 +257,7 @@
 
 .character-card.selected {
     border: 0.15vmin solid #a78bfa;
-    box-shadow: 0 0 0.75vmin rgba(139, 92, 246, 0.3); /* Very subtle glow */
+    box-shadow: 0 0 0.75vmin rgba(139, 92, 246, 0.3);
 }
 
 .character-card.in-team {
@@ -320,14 +314,39 @@
     border: 0.075vmin solid rgba(139, 92, 246, 0.3);
 }
 
-
-/* Right Section - Details */
 .right-section {
-    padding: 0; /* Reset default padding to allow scrolling container */
+    padding: 0; 
 }
 
 .weapon-stats{
-    font-size: 1.5vmin;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1vmin;
+    padding: 0.9vmin 1.1vmin;
+    border-radius: 0.7vmin;
+    background: rgba(15, 23, 42, 0.55);
+    border: 0.075vmin solid rgba(139, 92, 246, 0.35);
+    box-shadow: inset 0 0 0.35vmin rgba(59, 130, 246, 0.2);
+    font-size: 1.35vmin;
+}
+
+.weapon-stats-grid {
+    display: grid;
+    gap: 0.8vmin;
+}
+
+.weapon-stat-label {
+    color: #cbd5e1;
+    font-weight: 700;
+    letter-spacing: 0.05vmin;
+    text-transform: uppercase;
+}
+
+.weapon-stat-value {
+    color: #f8fafc;
+    font-weight: 800;
+    text-shadow: 0 0 0.6vmin rgba(167, 139, 250, 0.35);
 }
 
 .placeholder-info {
@@ -351,7 +370,7 @@
 }
 
 .character-details h4 {
-    font-size: 2.66vmin; /* Larger Title */
+    font-size: 2.66vmin; 
     margin: 0 0 1.1vmin 0;
     background: linear-gradient(90deg, #a78bfa, #c4b5fd);
     background-clip: text;
@@ -482,7 +501,6 @@
     line-height: 1.5;
 }
 
-/* Footer */
 .footer-controls {
     display: flex;
     flex-direction: column;

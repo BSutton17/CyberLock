@@ -134,11 +134,11 @@
       "level": 1,
       "behavior": "intelligent",
       "stats": {
-        "health": 90,
-        "maxHealth": 90,
+        "health": 120,
+        "maxHealth": 120,
         "speed": 30,
         "resistance": 85,
-        "strength": 80,
+        "strength": 50,
         "ta": 15
       },
       "weapon": {

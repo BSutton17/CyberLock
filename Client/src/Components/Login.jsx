@@ -1,7 +1,13 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import '../styles/Login.css';
+
+const API_URL =
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.DEV
+    ? `${window.location.protocol}//${window.location.hostname}:5000`
+    : 'https://cs-capstone-491b8f4e8664.herokuapp.com');
 
 const Login = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -11,13 +17,43 @@ const Login = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isServerConnected, setIsServerConnected] = useState(true);
 
   const { login, register } = useAuth();
   const navigate = useNavigate();
 
+  useEffect(() => {
+    let isMounted = true;
+
+    const checkServerConnection = async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/health`);
+        if (!isMounted) return;
+        setIsServerConnected(response.ok);
+      } catch (connectionError) {
+        if (!isMounted) return;
+        setIsServerConnected(false);
+      }
+    };
+
+    checkServerConnection();
+    const intervalId = setInterval(checkServerConnection, 10000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+    };
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    if (!isServerConnected) {
+      setError('Server is offline. Please try again in a moment.');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -73,6 +109,12 @@ const Login = () => {
     <div className="login-container">
       <div className="login-card">
         <h1>{isLogin ? 'Login' : 'Create Account'}</h1>
+
+        {!isServerConnected && (
+          <div className="server-status-warning" role="status" aria-live="polite">
+            Not connected to server. Login and signup are temporarily unavailable.
+          </div>
+        )}
 
         {error && <div className="error-message">{error}</div>}
 

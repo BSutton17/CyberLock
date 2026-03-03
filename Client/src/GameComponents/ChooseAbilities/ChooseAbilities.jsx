@@ -5,17 +5,18 @@ import './ChooseAbilities.css';
 
 
 function ChooseAbilities(){
-    const {players, playerCharacters, setPlayerCharacters, playerName, room, socket } = useGameContext();
+    const {players, playerCharacters, setPlayerCharacters, playerName, room, socket, getAbilityScaler } = useGameContext();
     const [isReady, setIsReady] = useState(false);
     const [hasSubmittedReady, setHasSubmittedReady] = useState(false);
     const [readyPlayers, setReadyPlayers] = useState([]);
     const [expandedCategory, setExpandedCategory] = useState(null);
-    const playerLevel = playerCharacters[playerName].level;
-    const playerRole = playerCharacters[playerName].role;
+    const currentCharacter = playerCharacters?.[playerName] || null;
+    const playerLevel = currentCharacter?.level ?? 1;
+    const playerRole = currentCharacter?.role ?? '';
 
     const handleReady = () => {
         if (!isReady || hasSubmittedReady) return;
-        const latestCharacter = playerCharacters[playerName];
+        const latestCharacter = currentCharacter;
         if (latestCharacter) {
             socket.emit("character_selected", { room, playerName, character: latestCharacter });
         }
@@ -24,7 +25,7 @@ function ChooseAbilities(){
     }
 
     const checkReady = () => {
-        const character = playerCharacters[playerName];
+        const character = currentCharacter;
         if (!character) {
             setIsReady(false);
             return;
@@ -41,8 +42,9 @@ function ChooseAbilities(){
     }
 
     const assignAbility = (name, index) => {
-        const playerInfo = playerCharacters[playerName];
-        const abilities = playerCharacters[playerName].abilities;
+        const playerInfo = currentCharacter;
+        if (!playerInfo) return;
+        const abilities = playerInfo.abilities;
         const updateAbilities = Array.isArray(abilities) ? [...abilities] : [];
         updateAbilities[index] = name;
         const updatedCharacter = {
@@ -58,7 +60,8 @@ function ChooseAbilities(){
     }
 
     const assignUltimate = (name) => {
-        const playerInfo = playerCharacters[playerName];
+        const playerInfo = currentCharacter;
+        if (!playerInfo) return;
         const updatedCharacter = {
             ...playerCharacters,
             [playerName]: {
@@ -72,8 +75,7 @@ function ChooseAbilities(){
 
     useEffect(() => {
         checkReady();
-        console.log(playerCharacters);
-    }, [playerCharacters]);
+    }, [playerCharacters, currentCharacter]);
 
     useEffect(() => {
         const handleAbilityReadyStatus = (readyList) => {
@@ -104,18 +106,19 @@ function ChooseAbilities(){
                     <div className="character-section">
                         <h3>Character</h3>
                         <div className="character-info">
-                            <p className="character-name">{playerCharacters[playerName].name}</p>
+                            <p className="character-name">{currentCharacter?.name || 'Loading...'}</p>
                             <p className="character-level">Level {playerLevel}</p>
-                            <p className="character-role">{playerCharacters[playerName].role}</p>
+                            <p className="character-role">{currentCharacter?.role || '-'}</p>
                         </div>
                     </div>
 
                     <div className="current-abilities-section">
                         <h3>Current Abilities</h3>
                         <div className="current-abilities-list">
-                            {Array.isArray(playerCharacters[playerName].abilities) && playerCharacters[playerName].abilities.map((ability, index) => (
+                            {Array.isArray(currentCharacter?.abilities) && currentCharacter.abilities.map((ability, index) => (
                                 ability ? (
                                     <div key={index} className="current-ability-item">
+                                        <div className='damage-scaling-list'>{getAbilityScaler(ability)}</div>
                                         <span className="ability-level">Level {[1, 3, 5][index]}</span>
                                         <div className="ability-details">
                                             <span className="ability-name">{ability.name || 'Empty'}</span>
@@ -131,12 +134,12 @@ function ChooseAbilities(){
                                     </div>
                                 )
                             ))}
-                            {playerCharacters[playerName].ultimate && (
+                            {currentCharacter?.ultimate && (
                                 <div className="current-ability-item ultimate">
                                     <span className="ability-level">Ultimate</span>
                                     <div className="ability-details">
-                                        <span className="ability-name">{playerCharacters[playerName].ultimate.name || 'Empty'}</span>
-                                        <p className='ability-description'>{playerCharacters[playerName].ultimate.description}</p>
+                                        <span className="ability-name">{currentCharacter.ultimate.name || 'Empty'}</span>
+                                        <p className='ability-description'>{currentCharacter.ultimate.description}</p>
                                     </div>
                                 </div>
                             )}
@@ -157,8 +160,8 @@ function ChooseAbilities(){
                         const level1Abilities = Object.entries(ABILITIES)
                             .filter(([key, ability]) => (ability.level === 1 && ability.role === playerRole));
 
-                        const currentUltimate = playerCharacters[playerName].ultimate;
-                        const currentAbilities = playerCharacters[playerName].abilities;
+                        const currentUltimate = currentCharacter?.ultimate;
+                        const currentAbilities = currentCharacter?.abilities;
 
                         return (
                             <>
@@ -186,7 +189,7 @@ function ChooseAbilities(){
                                                             setExpandedCategory(null);
                                                         }}
                                                     >
-                                                        {ability.name}
+                                                        {ability.name} - <span className="ability-description">{ability.description} {getAbilityScaler(ability)}</span>
                                                     </button>
                                                 ))}
                                             </div>
@@ -218,7 +221,7 @@ function ChooseAbilities(){
                                                             setExpandedCategory(null);
                                                         }}
                                                     >
-                                                        {ability.name}
+                                                        {ability.name} - <span className="ability-description">{ability.description} {getAbilityScaler(ability)}</span>
                                                     </button>
                                                 ))}
                                             </div>
@@ -250,7 +253,7 @@ function ChooseAbilities(){
                                                             setExpandedCategory(null);
                                                         }}
                                                     >
-                                                        {ability.name}
+                                                        {ability.name} - <span className="ability-description">{ability.description} {getAbilityScaler(ability)}</span>
                                                     </button>
                                                 ))}
                                             </div>
@@ -282,7 +285,7 @@ function ChooseAbilities(){
                                                             setExpandedCategory(null);
                                                         }}
                                                     >
-                                                        {ability.name}
+                                                       {ability.name} - <span className="ability-description">{ability.description} {getAbilityScaler(ability)}</span>
                                                     </button>
                                                 ))}
                                             </div>

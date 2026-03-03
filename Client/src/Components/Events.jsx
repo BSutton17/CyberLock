@@ -82,10 +82,7 @@ function Events(){
               })
             );
 
-            return {
-              ...prevCharacters,
-              ...normalizedSelections
-            };
+            return normalizedSelections;
           });
         });
 

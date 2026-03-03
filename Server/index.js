@@ -18,27 +18,11 @@ const CF_ACCESS_CLIENT_SECRET = process.env.CF_ACCESS_CLIENT_SECRET || '';
 // Middleware
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? false  // Same origin in production - no CORS needed
-    : [
-        process.env.CLIENT_URL || 'http://localhost:5173',
-        'http://localhost:5173',
-        'http://10.255.255.2:5173',
+    ? [
         'https://cyber-lock.online',
-        'http://cyber-lock.online'
-      ],
-  credentials: true,
-}));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-const server = http.createServer(app);
-
-// Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? false  // Same origin in production
+        'http://localhost:5000',
+        'http://localhost:5173'
+      ]  // Allow specific origins in production for testing
     : [
         process.env.CLIENT_URL || 'http://localhost:5173',
         'http://localhost:5173',
@@ -50,12 +34,20 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+const server = http.createServer(app);
 
 // Socket.io setup
 const io = new Server(server, {
   cors: {
     origin: process.env.NODE_ENV === 'production' 
-      ? false  // Same origin in production
+      ? [
+          'https://cyber-lock.online',
+          'http://localhost:5000',
+          'http://localhost:5173'
+        ]  // Allow specific origins in production for testing
       : [
           process.env.CLIENT_URL || 'http://localhost:5173',
           'http://localhost:5173',
@@ -86,20 +78,39 @@ app.get('/api/health', (req, res) => {
 // Serve static files from React build (Production only)
 if (process.env.NODE_ENV === 'production') {
   const path = await import('path');
+  const fs = await import('fs');
   const { fileURLToPath } = await import('url');
   
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
   
-  // Serve static files from Client/dist
-  app.use(express.static(path.join(__dirname, '../Client/dist')));
-  
-  // Catch-all handler for React Router (must be after API routes)
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../Client/dist/index.html'));
-  });
-  
-  console.log('✅ Serving React app from /Client/dist');
+  const clientDistPath = path.join(__dirname, '../Client/dist');
+  const clientIndexPath = path.join(clientDistPath, 'index.html');
+
+  if (fs.existsSync(clientIndexPath)) {
+    app.use(express.static(clientDistPath));
+
+    app.get('*', (req, res) => {
+      res.sendFile(clientIndexPath);
+    });
+
+    console.log('✅ Serving React app from /Client/dist');
+  } else {
+    app.get('/', (req, res) => {
+      res.json({
+        status: 'Server is running',
+        message: 'No Client/dist bundle found on this deployment. Use frontend dev server or deploy client separately.',
+        clientUrl: process.env.CLIENT_URL || 'http://localhost:5713'
+      });
+    });
+
+    app.get('*', (req, res) => {
+      res.status(404).json({
+        error: 'Not Found',
+        message: 'Route not found on API server deployment.'
+      });
+    });
+  }
 } else {
   app.get('/', (req, res) => {
     res.json({ 
@@ -759,6 +770,7 @@ io.on('connection', (socket) => {
       rooms[room].attributePoints = {};
       rooms[room].attributeReadyPlayers = [];
       rooms[room].sortedAttributeAllocations = {};
+      rooms[room].selectedFaction = null;
       
       // Clear combat session
       if (combatSessions[room]) {
@@ -769,6 +781,16 @@ io.on('connection', (socket) => {
       // Notify all clients to reset
       io.to(room).emit("game_reset");
     }
+  });
+
+  socket.on('faction_selected', ({ room, faction }) => {
+    if (!rooms[room]) return;
+
+    const normalizedFaction = faction === 'enforcers' || faction === 'rebels' ? faction : null;
+    if (!normalizedFaction) return;
+
+    rooms[room].selectedFaction = normalizedFaction;
+    io.to(room).emit('faction_selected', normalizedFaction);
   });
 
   socket.on("character_selected", ({ room, playerName, character }) => {
@@ -1301,6 +1323,10 @@ io.on('connection', (socket) => {
     }
 
     socket.emit('restore_screen', { screen: rooms[room].playerScreens[name] || 'waiting' });
+
+    if (rooms[room].selectedFaction) {
+      socket.emit('faction_selected', rooms[room].selectedFaction);
+    }
 
     const combat = combatSessions[room];
     if (combat?.turnOrder) {

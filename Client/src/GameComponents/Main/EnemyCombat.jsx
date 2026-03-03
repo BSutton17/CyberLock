@@ -71,26 +71,7 @@ export function selectAttackTarget(enemy, allies, playerCharacters, enemyPositio
 //enemy behavior
 export function determineBehavior(enemy, allies, playerCharacters) {
     const behavior = enemy.behavior || 'aggressive';
-    
-    if (behavior === 'intelligent') {
-        const healthPercent = (enemy.stats.health / enemy.stats.maxHealth) * 100;
-        
-        // Compare health with closest enemy
-        let minEnemyHealth = Infinity;
-        allies.forEach(allyId => {
-            const character = playerCharacters[allyId];
-            if (character) {
-                minEnemyHealth = Math.min(minEnemyHealth, character.stats.health);
-            }
-        });
-        
-        if (healthPercent > 50 || enemy.stats.health > minEnemyHealth) {
-            return 'aggressive';
-        } else {
-            return 'defensive';
-        }
-    }
-    
+
     return behavior;
 }
 
@@ -362,7 +343,7 @@ function calculateDefensiveMovement(enemy, allies, characterPositions, activeEff
 }
 
 //supports
-function calculateSupportMovement(enemy, alliedEnemies, characterPositions) {
+function calculateSupportMovement(enemy, alliedEnemies, characterPositions, activeEffects = []) {
     const enemyPos = characterPositions[enemy.id];
     if (!enemyPos) return null;
     
@@ -392,8 +373,36 @@ function calculateSupportMovement(enemy, alliedEnemies, characterPositions) {
     return bestMove;
 }
 
+function calculateRetreatToSupportMovement(enemy, supportAllies, characterPositions, activeEffects = []) {
+    const enemyPos = characterPositions[enemy.id];
+    if (!enemyPos) return null;
 
-export function calculateEnemyMovement(enemy, allies, alliedEnemies, playerCharacters, characterPositions, activeEffects = []) {
+    if (!Array.isArray(supportAllies) || supportAllies.length === 0) return null;
+
+    if (isInRangeOfAny(enemyPos, supportAllies, characterPositions)) {
+        return null;
+    }
+
+    const maxMovement = Math.floor(enemy.stats.speed / 10);
+    const closestSupport = findClosestTarget(enemyPos, supportAllies, characterPositions);
+    if (!closestSupport || !closestSupport.targetId) return null;
+
+    const supportPos = characterPositions[closestSupport.targetId];
+    const reachableCells = getReachableCells(enemyPos, maxMovement, characterPositions, activeEffects, enemy);
+
+    if (reachableCells.length === 0) return null;
+
+    const bestMove = reachableCells.reduce((best, cell) => {
+        const distance = getDistance(cell, supportPos);
+        const bestDistance = getDistance(best, supportPos);
+        return distance < bestDistance ? cell : best;
+    });
+
+    return bestMove;
+}
+
+
+export function calculateEnemyMovement(enemy, allies, alliedEnemies, supportAllies, playerCharacters, characterPositions, activeEffects = []) {
     const behavior = determineBehavior(enemy, allies, playerCharacters);
     const role = enemy.role || 'DPS';
     
@@ -408,11 +417,26 @@ export function calculateEnemyMovement(enemy, allies, alliedEnemies, playerChara
     if (behavior === 'defensive') {
         return calculateDefensiveMovement(enemy, allies, characterPositions, activeEffects);
     }
+
+    if (behavior === 'intelligent') {
+        const maxHealth = enemy?.stats?.maxHealth || 1;
+        const currentHealth = enemy?.stats?.health || 0;
+        const healthRatio = currentHealth / Math.max(1, maxHealth);
+
+        if (healthRatio < 0.25 && Array.isArray(supportAllies) && supportAllies.length > 0) {
+            const retreatMove = calculateRetreatToSupportMovement(enemy, supportAllies, characterPositions, activeEffects);
+            if (retreatMove) {
+                return retreatMove;
+            }
+        }
+
+        return calculateDefensiveMovement(enemy, allies, characterPositions, activeEffects);
+    }
     
     return null;
 }
 
-export function executeEnemyTurn(enemy, allies, alliedEnemies, playerCharacters, characterPositions, activeEffects = []) {
+export function executeEnemyTurn(enemy, allies, alliedEnemies, battlefieldEnemies = [], playerCharacters, characterPositions, activeEffects = []) {
     console.log(`[ENEMY TURN] ${enemy.name} (${enemy.id}) starting turn`);
     console.log(`[ENEMY TURN] Enemy abilities:`, enemy.abilities);
     console.log(`[ENEMY TURN] Enemy cooldowns:`, enemy.cooldowns);
@@ -447,13 +471,21 @@ export function executeEnemyTurn(enemy, allies, alliedEnemies, playerCharacters,
         };
     }
     
-    const behavior = determineBehavior(enemy, allies, playerCharacters);
-    const role = enemy.role || 'DPS';
+    const supportAllies = Array.isArray(alliedEnemies)
+        ? alliedEnemies.filter(allyId =>
+            battlefieldEnemies.some(allyEnemy =>
+                allyEnemy.id === allyId &&
+                allyEnemy.role === 'Support' &&
+                !allyEnemy.isDeadBody &&
+                (allyEnemy.stats?.health || 0) > 0
+            )
+        )
+        : [];
     
     // Calculate movement
     const newPosition = movementPrevented
         ? null
-        : calculateEnemyMovement(enemy, allies, alliedEnemies, playerCharacters, characterPositions, activeEffects);
+        : calculateEnemyMovement(enemy, allies, alliedEnemies, supportAllies, playerCharacters, characterPositions, activeEffects);
     
     // Create updated positions to check attack range AFTER moving
     const updatedPositions = newPosition ? {

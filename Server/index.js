@@ -18,27 +18,11 @@ const CF_ACCESS_CLIENT_SECRET = process.env.CF_ACCESS_CLIENT_SECRET || '';
 // Middleware
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? false  // Same origin in production - no CORS needed
-    : [
-        process.env.CLIENT_URL || 'http://localhost:5173',
-        'http://localhost:5173',
-        'http://10.255.255.2:5173',
+    ? [
         'https://cyber-lock.online',
-        'http://cyber-lock.online'
-      ],
-  credentials: true,
-}));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-const server = http.createServer(app);
-
-// Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? false  // Same origin in production
+        'http://localhost:5000',
+        'http://localhost:5173'
+      ]  // Allow specific origins in production for testing
     : [
         process.env.CLIENT_URL || 'http://localhost:5173',
         'http://localhost:5173',
@@ -50,12 +34,20 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+const server = http.createServer(app);
 
 // Socket.io setup
 const io = new Server(server, {
   cors: {
     origin: process.env.NODE_ENV === 'production' 
-      ? false  // Same origin in production
+      ? [
+          'https://cyber-lock.online',
+          'http://localhost:5000',
+          'http://localhost:5173'
+        ]  // Allow specific origins in production for testing
       : [
           process.env.CLIENT_URL || 'http://localhost:5173',
           'http://localhost:5173',

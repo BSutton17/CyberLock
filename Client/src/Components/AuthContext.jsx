@@ -6,7 +6,7 @@ const AuthContext = createContext();
 const API_URL =
   import.meta.env.VITE_API_URL ||
   (import.meta.env.DEV
-    ? 'http://localhost:5000'
+    ? `${window.location.protocol}//${window.location.hostname}:5000`
     : 'https://cs-capstone-491b8f4e8664.herokuapp.com');
 
 export const AuthProvider = ({ children }) => {

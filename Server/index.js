@@ -15,44 +15,45 @@ const AI_API_KEY = process.env.AI_API_KEY || '';
 const CF_ACCESS_CLIENT_ID = process.env.CF_ACCESS_CLIENT_ID || '';
 const CF_ACCESS_CLIENT_SECRET = process.env.CF_ACCESS_CLIENT_SECRET || '';
 
-const allowedOrigins = [
-  process.env.CLIENT_URL,
-  'http://localhost:5173',
-  'http://10.255.255.2:5173',
-  'https://cyber-lock.online',
-  'http://cyber-lock.online'
-].filter(Boolean);
-
-const isAllowedOrigin = (origin) => !origin || allowedOrigins.includes(origin);
-
-const server = http.createServer(app);
-
 // Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 app.use(cors({
-  origin: (origin, callback) => {
-    if (isAllowedOrigin(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: process.env.NODE_ENV === 'production' 
+    ? [
+        'https://cyber-lock.online',
+        'http://localhost:5000',
+        'http://localhost:5173'
+      ]  // Allow specific origins in production for testing
+    : [
+        process.env.CLIENT_URL || 'http://localhost:5173',
+        'http://localhost:5173',
+        'http://10.255.255.2:5173',
+        'https://cyber-lock.online',
+        'http://cyber-lock.online'
+      ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+const server = http.createServer(app);
 
 // Socket.io setup
 const io = new Server(server, {
   cors: {
-    origin: (origin, callback) => {
-      if (isAllowedOrigin(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
+    origin: process.env.NODE_ENV === 'production' 
+      ? [
+          'https://cyber-lock.online',
+          'http://localhost:5000',
+          'http://localhost:5173'
+        ]  // Allow specific origins in production for testing
+      : [
+          process.env.CLIENT_URL || 'http://localhost:5173',
+          'http://localhost:5173',
+          'http://10.255.255.2:5173',
+          'https://cyber-lock.online'
+        ],
     methods: ['GET', 'POST'],
     credentials: true,
   },

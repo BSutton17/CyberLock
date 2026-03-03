@@ -721,7 +721,7 @@ function Main() {
         const partyLevel = getPartyLevel();
 
         if (spawnType === 'medium') {
-            const mediumCount = partySize <= 3 ? 2 : 3;
+            const mediumCount = partySize <= 4 ? 2 : 3;
             const mediumEnemies = selectEnemiesByTier('mid-tier', mediumCount, partySize, partyLevel);
             return mediumEnemies.length > 0 ? mediumEnemies : selectEnemiesByTier('generic', mediumCount, partySize, partyLevel);
         }
@@ -730,7 +730,7 @@ function Main() {
             const bossEnemies = selectEnemiesByTier('boss', 1, partySize, partyLevel);
             if (bossEnemies.length > 0) return bossEnemies;
 
-            const fallbackCount = partySize <= 3 ? 2 : 3;
+            const fallbackCount = partySize <= 4 ? 2: 3;
             const mediumEnemies = selectEnemiesByTier('mid-tier', fallbackCount, partySize, partyLevel);
             return mediumEnemies.length > 0 ? mediumEnemies : selectEnemiesByTier('generic', fallbackCount, partySize, partyLevel);
         }

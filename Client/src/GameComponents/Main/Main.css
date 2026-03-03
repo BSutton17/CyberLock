@@ -103,6 +103,7 @@ h3, h4, p {
     border-radius: 0.375rem;
     flex-shrink: 0;
     overflow: hidden;
+    position: relative;
 }
 
 .character-icon img {
@@ -579,6 +580,28 @@ h3, h4, p {
 .grid-character {
     width: 100%;
     height: 100%;
+    position: relative;
+}
+
+.status-effect-indicator {
+    position: absolute;
+    right: 0.2vmin;
+    top: 0.2vmin;
+    width: 2.5vmin;
+    height: 2.5vmin;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 12;
+}
+
+.status-effect-indicator-party {
+    font-size: 1.85vmin;
+}
+
+.status-effect-indicator-grid {
+    font-size: 1.85vmin;
 }
 
 .grid-character.player-grid-character {

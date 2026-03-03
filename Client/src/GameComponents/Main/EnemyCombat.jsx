@@ -481,6 +481,13 @@ export function executeEnemyTurn(enemy, allies, alliedEnemies, battlefieldEnemie
             )
         )
         : [];
+
+    const enemyRole = enemy.role || 'DPS';
+    const canUseConsecutiveAbilities = enemyRole === 'Support';
+    const blockedByRecentAbilityUse = !canUseConsecutiveAbilities && enemy.usedAbilityLastTurn === true;
+    if (blockedByRecentAbilityUse) {
+        console.log(`[ENEMY ABILITIES] ${enemy.name} used an ability last turn and must weapon/move this turn.`);
+    }
     
     // Calculate movement
     const newPosition = movementPrevented
@@ -492,15 +499,18 @@ export function executeEnemyTurn(enemy, allies, alliedEnemies, battlefieldEnemie
         ...characterPositions,
         [enemy.id]: newPosition
     } : characterPositions;
+
+    const weaponTargetAfterMovement = selectAttackTarget(enemy, allies, playerCharacters, updatedPositions, updatedPositions);
     
     // Check if enemy should use an ability instead of weapon
     let abilityToUse = null;
     let abilityRequiresTarget = false;
-    if (!abilitiesDisabled && enemy.abilities && enemy.abilities.length > 0 && enemy.cooldowns) {
+    let availableAbilities = [];
+    if (!abilitiesDisabled && !blockedByRecentAbilityUse && enemy.abilities && enemy.abilities.length > 0 && enemy.cooldowns) {
         console.log(`[ENEMY ABILITIES] ${enemy.name} (${enemy.id}) checking abilities...`);
         
         // Find all abilities that are off cooldown and currently usable
-        const availableAbilities = enemy.abilities.filter(ability => {
+        availableAbilities = enemy.abilities.filter(ability => {
             const currentCooldown = enemy.cooldowns[ability.id] || 0;
             if (currentCooldown !== 0) {
                 console.log(`[ENEMY ABILITIES]   - ${ability.name} (level ${ability.level}): cooldown ${currentCooldown}`);
@@ -559,6 +569,27 @@ export function executeEnemyTurn(enemy, allies, alliedEnemies, battlefieldEnemie
             abilityRequiresTarget = !['self', 'all-enemies', 'all-allies'].includes(selectedTargetType);
         }
     }
+
+    const hasNoAttackOption = !weaponTargetAfterMovement;
+    const hasNoMovementOption = !newPosition;
+    if (!abilityToUse && availableAbilities.length > 0 && hasNoAttackOption && hasNoMovementOption) {
+        const statBuffAbilities = availableAbilities.filter(ability => {
+            const abilityDef = ABILITIES[ability.id];
+            return abilityDef?.type === 'buff';
+        });
+
+        if (statBuffAbilities.length > 0) {
+            abilityToUse = statBuffAbilities.reduce((best, current) => {
+                return (current.level || 1) > (best.level || 1) ? current : best;
+            });
+
+            const selectedAbilityDef = ABILITIES[abilityToUse.id];
+            const selectedTargetType = selectedAbilityDef?.targetType;
+            abilityRequiresTarget = !['self', 'all-enemies', 'all-allies'].includes(selectedTargetType);
+
+            console.log(`[ENEMY ABILITIES] ${enemy.name} cannot move/attack and will use stat buff ${abilityToUse.name}.`);
+        }
+    }
     
     // Select target based on whether we're using an ability or weapon
     let target;
@@ -600,7 +631,7 @@ export function executeEnemyTurn(enemy, allies, alliedEnemies, battlefieldEnemie
         console.log(`[ENEMY ABILITIES] Target for ${abilityToUse.name} by ${enemy.name} (${enemy.id}):`, target);
     } else {
         // For weapon attacks, use normal range-based targeting
-        target = selectAttackTarget(enemy, allies, playerCharacters, updatedPositions, updatedPositions);
+        target = weaponTargetAfterMovement;
     }
     
     // Fallback: if ability needs a target but none found, use weapon attack instead

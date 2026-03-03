@@ -20,11 +20,23 @@ const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:5713',
   'http://10.255.255.2:5173',
+  'http://100.69.32.229:5173',
   'https://cyber-lock.online',
   'http://cyber-lock.online'
 ].filter(Boolean);
 
-const isAllowedOrigin = (origin) => !origin || allowedOrigins.includes(origin);
+const localDevOriginPattern = /^https?:\/\/(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+):(5173|5713)$/;
+
+const normalizeOrigin = (origin) => {
+  if (!origin || typeof origin !== 'string') return origin;
+  return origin.endsWith('/') ? origin.slice(0, -1) : origin;
+};
+
+const isAllowedOrigin = (origin) => {
+  const normalizedOrigin = normalizeOrigin(origin);
+  if (!normalizedOrigin) return true;
+  return allowedOrigins.includes(normalizedOrigin) || localDevOriginPattern.test(normalizedOrigin);
+};
 
 const server = http.createServer(app);
 

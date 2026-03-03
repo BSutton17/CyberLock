@@ -19,7 +19,7 @@ function HomeScreen() {
     const savedRoom = localStorage.getItem('room');
     return !!(savedName && savedRoom);
   }); 
-  const { socket, room, setRoom, screen, setPlayerName, setAdmin } = useGameContext();
+  const { socket, room, setRoom, screen, setPlayerName, setAdmin, setScreen } = useGameContext();
   const navigate = useNavigate();
   const { user, logout: logoutAuth } = useAuth();
   const [name] = useState(() => {
@@ -46,15 +46,29 @@ function HomeScreen() {
     const savedName = localStorage.getItem('name');
     const savedRoom = localStorage.getItem('room');
     const savedIsAdmin = localStorage.getItem('isAdmin') === 'true';
+    const savedScreen = localStorage.getItem('screen');
 
     if (savedName && savedRoom) {
       if (setPlayerName) setPlayerName(savedName);
       setRoom(savedRoom);
       if (setAdmin) setAdmin(savedIsAdmin);
+      if (savedScreen) setScreen(savedScreen);
 
       socket.emit('join_room', savedRoom, savedName);
     }
-  }, [setAdmin, setPlayerName, setRoom, socket]);
+  }, [setAdmin, setPlayerName, setRoom, socket, setScreen]);
+
+  useEffect(() => {
+    if (!isJoining || !room || !name || !screen) return;
+
+    localStorage.setItem('screen', screen);
+
+    socket.emit('player_screen_updated', {
+      room,
+      playerName: name,
+      screen
+    });
+  }, [socket, isJoining, room, name, screen]);
 
 
 
@@ -63,6 +77,7 @@ function HomeScreen() {
       setJoinError('');
       localStorage.setItem('name', name);
       localStorage.setItem('room', room);
+      localStorage.setItem('screen', 'waiting');
       if (setPlayerName) setPlayerName(name);
 
       socket.emit('join_room', room, name);
@@ -87,6 +102,7 @@ function HomeScreen() {
     setTimeout(() => {
       localStorage.setItem('name', name);
       localStorage.setItem('room', strRoom);
+      localStorage.setItem('screen', 'waiting');
       if (setPlayerName) setPlayerName(name);
 
       socket.emit('join_room', strRoom, name);
@@ -99,6 +115,7 @@ function HomeScreen() {
     localStorage.removeItem("name");
     localStorage.removeItem("room");
     localStorage.removeItem("isAdmin");
+    localStorage.removeItem("screen");
     window.location.reload(); 
     socket.emit("disconnect");
   };
@@ -112,9 +129,14 @@ function HomeScreen() {
   return (
     <div className="home-screen-container">
       <Events />
+      {screen == "waiting" && <>
+       <div className="home-title-card-wrap">
+        <img className="home-title-card" src="/TitleCard.png" alt="Cyber Lock" />
+      </div>
+      </>}
+     
       {!isJoining ? (
         <div className="case">
-          {/* User Header */}
           <div className="name_input">
             <div className="user-header">
               <div className="user-info">
@@ -142,6 +164,7 @@ function HomeScreen() {
           {screen === "characterBuilder" && <CharacterBuilder />}
           {screen === "main" && <Main />}
           {screen !== "main" && <button className="leave" onClick={leaveGame}>Leave Game</button>}
+          {screen === "main" && <button className="leave-main" onClick={leaveGame}>Leave Game</button>}
           {screen === "levelup" && <LevelUp />}
           {screen === "chooseAbilities" && <ChooseAbilities />}
         </div>

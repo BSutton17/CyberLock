@@ -82,10 +82,7 @@ function Events(){
               })
             );
 
-            return {
-              ...prevCharacters,
-              ...normalizedSelections
-            };
+            return normalizedSelections;
           });
         });
 
@@ -105,8 +102,14 @@ function Events(){
           setScreen("main");
         });
 
+        socket.on("restore_screen", ({ screen }) => {
+          if (!screen) return;
+          localStorage.setItem('screen', screen);
+          setScreen(screen);
+        });
+
         // Game phase transitions
-        socket.on("phase_changed_combat", ({ enemies, enemyPositions, turnOrder, currentTurn, characterSelections }) => {
+        socket.on("phase_changed_combat", ({ enemies, enemyPositions, playerPositions, turnOrder, currentTurn, characterSelections }) => {
           console.log('Combat Phase Started - Turn Order:', turnOrder);
           console.log('Received enemies:', enemies);
           console.log('Received enemy positions:', enemyPositions);
@@ -135,6 +138,10 @@ function Events(){
           if (enemyPositions) {
             sessionStorage.setItem(`enemyPositions_${room}`, JSON.stringify(enemyPositions));
           }
+
+          if (playerPositions) {
+            sessionStorage.setItem(`playerPositions_${room}`, JSON.stringify(playerPositions));
+          }
           
           setTurnOrder(turnOrder);
           setCurrentTurn(currentTurn);
@@ -151,6 +158,19 @@ function Events(){
           console.log('[TURN DEBUG] Setting isMyTurn to:', currentTurn.id === playerName && currentTurn.type === 'ally');
           setCurrentTurn(currentTurn);
           setIsMyTurn(currentTurn.id === playerName && currentTurn.type === 'ally');
+        });
+
+        socket.on("turn_order_updated", ({ turnOrder, currentTurnIndex }) => {
+          setTurnOrder(turnOrder || []);
+
+          if (Array.isArray(turnOrder) && turnOrder.length > 0) {
+            const safeIndex = Math.max(0, Math.min(currentTurnIndex || 0, turnOrder.length - 1));
+            const currentTurn = turnOrder[safeIndex];
+            if (currentTurn) {
+              setCurrentTurn(currentTurn);
+              setIsMyTurn(currentTurn.id === playerName && currentTurn.type === 'ally');
+            }
+          }
         });
 
         socket.on("attribute_allocations_updated", (allocations) => {
@@ -197,8 +217,10 @@ function Events(){
           socket.off("update_ready_status");
           socket.off("start_main_game");
           socket.off("start_game");
+          socket.off("restore_screen");
           socket.off("phase_changed_combat");
           socket.off("turn_changed");
+          socket.off("turn_order_updated");
           socket.off("attribute_allocations_updated");
           socket.off("player_health_updated");
           socket.off("level_up");

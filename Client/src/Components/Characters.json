@@ -2,13 +2,13 @@
   "characters": [
     {
       "id": "offensive_tank_1",
-      "name": "Offensive Tank #1",
+      "name": "Shipment",
       "role": "Tank",
       "level": 1,
       "stats": {
         "health": 95,
         "maxHealth": 95,
-        "speed": 20,
+        "speed": 30,
         "resistance": 30,
         "strength": 30,
         "ta": 15
@@ -16,7 +16,7 @@
       "weapon": {
         "range": 1,
         "name": "Hammer",
-        "damage": 10
+        "damage": 9
       },
       "abilities": [
 
@@ -25,7 +25,7 @@
     },
     {
       "id": "defensive_tank_2",
-      "name": "Defensive Tank #2",
+      "name": "E.N.C.A.G.E",
       "role": "Tank",
       "level": 1,
       "stats": {
@@ -48,7 +48,7 @@
     },
     {
       "id": "spellcaster_dps_1",
-      "name": "Spell Caster DPS #1",
+      "name": "Shoot House",
       "role": "DPS",
       "level": 1,
       "stats": {
@@ -70,7 +70,7 @@
     },
     {
       "id": "aggressive_dps_2",
-      "name": "Aggressive DPS #2",
+      "name": "Leo",
       "role": "DPS",
       "level": 1,
       "stats": {
@@ -106,7 +106,7 @@
       },
       "weapon": {
         "range": 2,
-        "name": "Rail Cannon",
+        "name": "Shotgun",
         "damage": 10
       },
       "abilities": [

@@ -595,36 +595,23 @@ function Main() {
 
     const generateSpreadColumns = (count, totalCols = 10) => {
         if (count <= 0) return [];
-        if (count === 1) return [Math.floor(totalCols / 2)];
+        const preferredMiddle = [4, 5, 6].filter(col => col >= 0 && col < totalCols);
+        const center = (totalCols - 1) / 2;
 
-        const baseColumns = Array.from({ length: count }, (_, index) =>
-            Math.round((index * (totalCols - 1)) / (count - 1))
-        );
+        const remainingColumns = Array.from({ length: totalCols }, (_, col) => col)
+            .filter(col => !preferredMiddle.includes(col))
+            .sort((firstCol, secondCol) => {
+                const firstDistance = Math.abs(firstCol - center);
+                const secondDistance = Math.abs(secondCol - center);
 
-        const used = new Set();
-        return baseColumns.map((baseCol) => {
-            if (!used.has(baseCol)) {
-                used.add(baseCol);
-                return baseCol;
-            }
-
-            for (let offset = 1; offset < totalCols; offset++) {
-                const left = baseCol - offset;
-                const right = baseCol + offset;
-
-                if (left >= 0 && !used.has(left)) {
-                    used.add(left);
-                    return left;
+                if (firstDistance !== secondDistance) {
+                    return firstDistance - secondDistance;
                 }
 
-                if (right < totalCols && !used.has(right)) {
-                    used.add(right);
-                    return right;
-                }
-            }
+                return firstCol - secondCol;
+            });
 
-            return baseCol;
-        });
+        return [...preferredMiddle, ...remainingColumns].slice(0, count);
     };
 
     const generateEnemyFallbackPositions = (enemyList = []) => {
@@ -3025,7 +3012,7 @@ function Main() {
                 </div>
             )}
         {/* <button style={{ width: '150px' }} onClick={handleLevelUp}>Level Up</button> */}
-        <button style={{ width: '150px' }} onClick={() => handleStoryComplete("medium")}>Combat</button>
+        {/* <button style={{ width: '150px' }} onClick={() => handleStoryComplete("medium")}>Combat</button> */}
             </div>
             <span className="ai-text">
                 {displayText}

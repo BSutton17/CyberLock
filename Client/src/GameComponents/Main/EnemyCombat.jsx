@@ -536,11 +536,22 @@ export function executeEnemyTurn(enemy, allies, alliedEnemies, battlefieldEnemie
             }
             
             // Check if any valid target is in ability range
-            const targetInRange = allies.some(allyId => {
-                const target = playerCharacters[allyId];
-                if (!target || target.stats.health <= 0) return false;
-                
-                const targetPos = characterPositions[allyId];
+            const targetsToCheck = targetType === 'ally'
+                ? (alliedEnemies || []).filter(allyEnemyId => allyEnemyId !== enemy.id)
+                : allies;
+
+            const targetInRange = targetsToCheck.some(targetId => {
+                const target = targetType === 'ally'
+                    ? battlefieldEnemies.find(candidate =>
+                        candidate.id === targetId &&
+                        !candidate.isDeadBody &&
+                        (candidate.stats?.health || 0) > 0
+                    )
+                    : playerCharacters[targetId];
+
+                if (!target || (target.stats?.health || 0) <= 0) return false;
+
+                const targetPos = characterPositions[targetId];
                 if (!targetPos) return false;
                 
                 const distance = getDistance(enemyPos, targetPos);
@@ -605,11 +616,22 @@ export function executeEnemyTurn(enemy, allies, alliedEnemies, battlefieldEnemie
         const abilityRange = abilityDef?.range || 1;
         const enemyPos = characterPositions[enemy.id];
         
-        const validTargets = allies.filter(allyId => {
-            const allyChar = playerCharacters[allyId];
-            if (!allyChar || allyChar.stats.health <= 0) return false;
+        const validTargetPool = targetType === 'ally'
+            ? (alliedEnemies || []).filter(allyEnemyId => allyEnemyId !== enemy.id)
+            : allies;
+
+        const validTargets = validTargetPool.filter(targetId => {
+            const targetCharacter = targetType === 'ally'
+                ? battlefieldEnemies.find(candidate =>
+                    candidate.id === targetId &&
+                    !candidate.isDeadBody &&
+                    (candidate.stats?.health || 0) > 0
+                )
+                : playerCharacters[targetId];
+
+            if (!targetCharacter || (targetCharacter.stats?.health || 0) <= 0) return false;
             
-            const targetPos = characterPositions[allyId];
+            const targetPos = characterPositions[targetId];
             if (!targetPos) return false;
             
             const distance = getDistance(enemyPos, targetPos);
@@ -618,12 +640,12 @@ export function executeEnemyTurn(enemy, allies, alliedEnemies, battlefieldEnemie
         
         if (validTargets.length > 0) {
             // Pick closest target
-            target = validTargets.reduce((closest, allyId) => {
-                const allyPos = characterPositions[allyId];
+            target = validTargets.reduce((closest, targetId) => {
+                const allyPos = characterPositions[targetId];
                 const closestPos = characterPositions[closest];
                 const allyDistance = getDistance(enemyPos, allyPos);
                 const closestDistance = getDistance(enemyPos, closestPos);
-                return allyDistance < closestDistance ? allyId : closest;
+                return allyDistance < closestDistance ? targetId : closest;
             });
         }
         }

@@ -137,9 +137,9 @@
         "health": 120,
         "maxHealth": 120,
         "speed": 30,
-        "resistance": 85,
+        "resistance": 65,
         "strength": 50,
-        "ta": 15
+        "ta": 35
       },
       "weapon": {
         "name": "Siege Gauntlets",

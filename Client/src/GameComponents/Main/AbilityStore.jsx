@@ -862,7 +862,7 @@ export const ABILITIES = {
                         stackable: false
                     }
                 ],
-                message: `${caster.name} gains +5 Speed and +5 Health for 2 turns!`
+                message: `${caster.name} gains +15 Speed, +10 Strength, and +15 Health for 2 turns!`
             };
             return result;
         }
@@ -955,7 +955,6 @@ export const ABILITIES = {
         isUltimate: true,
         targetType: 'all-enemies',
         type: 'damage',
-        damageScaling: 'none', // Pure % damage, doesn't scale with stats
         
         /**
          * @param {Object} params
@@ -1982,7 +1981,7 @@ export const ABILITIES = {
             return {
                 success: true,
                 effects,
-                message: `${caster.name} uses Stonewall! ${protectedAllies.join(', ')} gain +8 bonus health for 1 turn!`
+                message: `${caster.name} uses Stonewall! ${protectedAllies.join(', ')} gain +15 bonus health for 2 turns!`
             };
         }
     },

@@ -448,11 +448,21 @@ function generateEnemySpawnPositions(enemies = []) {
   return positions;
 }
 
-function generatePlayerSpawnPositions(players = []) {
+function generatePlayerSpawnPositions(players = [], characterSelections = {}) {
   const positions = {};
-  const bottomRow = 6;
+
+  const getPlayerSpawnRow = (playerName) => {
+    const role = (characterSelections?.[playerName]?.role || '').toLowerCase();
+
+    if (role === 'tank') {
+      return 5;
+    }
+
+    return 6;
+  };
+
   players.forEach((player, index) => {
-    positions[player] = { row: bottomRow, col: index + 3 };
+    positions[player] = { row: getPlayerSpawnRow(player), col: index + 3 };
   });
   return positions;
 }
@@ -917,7 +927,10 @@ io.on('connection', (socket) => {
 
     // Generate enemy positions (server decides so all clients see same positions)
     const enemyPositions = generateEnemySpawnPositions(generatedEnemies);
-    const playerPositions = generatePlayerSpawnPositions(rooms[room]?.players || []);
+    const playerPositions = generatePlayerSpawnPositions(
+      rooms[room]?.players || [],
+      rooms[room]?.characterSelections || {}
+    );
     combatSessions[room].enemyPositions = enemyPositions;
     combatSessions[room].playerPositions = playerPositions;
 

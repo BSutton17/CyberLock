@@ -164,7 +164,7 @@ h3, h4, p {
     padding: 0.5rem;
     border-radius: 18px;
     box-sizing: border-box;
-    background-image: url('/Cyberpunk City Street.png');
+    background-image: url('/Background-City Square.png');
     background-size: 100% 100%;
     background-position: center;
     background-repeat: no-repeat;
@@ -181,7 +181,7 @@ h3, h4, p {
 
 .grid-cell {
     background: transparent;
-    border: 1px solid rgba(74, 106, 138, 0.2);
+    border: 1px solid rgba(138, 155, 173, 0.2);
     cursor: pointer;
     display: flex;
     justify-content: center;

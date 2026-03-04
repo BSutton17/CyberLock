@@ -10,6 +10,56 @@ import { FaRegSnowflake, FaSkullCrossbones, FaFireAlt, FaShieldAlt } from 'react
 import { assignEnemyAbilities } from '../../Utils/enemyAbilityUtils';
 import './Main.css';
 
+const SCENE_BACKGROUNDS = {
+    city_square: '/Background-City Square.png',
+    warehouse: '/Background-Warehouse.png',
+    club: '/Background-Club.png',
+    hospital: '/Background-Hospital.png',
+    office: '/Background-office.png',
+    sewer: '/Background-sewer.png',
+    shop: '/Background-shop.png',
+    boss: '/Background-boss.png',
+    street: './Cyberpunk City Street.png'
+};
+
+const SCENE_LABELS = {
+    city_square: 'City Square',
+    warehouse: 'Warehouse',
+    club: 'Club',
+    hospital: 'Hospital',
+    office: 'Office',
+    sewer: 'Sewer',
+    shop: 'Shop',
+    boss: 'Boss Arena',
+    street: 'Street'
+};
+
+const SCENE_ALIASES = {
+    city: 'city_square',
+    citysquare: 'city_square',
+    city_square: 'city_square',
+    square: 'city_square',
+    warehouse: 'warehouse',
+    club: 'club',
+    hospital: 'hospital',
+    office: 'office',
+    sewer: 'sewer',
+    shop: 'shop',
+    boss: 'boss'
+};
+
+const normalizeSceneToken = (value = '') =>
+    value
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+
+const resolveSceneKey = (rawKeyword = '') => {
+    const normalizedKeyword = normalizeSceneToken(rawKeyword);
+    return SCENE_ALIASES[normalizedKeyword] || null;
+};
+
 function Main() {
     const { players, playerCharacters, setPlayerCharacters, playerName, room, socket,getAbilityScaler, attributeAllocations, setGamePhase, isMyTurn, currentTurn, enemies, setEnemies, turnOrder, setTurnOrder, isAdmin, setScreen, getCharacterImage } = useGameContext();
     const [currentPlayerCharacter, setCurrentPlayerCharacter] = useState(null);
@@ -37,6 +87,7 @@ function Main() {
     const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0);
     const [displayText, setDisplayText] = useState('');
     const [typingIndex, setTypingIndex] = useState(0);
+    const [currentSceneKey, setCurrentSceneKey] = useState('city');
     const aiLogRef = useRef(null);
     const hasRequestedIntroRef = useRef(false);
     const pendingStartCombatRef = useRef(false);
@@ -167,6 +218,11 @@ function Main() {
             eventType: entry.eventType || 'chat'
         };
         setAiLog(prev => [...prev, logEntry]);
+    };
+
+    const setSceneFromKeyword = (keyword) => {
+        const resolvedScene = resolveSceneKey(keyword);
+        setCurrentSceneKey(resolvedScene || 'city_square');
     };
 
     const emitAiEvent = (eventType, message, data = {}, options = {}) => {
@@ -346,6 +402,14 @@ function Main() {
             setAiBusy(false);
             appendAiLog({ role: 'ai', text: response, eventType });
             setAiText(response || '');
+
+            const trimmedResponse = (response || '').trim();
+            const isSingleKeyword = /^[a-zA-Z0-9_-]+$/.test(trimmedResponse);
+            const isSceneEvent = eventType === 'scene' || eventType === 'scene_change' || eventType === 'location';
+
+            if (isSceneEvent || isSingleKeyword) {
+                setSceneFromKeyword(trimmedResponse);
+            }
 
             if (eventType === 'game_start') {
                 setPendingFactionChoice(true);
@@ -796,7 +860,7 @@ function Main() {
         return genericEnemies;
     };
 
-    // Initialize character positions at bottom of grid
+    // Initialize player positions with role-based rows
     useEffect(() => {
         const storedPlayerPositions = sessionStorage.getItem(`playerPositions_${room}`);
         if (storedPlayerPositions) {
@@ -822,17 +886,26 @@ function Main() {
             }
         }
 
+        const getPlayerSpawnRow = (playerId) => {
+            const role = (playerCharacters[playerId]?.role || '').toLowerCase();
+
+            if (role === 'tank') {
+                return 5;
+            }
+
+            return 6;
+        };
+
         const newPositions = {};
-        const bottomRow = 6; 
         players.forEach((player, index) => {
             if (!characterPositions[player]) {
-                newPositions[player] = { row: bottomRow, col: index + 3 };
+                newPositions[player] = { row: getPlayerSpawnRow(player), col: index + 3 };
             }
         });
         if (Object.keys(newPositions).length > 0) {
             setCharacterPositions(prev => ({ ...prev, ...newPositions }));
         }
-    }, [players, room, characterPositions]);
+    }, [players, room, characterPositions, playerCharacters]);
 
     useEffect(() => {
         if (enemies && enemies.length > 0) {
@@ -1024,6 +1097,12 @@ function Main() {
                     ...character,
                     id
                 }));
+                const enemyAllyCharacters = latestEnemies
+                    .filter(aliveEnemy => !isEnemyDeadBody(aliveEnemy))
+                    .reduce((accumulator, aliveEnemy) => {
+                        accumulator[aliveEnemy.id] = aliveEnemy;
+                        return accumulator;
+                    }, {});
                 const enemyAbilityDef = getAbility(turnAction.abilityToUse.id);
                 const enemyTargetPosition = turnAction.target ? characterPositions[turnAction.target] : null;
 
@@ -1032,7 +1111,7 @@ function Main() {
                     playerName: enemy.id,
                     target: turnAction.target,
                     enemies: enemyAbilityTargets,
-                    playerCharacters: latestPlayerCharacters,
+                    playerCharacters: enemyAllyCharacters,
                     characterPositions,
                     cooldowns: enemy.cooldowns
                 };
@@ -2906,7 +2985,7 @@ function Main() {
         )}
         
         <div className="scene-name">
-            <h2>Location</h2>
+            <h2>{SCENE_LABELS[currentSceneKey] || SCENE_LABELS.city_square}</h2>
             <h2>
                 {isMyTurn ? (
                     <div className="turn">
@@ -2971,7 +3050,10 @@ function Main() {
         </div>
 
         <div className="main-game">
-            <div className="game-area">
+            <div
+                className="game-area"
+                style={{ backgroundImage: `url('${SCENE_BACKGROUNDS[currentSceneKey] || SCENE_BACKGROUNDS.city_square}')` }}
+            >
                 <div className="battle-grid">
                     {renderGrid()}
                 </div>
@@ -3012,7 +3094,7 @@ function Main() {
                 </div>
             )}
         {/* <button style={{ width: '150px' }} onClick={handleLevelUp}>Level Up</button> */}
-        {/* <button style={{ width: '150px' }} onClick={() => handleStoryComplete("medium")}>Combat</button> */}
+        <button style={{ width: '150px' }} onClick={() => handleStoryComplete("medium")}>Combat</button>
             </div>
             <span className="ai-text">
                 {displayText}

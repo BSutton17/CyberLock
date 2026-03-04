@@ -1147,8 +1147,8 @@ io.on('connection', (socket) => {
     io.to(room).emit("cooldown_reduced", { targetPlayer, value });
   });
 
-  socket.on("reset_cooldowns", ({ room, targetPlayer }) => {
-    io.to(room).emit("cooldowns_reset", { targetPlayer });
+  socket.on("reset_cooldowns", ({ room, targetPlayer, excludeAbilityIds }) => {
+    io.to(room).emit("cooldowns_reset", { targetPlayer, excludeAbilityIds });
   });
 
   socket.on("enemy_damaged", ({ room, enemyId, damage, newHealth }) => {
@@ -1208,6 +1208,19 @@ io.on('connection', (socket) => {
 
   socket.on("player_damaged", ({ room, playerName, damage, newHealth, updatedActiveEffects }) => {
     const combat = combatSessions[room];
+
+    if (rooms[room]?.characterSelections?.[playerName]) {
+      const character = rooms[room].characterSelections[playerName];
+      rooms[room].characterSelections[playerName] = {
+        ...character,
+        stats: {
+          ...character.stats,
+          health: newHealth
+        }
+      };
+      io.to(room).emit("characters_updated", { [playerName]: rooms[room].characterSelections[playerName] });
+    }
+
     if (combat && newHealth <= 0) {
       const currentTurn = combat.turnOrder[combat.currentTurnIndex];
       const wasCurrentTurn = currentTurn && currentTurn.id === playerName;
@@ -1331,9 +1344,11 @@ io.on('connection', (socket) => {
     const combat = combatSessions[room];
     if (combat?.turnOrder) {
       const alreadyInTurnOrder = combat.turnOrder.some(turn => turn.type === 'ally' && turn.id === name);
+      const character = rooms[room]?.characterSelections?.[name];
+      const isPlayerAlive = (character?.stats?.health || 0) > 0;
+      const canRestoreTurnSlot = (reconnectState?.turnOrderIndex ?? -1) >= 0;
 
-      if (!alreadyInTurnOrder) {
-        const character = rooms[room]?.characterSelections?.[name];
+      if (!alreadyInTurnOrder && isPlayerAlive && canRestoreTurnSlot) {
         const restoredTurnEntry = {
           type: 'ally',
           id: name,
@@ -1358,6 +1373,13 @@ io.on('connection', (socket) => {
         io.to(room).emit('turn_order_updated', {
           turnOrder: combat.turnOrder,
           currentTurnIndex: combat.currentTurnIndex
+        });
+      } else if (!alreadyInTurnOrder && (!isPlayerAlive || !canRestoreTurnSlot)) {
+        console.log('[RECONNECT] Skipping turn-order restore for player:', {
+          room,
+          player: name,
+          isPlayerAlive,
+          restoreIndex: reconnectState?.turnOrderIndex
         });
       }
 

@@ -50,6 +50,7 @@ export const ABILITIES = {
         cooldown: 2,
         targetType: 'multi-enemy', 
         maxTargets: 2,
+        range: 4,
         type: 'debuff',
         
         /**
@@ -512,7 +513,6 @@ export const ABILITIES = {
         targetType: 'single-enemy',
         type: 'damage',
         range: 1,
-        damageScaling: 'none', 
         
         /**
          * @param {Object} params
@@ -1059,12 +1059,14 @@ export const ABILITIES = {
                 type: 'healing_field',
                 center: { row, col },
                 radius: 1,
-                duration: 2
+                duration: 2,
+                tickOnCastTurn: true
             });
             
             // Find all allies in 3x3 area
             Object.keys(playerCharacters).forEach(playerName => {
-                const allyPos = characterPositions[playerName];
+                const ally = playerCharacters[playerName];
+                const allyPos = characterPositions[playerName] || characterPositions[ally?.name];
                 if (!allyPos) return;
                 
                 const rowDiff = Math.abs(allyPos.row - row);
@@ -1072,7 +1074,6 @@ export const ABILITIES = {
                 
                 // Within 1 square in any direction (3x3 grid)
                 if (rowDiff <= 1 && colDiff <= 1) {
-                    const ally = playerCharacters[playerName];
                     allyNames.push(ally.name);
                     
                     // Add healing effect for 2 turns
@@ -1080,13 +1081,14 @@ export const ABILITIES = {
                         type: 'healing_over_time',
                         target: playerName,
                         amount: 5,
-                        duration: 2
+                        duration: 2,
+                        tickOnCastTurn: true
                     });
                 }
             });
             
             const healingMessage = allyNames.length > 0
-                ? `${allyNames.join(', ')} will heal +10 HP for 2 turns!`
+                ? `${allyNames.join(', ')} will heal +5 HP for 2 turns!`
                 : 'No allies are currently in the field.';
 
             return {
@@ -1415,7 +1417,7 @@ export const ABILITIES = {
     here_we_go_again: {
         id: 'here_we_go_again',
         name: 'Here We Go Again',
-        description: 'All allies have all of their cooldowns set to 0',
+        description: 'Reset all allies cooldowns except your own and Here We Go Again',
         role: "Support",
         level: 5,
         cooldown: 5,
@@ -1428,24 +1430,34 @@ export const ABILITIES = {
          * @param {Object} params.playerCharacters - All player characters
          * @returns {Object} Effect data
          */
-        execute: ({ caster, playerCharacters }) => {
+        execute: ({ caster, playerCharacters, playerName }) => {
             const effects = [];
             const allyNames = [];
             
             // Create cooldown reset effects for all allies
-            Object.keys(playerCharacters).forEach(playerName => {
-                allyNames.push(playerCharacters[playerName].name);
+            Object.keys(playerCharacters).forEach(allyPlayerName => {
+                if (allyPlayerName === playerName) return;
+
+                allyNames.push(playerCharacters[allyPlayerName].name);
                 effects.push({
                     type: 'cooldown_reset',
-                    target: playerName,
+                    target: allyPlayerName,
+                    excludeAbilityIds: ['here_we_go_again'],
                     duration: 0 // Instant effect
                 });
             });
+
+            if (effects.length === 0) {
+                return {
+                    success: false,
+                    message: 'No allies available to reset cooldowns.'
+                };
+            }
             
             return {
                 success: true,
                 effects: effects,
-                message: `${caster.name} uses Here We Go Again! All cooldowns reset for ${allyNames.join(', ')}!`
+                message: `${caster.name} uses Here We Go Again! Cooldowns reset for ${allyNames.join(', ')} (excluding Here We Go Again).`
             };
         }
     },

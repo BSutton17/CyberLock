@@ -817,107 +817,6 @@ export const ABILITIES = {
             return result;
         }
     },
-    greater_ability_boost: {
-        id: 'greater_ability_boost',
-        name: 'Greater Ability Boost',
-        description: 'Grants yourself +15 Speed, +15 Bonus Health, and +10 Strength for 2 turns',
-        role: "Tank",
-        level: 5,
-        cooldown: 3,
-        targetType: 'self',
-        type: 'buff',
-        
-        /**
-         * @param {Object} params
-         * @param {Object} params.caster - The character using the ability
-         * @param {Object} params.playerCharacters - All player characters
-         * @returns {Object} Effect data
-         */
-        execute: ({ caster, playerName }) => {
-            const result = {
-                success: true,
-                effects: [
-                    {
-                        type: 'stat_buff',
-                        target: playerName,
-                        stat: 'speed',
-                        value: 15,
-                        duration: 2,
-                        stackable: false
-                    },
-                    {
-                        type: 'stat_buff',
-                        target: playerName,
-                        stat: 'health',
-                        value: 15,
-                        duration: 2,
-                        stackable: false
-                    },
-                    {
-                        type: 'stat_buff',
-                        target: playerName,
-                        stat: 'strength',
-                        value: 10,
-                        duration: 2,
-                        stackable: false
-                    }
-                ],
-                message: `${caster.name} gains +15 Speed, +10 Strength, and +15 Health for 2 turns!`
-            };
-            return result;
-        }
-    },
-    guarded_breath: {
-        id: 'guarded_breath',
-        name: 'Guarded Breath',
-        description: 'Guard one ally, doubling their resistance for one turn',
-        role: "Tank",
-        level: 1,
-        cooldown: 2,
-        targetType: 'ally',
-        type: 'buff',
-        
-        /**
-         * @param {Object} params
-         * @param {Object} params.caster - Character using ability
-         * @param {string} params.target - Ally player name/ID
-         * @param {Object} params.playerCharacters - All player characters
-         * @returns {Object} Effect data
-         */
-        execute: ({ caster, target, playerCharacters }) => {
-            console.log('[GUARDED BREATH] Execute params:', {
-                casterName: caster?.name,
-                target,
-                playerCharacterKeys: Object.keys(playerCharacters || {})
-            });
-            
-            const ally = playerCharacters[target];
-
-            
-            if (!ally) {
-                console.log('[GUARDED BREATH] Target not found!');
-                return { success: false, message: 'Target not found' };
-            }
-
-            const result = {
-                success: true,
-                effects: [
-                {
-                    type: 'stat_buff',
-                    target: target,
-                    source: 'guarded_breath',
-                    stat: 'resistance',
-                    value: ally.stats.resistance, 
-                    duration: 1,
-                    stackable: false
-                }],
-                message: `${caster.name} gave ${ally.name} doubled resistance for 1 turn!`
-            };
-            
-            console.log('[GUARDED BREATH] Returning result:', result);
-            return result;
-            }
-    },
     eagle_eye: {
         id: 'eagle_eye',
         name: 'Eagle Eye',
@@ -1273,6 +1172,107 @@ export const ABILITIES = {
                 message: `${caster.name} casts Fireball! ${affectedEnemies.length} enemies hit for ${damagePerEnemy} damage each!${burnMessage}`
             };
         }
+    },
+    greater_ability_boost: {
+        id: 'greater_ability_boost',
+        name: 'Greater Ability Boost',
+        description: 'Grants yourself +15 Speed, +15 Bonus Health, and +10 Strength for 2 turns',
+        role: "Tank",
+        level: 5,
+        cooldown: 3,
+        targetType: 'self',
+        type: 'buff',
+        
+        /**
+         * @param {Object} params
+         * @param {Object} params.caster - The character using the ability
+         * @param {Object} params.playerCharacters - All player characters
+         * @returns {Object} Effect data
+         */
+        execute: ({ caster, playerName }) => {
+            const result = {
+                success: true,
+                effects: [
+                    {
+                        type: 'stat_buff',
+                        target: playerName,
+                        stat: 'speed',
+                        value: 15,
+                        duration: 2,
+                        stackable: false
+                    },
+                    {
+                        type: 'stat_buff',
+                        target: playerName,
+                        stat: 'health',
+                        value: 15,
+                        duration: 2,
+                        stackable: false
+                    },
+                    {
+                        type: 'stat_buff',
+                        target: playerName,
+                        stat: 'strength',
+                        value: 10,
+                        duration: 2,
+                        stackable: false
+                    }
+                ],
+                message: `${caster.name} gains +15 Speed, +10 Strength, and +15 Health for 2 turns!`
+            };
+            return result;
+        }
+    },
+    guarded_breath: {
+        id: 'guarded_breath',
+        name: 'Guarded Breath',
+        description: 'Guard one ally, doubling their resistance for one turn',
+        role: "Tank",
+        level: 1,
+        cooldown: 2,
+        targetType: 'ally',
+        type: 'buff',
+        
+        /**
+         * @param {Object} params
+         * @param {Object} params.caster - Character using ability
+         * @param {string} params.target - Ally player name/ID
+         * @param {Object} params.playerCharacters - All player characters
+         * @returns {Object} Effect data
+         */
+        execute: ({ caster, target, playerCharacters }) => {
+            console.log('[GUARDED BREATH] Execute params:', {
+                casterName: caster?.name,
+                target,
+                playerCharacterKeys: Object.keys(playerCharacters || {})
+            });
+            
+            const ally = playerCharacters[target];
+
+            
+            if (!ally) {
+                console.log('[GUARDED BREATH] Target not found!');
+                return { success: false, message: 'Target not found' };
+            }
+
+            const result = {
+                success: true,
+                effects: [
+                {
+                    type: 'stat_buff',
+                    target: target,
+                    source: 'guarded_breath',
+                    stat: 'resistance',
+                    value: ally.stats.resistance, 
+                    duration: 1,
+                    stackable: false
+                }],
+                message: `${caster.name} gave ${ally.name} doubled resistance for 1 turn!`
+            };
+            
+            console.log('[GUARDED BREATH] Returning result:', result);
+            return result;
+            }
     },
     gtg: {
         id: 'gtg',

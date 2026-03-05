@@ -41,9 +41,32 @@ export const GameProvider = ({ children }) => {
       hacker_support_4: '/Hacker.png'
     };
 
+    const enemyImageMap = {
+      enforcer_soldier: '/Enforcer_Solider.png',
+      enforcer_drone: '/Enforcer_Drone.png',
+      rebel_initiate: '/Rebel_Initiate.png',
+      rebel_field_tech: '/Rebel_Field_Tech.png',
+      division_command: '/Enforcer_Division_Command.png',
+      division_strategist: '/Enforcer_Division_Strategist.png',
+      vanguard_captain: '/Enforcer_Vanguard_Captain.png',
+      field_captain: '/Rebel_Field_Captain.png',
+      rebel_coordinator: '/Rebel_Field_Coordinator.png',
+      operations_handler: '/Rebel_Field_Tech.png',
+      division_chief: '/Enforcer_Division_Command.png',
+      rebellion_chief: '/Rebel_Field_Captain.png'
+    };
+
     const getCharacterImage = (character) => {
       if (!character?.id) return '/vite.svg';
       return characterImageMap[character.id] || '/vite.svg';
+    };
+
+    const getEnemyImage = (enemy) => {
+      const rawId = typeof enemy === 'string' ? enemy : enemy?.id;
+      if (!rawId) return '/vite.svg';
+
+      const normalizedId = rawId.replace(/_\d+$/, '');
+      return enemyImageMap[rawId] || enemyImageMap[normalizedId] || '/vite.svg';
     };
 
     const getAbilityScaler = (ability) => {
@@ -72,7 +95,9 @@ export const GameProvider = ({ children }) => {
         enemies, setEnemies,
         attributeAllocations, setAttributeAllocations,
         characterImageMap,
+        enemyImageMap,
         getCharacterImage,
+        getEnemyImage,
         getAbilityScaler
       }}
     >

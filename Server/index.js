@@ -802,6 +802,10 @@ io.on('connection', (socket) => {
 
     try {
       const resolvedPlayer = playerName || playerNames[socket.id] || 'system';
+
+      // Broadcast AI thinking state to ALL players in the room
+      io.to(room).emit('ai_thinking', { thinking: true, from: resolvedPlayer, eventType });
+
       const aiResponse = await requestAiNarration({
         session_id: room,
         event_type: eventType,
@@ -812,13 +816,21 @@ io.on('connection', (socket) => {
         use_memory: true
       });
 
+      // Broadcast AI done thinking to ALL players
+      io.to(room).emit('ai_thinking', { thinking: false });
+
       io.to(room).emit('ai_message', {
         eventType,
         response: aiResponse.response,
+        location: aiResponse.location || null,
+        attribute: aiResponse.attribute || null,
+        startCombat: aiResponse.start_combat || false,
+        options: aiResponse.options || null,
         from: resolvedPlayer
       });
     } catch (error) {
       console.error('[AI] Request failed:', error.message);
+      io.to(room).emit('ai_thinking', { thinking: false });
       socket.emit('ai_error', { error: error.message });
     }
   });

@@ -8,6 +8,25 @@ const ROLE_PRIORITY = {
     'Tank': 2
 };
 
+const SEWER_SLOW_TILE_KEYS = new Set([
+    '3,0', '3,1', '3,2', '3,3', '3,4', '3,5', '3,6', '3,7', '3,8', '3,9',
+    '1,4', '1,5', '2,4', '2,5', '4,4', '5,4', '5,5'
+]);
+
+const isSewerSlowTile = (sceneKey, position) => {
+    if (sceneKey !== 'sewer' || !position) return false;
+    return SEWER_SLOW_TILE_KEYS.has(`${position.row},${position.col}`);
+};
+
+const getMovementFromSpeed = (speedValue, position, sceneKey) => {
+    const normalizedSpeed = Number.isFinite(speedValue) ? speedValue : 0;
+    const effectiveSpeed = isSewerSlowTile(sceneKey, position)
+        ? Math.floor(normalizedSpeed / 2)
+        : normalizedSpeed;
+
+    return Math.floor(effectiveSpeed / 10);
+};
+
 /**
  * Calculate attack priority for a target
  * Lower value = higher priority
@@ -247,7 +266,7 @@ function getReachableCells(startPos, maxMovement, characterPositions, activeEffe
 }
 
 //aggressive behavior type movement logic
-function calculateAggressiveMovement(enemy, allies, characterPositions, activeEffects = []) {
+function calculateAggressiveMovement(enemy, allies, characterPositions, activeEffects = [], sceneKey = null) {
     const enemyPos = characterPositions[enemy.id];
     if (!enemyPos) return null;
     
@@ -257,7 +276,7 @@ function calculateAggressiveMovement(enemy, allies, characterPositions, activeEf
     }
     
     // Calculate max movement based on speed
-    const maxMovement = Math.floor(enemy.stats.speed / 10);
+    const maxMovement = getMovementFromSpeed(enemy.stats.speed, enemyPos, sceneKey);
     
     // Find closest ally
     const closest = findClosestTarget(enemyPos, allies, characterPositions);
@@ -289,13 +308,13 @@ function calculateAggressiveMovement(enemy, allies, characterPositions, activeEf
 }
 
 //defensive behavior type movement logic
-function calculateDefensiveMovement(enemy, allies, characterPositions, activeEffects = []) {
+function calculateDefensiveMovement(enemy, allies, characterPositions, activeEffects = [], sceneKey = null) {
     const enemyPos = characterPositions[enemy.id];
     if (!enemyPos) return null;
     const weaponRange = enemy.weapon?.range || 1;
     
     // Calculate max movement based on speed
-    const maxMovement = Math.floor(enemy.stats.speed / 10);
+    const maxMovement = getMovementFromSpeed(enemy.stats.speed, enemyPos, sceneKey);
 
     const closest = findClosestTarget(enemyPos, allies, characterPositions);
     if (!closest || !closest.targetId) return null;
@@ -343,7 +362,7 @@ function calculateDefensiveMovement(enemy, allies, characterPositions, activeEff
 }
 
 //supports
-function calculateSupportMovement(enemy, alliedEnemies, characterPositions, activeEffects = []) {
+function calculateSupportMovement(enemy, alliedEnemies, characterPositions, activeEffects = [], sceneKey = null) {
     const enemyPos = characterPositions[enemy.id];
     if (!enemyPos) return null;
     
@@ -353,7 +372,7 @@ function calculateSupportMovement(enemy, alliedEnemies, characterPositions, acti
     }
     
     // Calculate max movement based on speed
-    const maxMovement = Math.floor(enemy.stats.speed / 10);
+    const maxMovement = getMovementFromSpeed(enemy.stats.speed, enemyPos, sceneKey);
     
     //Find closest allied enemy
     const closest = findClosestTarget(enemyPos, alliedEnemies, characterPositions);
@@ -373,7 +392,7 @@ function calculateSupportMovement(enemy, alliedEnemies, characterPositions, acti
     return bestMove;
 }
 
-function calculateRetreatToSupportMovement(enemy, supportAllies, characterPositions, activeEffects = []) {
+function calculateRetreatToSupportMovement(enemy, supportAllies, characterPositions, activeEffects = [], sceneKey = null) {
     const enemyPos = characterPositions[enemy.id];
     if (!enemyPos) return null;
 
@@ -383,7 +402,7 @@ function calculateRetreatToSupportMovement(enemy, supportAllies, characterPositi
         return null;
     }
 
-    const maxMovement = Math.floor(enemy.stats.speed / 10);
+    const maxMovement = getMovementFromSpeed(enemy.stats.speed, enemyPos, sceneKey);
     const closestSupport = findClosestTarget(enemyPos, supportAllies, characterPositions);
     if (!closestSupport || !closestSupport.targetId) return null;
 
@@ -402,20 +421,20 @@ function calculateRetreatToSupportMovement(enemy, supportAllies, characterPositi
 }
 
 
-export function calculateEnemyMovement(enemy, allies, alliedEnemies, supportAllies, playerCharacters, characterPositions, activeEffects = []) {
+export function calculateEnemyMovement(enemy, allies, alliedEnemies, supportAllies, playerCharacters, characterPositions, activeEffects = [], sceneKey = null) {
     const behavior = determineBehavior(enemy, allies, playerCharacters);
     const role = enemy.role || 'DPS';
     
     if (role === 'Support') {
-        return calculateSupportMovement(enemy, alliedEnemies, characterPositions, activeEffects);
+        return calculateSupportMovement(enemy, alliedEnemies, characterPositions, activeEffects, sceneKey);
     }
     
     if (behavior === 'aggressive') {
-        return calculateAggressiveMovement(enemy, allies, characterPositions, activeEffects);
+        return calculateAggressiveMovement(enemy, allies, characterPositions, activeEffects, sceneKey);
     }
     
     if (behavior === 'defensive') {
-        return calculateDefensiveMovement(enemy, allies, characterPositions, activeEffects);
+        return calculateDefensiveMovement(enemy, allies, characterPositions, activeEffects, sceneKey);
     }
 
     if (behavior === 'intelligent') {
@@ -424,19 +443,19 @@ export function calculateEnemyMovement(enemy, allies, alliedEnemies, supportAlli
         const healthRatio = currentHealth / Math.max(1, maxHealth);
 
         if (healthRatio < 0.25 && Array.isArray(supportAllies) && supportAllies.length > 0) {
-            const retreatMove = calculateRetreatToSupportMovement(enemy, supportAllies, characterPositions, activeEffects);
+            const retreatMove = calculateRetreatToSupportMovement(enemy, supportAllies, characterPositions, activeEffects, sceneKey);
             if (retreatMove) {
                 return retreatMove;
             }
         }
 
-        return calculateDefensiveMovement(enemy, allies, characterPositions, activeEffects);
+        return calculateDefensiveMovement(enemy, allies, characterPositions, activeEffects, sceneKey);
     }
     
     return null;
 }
 
-export function executeEnemyTurn(enemy, allies, alliedEnemies, battlefieldEnemies = [], playerCharacters, characterPositions, activeEffects = []) {
+export function executeEnemyTurn(enemy, allies, alliedEnemies, battlefieldEnemies = [], playerCharacters, characterPositions, activeEffects = [], sceneKey = null) {
     console.log(`[ENEMY TURN] ${enemy.name} (${enemy.id}) starting turn`);
     console.log(`[ENEMY TURN] Enemy abilities:`, enemy.abilities);
     console.log(`[ENEMY TURN] Enemy cooldowns:`, enemy.cooldowns);
@@ -481,26 +500,36 @@ export function executeEnemyTurn(enemy, allies, alliedEnemies, battlefieldEnemie
             )
         )
         : [];
+
+    const enemyRole = enemy.role || 'DPS';
+    const canUseConsecutiveAbilities = enemyRole === 'Support';
+    const blockedByRecentAbilityUse = !canUseConsecutiveAbilities && enemy.usedAbilityLastTurn === true;
+    if (blockedByRecentAbilityUse) {
+        console.log(`[ENEMY ABILITIES] ${enemy.name} used an ability last turn and must weapon/move this turn.`);
+    }
     
     // Calculate movement
     const newPosition = movementPrevented
         ? null
-        : calculateEnemyMovement(enemy, allies, alliedEnemies, supportAllies, playerCharacters, characterPositions, activeEffects);
+        : calculateEnemyMovement(enemy, allies, alliedEnemies, supportAllies, playerCharacters, characterPositions, activeEffects, sceneKey);
     
     // Create updated positions to check attack range AFTER moving
     const updatedPositions = newPosition ? {
         ...characterPositions,
         [enemy.id]: newPosition
     } : characterPositions;
+
+    const weaponTargetAfterMovement = selectAttackTarget(enemy, allies, playerCharacters, updatedPositions, updatedPositions);
     
     // Check if enemy should use an ability instead of weapon
     let abilityToUse = null;
     let abilityRequiresTarget = false;
-    if (!abilitiesDisabled && enemy.abilities && enemy.abilities.length > 0 && enemy.cooldowns) {
+    let availableAbilities = [];
+    if (!abilitiesDisabled && !blockedByRecentAbilityUse && enemy.abilities && enemy.abilities.length > 0 && enemy.cooldowns) {
         console.log(`[ENEMY ABILITIES] ${enemy.name} (${enemy.id}) checking abilities...`);
         
         // Find all abilities that are off cooldown and currently usable
-        const availableAbilities = enemy.abilities.filter(ability => {
+        availableAbilities = enemy.abilities.filter(ability => {
             const currentCooldown = enemy.cooldowns[ability.id] || 0;
             if (currentCooldown !== 0) {
                 console.log(`[ENEMY ABILITIES]   - ${ability.name} (level ${ability.level}): cooldown ${currentCooldown}`);
@@ -526,11 +555,22 @@ export function executeEnemyTurn(enemy, allies, alliedEnemies, battlefieldEnemie
             }
             
             // Check if any valid target is in ability range
-            const targetInRange = allies.some(allyId => {
-                const target = playerCharacters[allyId];
-                if (!target || target.stats.health <= 0) return false;
-                
-                const targetPos = characterPositions[allyId];
+            const targetsToCheck = targetType === 'ally'
+                ? (alliedEnemies || []).filter(allyEnemyId => allyEnemyId !== enemy.id)
+                : allies;
+
+            const targetInRange = targetsToCheck.some(targetId => {
+                const target = targetType === 'ally'
+                    ? battlefieldEnemies.find(candidate =>
+                        candidate.id === targetId &&
+                        !candidate.isDeadBody &&
+                        (candidate.stats?.health || 0) > 0
+                    )
+                    : playerCharacters[targetId];
+
+                if (!target || (target.stats?.health || 0) <= 0) return false;
+
+                const targetPos = characterPositions[targetId];
                 if (!targetPos) return false;
                 
                 const distance = getDistance(enemyPos, targetPos);
@@ -559,6 +599,27 @@ export function executeEnemyTurn(enemy, allies, alliedEnemies, battlefieldEnemie
             abilityRequiresTarget = !['self', 'all-enemies', 'all-allies'].includes(selectedTargetType);
         }
     }
+
+    const hasNoAttackOption = !weaponTargetAfterMovement;
+    const hasNoMovementOption = !newPosition;
+    if (!abilityToUse && availableAbilities.length > 0 && hasNoAttackOption && hasNoMovementOption) {
+        const statBuffAbilities = availableAbilities.filter(ability => {
+            const abilityDef = ABILITIES[ability.id];
+            return abilityDef?.type === 'buff';
+        });
+
+        if (statBuffAbilities.length > 0) {
+            abilityToUse = statBuffAbilities.reduce((best, current) => {
+                return (current.level || 1) > (best.level || 1) ? current : best;
+            });
+
+            const selectedAbilityDef = ABILITIES[abilityToUse.id];
+            const selectedTargetType = selectedAbilityDef?.targetType;
+            abilityRequiresTarget = !['self', 'all-enemies', 'all-allies'].includes(selectedTargetType);
+
+            console.log(`[ENEMY ABILITIES] ${enemy.name} cannot move/attack and will use stat buff ${abilityToUse.name}.`);
+        }
+    }
     
     // Select target based on whether we're using an ability or weapon
     let target;
@@ -574,11 +635,22 @@ export function executeEnemyTurn(enemy, allies, alliedEnemies, battlefieldEnemie
         const abilityRange = abilityDef?.range || 1;
         const enemyPos = characterPositions[enemy.id];
         
-        const validTargets = allies.filter(allyId => {
-            const allyChar = playerCharacters[allyId];
-            if (!allyChar || allyChar.stats.health <= 0) return false;
+        const validTargetPool = targetType === 'ally'
+            ? (alliedEnemies || []).filter(allyEnemyId => allyEnemyId !== enemy.id)
+            : allies;
+
+        const validTargets = validTargetPool.filter(targetId => {
+            const targetCharacter = targetType === 'ally'
+                ? battlefieldEnemies.find(candidate =>
+                    candidate.id === targetId &&
+                    !candidate.isDeadBody &&
+                    (candidate.stats?.health || 0) > 0
+                )
+                : playerCharacters[targetId];
+
+            if (!targetCharacter || (targetCharacter.stats?.health || 0) <= 0) return false;
             
-            const targetPos = characterPositions[allyId];
+            const targetPos = characterPositions[targetId];
             if (!targetPos) return false;
             
             const distance = getDistance(enemyPos, targetPos);
@@ -587,12 +659,12 @@ export function executeEnemyTurn(enemy, allies, alliedEnemies, battlefieldEnemie
         
         if (validTargets.length > 0) {
             // Pick closest target
-            target = validTargets.reduce((closest, allyId) => {
-                const allyPos = characterPositions[allyId];
+            target = validTargets.reduce((closest, targetId) => {
+                const allyPos = characterPositions[targetId];
                 const closestPos = characterPositions[closest];
                 const allyDistance = getDistance(enemyPos, allyPos);
                 const closestDistance = getDistance(enemyPos, closestPos);
-                return allyDistance < closestDistance ? allyId : closest;
+                return allyDistance < closestDistance ? targetId : closest;
             });
         }
         }
@@ -600,7 +672,7 @@ export function executeEnemyTurn(enemy, allies, alliedEnemies, battlefieldEnemie
         console.log(`[ENEMY ABILITIES] Target for ${abilityToUse.name} by ${enemy.name} (${enemy.id}):`, target);
     } else {
         // For weapon attacks, use normal range-based targeting
-        target = selectAttackTarget(enemy, allies, playerCharacters, updatedPositions, updatedPositions);
+        target = weaponTargetAfterMovement;
     }
     
     // Fallback: if ability needs a target but none found, use weapon attack instead

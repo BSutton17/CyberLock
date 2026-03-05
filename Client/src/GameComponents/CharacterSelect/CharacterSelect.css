@@ -14,6 +14,7 @@
     position: relative;
     overflow-x: hidden;
     overflow-y: auto;
+    image-rendering: pixelated;
 }
 
 .character-select-container > * {
@@ -295,6 +296,7 @@
     border-radius: 0.6vmin;
     border: 0.075vmin solid rgba(139, 92, 246, 0.35);
     margin: 0 auto;
+    image-rendering: pixelated;
 }
 
 .mini-stats {

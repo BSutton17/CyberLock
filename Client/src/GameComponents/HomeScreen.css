@@ -1,5 +1,5 @@
 .home-screen-container {
-    background-image: url('/CyberpunkCity.jpg');
+  background-image: url('/CyberpunkCity.jpg');
     background-size: cover;
     background-position: center;
     background-attachment: fixed;
@@ -11,6 +11,7 @@
     font-family: 'Arial', sans-serif;
     color: #ffffff;
     position: relative;
+    image-rendering: pixelated;
 }
 
 .home-screen-container > * {

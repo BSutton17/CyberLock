@@ -15,44 +15,45 @@ const AI_API_KEY = process.env.AI_API_KEY || '';
 const CF_ACCESS_CLIENT_ID = process.env.CF_ACCESS_CLIENT_ID || '';
 const CF_ACCESS_CLIENT_SECRET = process.env.CF_ACCESS_CLIENT_SECRET || '';
 
-const allowedOrigins = [
-  process.env.CLIENT_URL,
-  'http://localhost:5173',
-  'http://10.255.255.2:5173',
-  'https://cyber-lock.online',
-  'http://cyber-lock.online'
-].filter(Boolean);
-
-const isAllowedOrigin = (origin) => !origin || allowedOrigins.includes(origin);
-
-const server = http.createServer(app);
-
 // Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 app.use(cors({
-  origin: (origin, callback) => {
-    if (isAllowedOrigin(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: process.env.NODE_ENV === 'production' 
+    ? [
+        'https://cyber-lock.online',
+        'http://localhost:5000',
+        'http://localhost:5173'
+      ]  // Allow specific origins in production for testing
+    : [
+        process.env.CLIENT_URL || 'http://localhost:5173',
+        'http://localhost:5173',
+        'http://10.255.255.2:5173',
+        'https://cyber-lock.online',
+        'http://cyber-lock.online'
+      ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+const server = http.createServer(app);
 
 // Socket.io setup
 const io = new Server(server, {
   cors: {
-    origin: (origin, callback) => {
-      if (isAllowedOrigin(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
+    origin: process.env.NODE_ENV === 'production' 
+      ? [
+          'https://cyber-lock.online',
+          'http://localhost:5000',
+          'http://localhost:5173'
+        ]  // Allow specific origins in production for testing
+      : [
+          process.env.CLIENT_URL || 'http://localhost:5173',
+          'http://localhost:5173',
+          'http://10.255.255.2:5173',
+          'https://cyber-lock.online'
+        ],
     methods: ['GET', 'POST'],
     credentials: true,
   },
@@ -346,6 +347,21 @@ function dispatchEnemyTurn(io, room, combat, enemyId) {
   };
 }
 
+const SEWER_SLOW_TILE_KEYS = new Set([
+  '3,0', '3,1', '3,2', '3,3', '3,4', '3,5', '3,6', '3,7', '3,8', '3,9',
+  '1,4', '1,5', '2,4', '2,5', '4,4', '5,4', '5,5'
+]);
+
+const SEWER_SPAWN_BLOCKED_TILE_KEYS = new Set([
+  ...SEWER_SLOW_TILE_KEYS,
+  '0,4', '0,5', '6,4', '6,5'
+]);
+
+function isSewerSpawnBlockedTile(sceneKey, row, col) {
+  if (sceneKey !== 'sewer') return false;
+  return SEWER_SPAWN_BLOCKED_TILE_KEYS.has(`${row},${col}`);
+}
+
 function getEnemySpawnDepth(enemy) {
   const behavior = enemy?.behavior || 'aggressive';
   const role = enemy?.role || 'DPS';
@@ -391,7 +407,7 @@ function generateSpreadColumns(count, totalCols = 10) {
   });
 }
 
-function generateEnemySpawnPositions(enemies = []) {
+function generateEnemySpawnPositions(enemies = [], sceneKey = null) {
   const sortedEnemies = [...enemies].sort((firstEnemy, secondEnemy) =>
     getEnemySpawnDepth(secondEnemy) - getEnemySpawnDepth(firstEnemy)
   );
@@ -402,7 +418,10 @@ function generateEnemySpawnPositions(enemies = []) {
 
   const findOpenCell = (preferredRow, preferredCol) => {
     const withinBounds = (row, col) => row >= 0 && row < 7 && col >= 0 && col < 10;
-    const isOpen = (row, col) => !usedCells.has(`${row},${col}`);
+    const isOpen = (row, col) => {
+      if (isSewerSpawnBlockedTile(sceneKey, row, col)) return false;
+      return !usedCells.has(`${row},${col}`);
+    };
 
     if (withinBounds(preferredRow, preferredCol) && isOpen(preferredRow, preferredCol)) {
       return { row: preferredRow, col: preferredCol };
@@ -447,11 +466,61 @@ function generateEnemySpawnPositions(enemies = []) {
   return positions;
 }
 
-function generatePlayerSpawnPositions(players = []) {
+function generatePlayerSpawnPositions(players = [], characterSelections = {}, sceneKey = null) {
   const positions = {};
-  const bottomRow = 6;
+  const usedCells = new Set();
+
+  const getPlayerSpawnRow = (playerName) => {
+    const role = (characterSelections?.[playerName]?.role || '').toLowerCase();
+
+    if (role === 'tank') {
+      return 5;
+    }
+
+    return 6;
+  };
+
+  const findPlayerSpawnCell = (preferredRow, preferredCol) => {
+    const candidateRows = [preferredRow, preferredRow === 5 ? 6 : 5];
+
+    for (let offset = 0; offset < 10; offset++) {
+      const candidateCols = offset === 0
+        ? [preferredCol]
+        : [preferredCol - offset, preferredCol + offset];
+
+      for (const row of candidateRows) {
+        for (const col of candidateCols) {
+          if (col < 0 || col >= 10) continue;
+          if (isSewerSpawnBlockedTile(sceneKey, row, col)) continue;
+
+          const key = `${row},${col}`;
+          if (!usedCells.has(key)) {
+            usedCells.add(key);
+            return { row, col };
+          }
+        }
+      }
+    }
+
+    for (const row of candidateRows) {
+      for (let col = 0; col < 10; col++) {
+        if (isSewerSpawnBlockedTile(sceneKey, row, col)) continue;
+
+        const key = `${row},${col}`;
+        if (!usedCells.has(key)) {
+          usedCells.add(key);
+          return { row, col };
+        }
+      }
+    }
+
+    return { row: preferredRow, col: preferredCol };
+  };
+
   players.forEach((player, index) => {
-    positions[player] = { row: bottomRow, col: index + 3 };
+    const preferredRow = getPlayerSpawnRow(player);
+    const preferredCol = index + 3;
+    positions[player] = findPlayerSpawnCell(preferredRow, preferredCol);
   });
   return positions;
 }
@@ -907,7 +976,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on("start_combat", ({ room, generatedEnemies }) => {
+  socket.on("start_combat", ({ room, generatedEnemies, sceneKey }) => {
     if(!combatSessions[room]) {
       combatSessions[room] = {};
     }
@@ -915,8 +984,12 @@ io.on('connection', (socket) => {
     combatSessions[room].enemies = generatedEnemies;
 
     // Generate enemy positions (server decides so all clients see same positions)
-    const enemyPositions = generateEnemySpawnPositions(generatedEnemies);
-    const playerPositions = generatePlayerSpawnPositions(rooms[room]?.players || []);
+    const enemyPositions = generateEnemySpawnPositions(generatedEnemies, sceneKey);
+    const playerPositions = generatePlayerSpawnPositions(
+      rooms[room]?.players || [],
+      rooms[room]?.characterSelections || {},
+      sceneKey
+    );
     combatSessions[room].enemyPositions = enemyPositions;
     combatSessions[room].playerPositions = playerPositions;
 
@@ -1146,8 +1219,8 @@ io.on('connection', (socket) => {
     io.to(room).emit("cooldown_reduced", { targetPlayer, value });
   });
 
-  socket.on("reset_cooldowns", ({ room, targetPlayer }) => {
-    io.to(room).emit("cooldowns_reset", { targetPlayer });
+  socket.on("reset_cooldowns", ({ room, targetPlayer, excludeAbilityIds }) => {
+    io.to(room).emit("cooldowns_reset", { targetPlayer, excludeAbilityIds });
   });
 
   socket.on("enemy_damaged", ({ room, enemyId, damage, newHealth }) => {
@@ -1207,6 +1280,19 @@ io.on('connection', (socket) => {
 
   socket.on("player_damaged", ({ room, playerName, damage, newHealth, updatedActiveEffects }) => {
     const combat = combatSessions[room];
+
+    if (rooms[room]?.characterSelections?.[playerName]) {
+      const character = rooms[room].characterSelections[playerName];
+      rooms[room].characterSelections[playerName] = {
+        ...character,
+        stats: {
+          ...character.stats,
+          health: newHealth
+        }
+      };
+      io.to(room).emit("characters_updated", { [playerName]: rooms[room].characterSelections[playerName] });
+    }
+
     if (combat && newHealth <= 0) {
       const currentTurn = combat.turnOrder[combat.currentTurnIndex];
       const wasCurrentTurn = currentTurn && currentTurn.id === playerName;
@@ -1330,9 +1416,11 @@ io.on('connection', (socket) => {
     const combat = combatSessions[room];
     if (combat?.turnOrder) {
       const alreadyInTurnOrder = combat.turnOrder.some(turn => turn.type === 'ally' && turn.id === name);
+      const character = rooms[room]?.characterSelections?.[name];
+      const isPlayerAlive = (character?.stats?.health || 0) > 0;
+      const canRestoreTurnSlot = (reconnectState?.turnOrderIndex ?? -1) >= 0;
 
-      if (!alreadyInTurnOrder) {
-        const character = rooms[room]?.characterSelections?.[name];
+      if (!alreadyInTurnOrder && isPlayerAlive && canRestoreTurnSlot) {
         const restoredTurnEntry = {
           type: 'ally',
           id: name,
@@ -1357,6 +1445,13 @@ io.on('connection', (socket) => {
         io.to(room).emit('turn_order_updated', {
           turnOrder: combat.turnOrder,
           currentTurnIndex: combat.currentTurnIndex
+        });
+      } else if (!alreadyInTurnOrder && (!isPlayerAlive || !canRestoreTurnSlot)) {
+        console.log('[RECONNECT] Skipping turn-order restore for player:', {
+          room,
+          player: name,
+          isPlayerAlive,
+          restoreIndex: reconnectState?.turnOrderIndex
         });
       }
 

@@ -118,7 +118,7 @@ function Main() {
     const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0);
     const [displayText, setDisplayText] = useState('');
     const [typingIndex, setTypingIndex] = useState(0);
-    const [currentSceneKey, setCurrentSceneKey] = useState('sewer');
+    const [currentSceneKey, setCurrentSceneKey] = useState('city');
     const aiLogRef = useRef(null);
     const hasRequestedIntroRef = useRef(false);
     const pendingStartCombatRef = useRef(false);

@@ -347,6 +347,21 @@ function dispatchEnemyTurn(io, room, combat, enemyId) {
   };
 }
 
+const SEWER_SLOW_TILE_KEYS = new Set([
+  '3,0', '3,1', '3,2', '3,3', '3,4', '3,5', '3,6', '3,7', '3,8', '3,9',
+  '1,4', '1,5', '2,4', '2,5', '4,4', '5,4', '5,5'
+]);
+
+const SEWER_SPAWN_BLOCKED_TILE_KEYS = new Set([
+  ...SEWER_SLOW_TILE_KEYS,
+  '0,4', '0,5', '6,4', '6,5'
+]);
+
+function isSewerSpawnBlockedTile(sceneKey, row, col) {
+  if (sceneKey !== 'sewer') return false;
+  return SEWER_SPAWN_BLOCKED_TILE_KEYS.has(`${row},${col}`);
+}
+
 function getEnemySpawnDepth(enemy) {
   const behavior = enemy?.behavior || 'aggressive';
   const role = enemy?.role || 'DPS';
@@ -392,7 +407,7 @@ function generateSpreadColumns(count, totalCols = 10) {
   });
 }
 
-function generateEnemySpawnPositions(enemies = []) {
+function generateEnemySpawnPositions(enemies = [], sceneKey = null) {
   const sortedEnemies = [...enemies].sort((firstEnemy, secondEnemy) =>
     getEnemySpawnDepth(secondEnemy) - getEnemySpawnDepth(firstEnemy)
   );
@@ -403,7 +418,10 @@ function generateEnemySpawnPositions(enemies = []) {
 
   const findOpenCell = (preferredRow, preferredCol) => {
     const withinBounds = (row, col) => row >= 0 && row < 7 && col >= 0 && col < 10;
-    const isOpen = (row, col) => !usedCells.has(`${row},${col}`);
+    const isOpen = (row, col) => {
+      if (isSewerSpawnBlockedTile(sceneKey, row, col)) return false;
+      return !usedCells.has(`${row},${col}`);
+    };
 
     if (withinBounds(preferredRow, preferredCol) && isOpen(preferredRow, preferredCol)) {
       return { row: preferredRow, col: preferredCol };
@@ -448,8 +466,9 @@ function generateEnemySpawnPositions(enemies = []) {
   return positions;
 }
 
-function generatePlayerSpawnPositions(players = [], characterSelections = {}) {
+function generatePlayerSpawnPositions(players = [], characterSelections = {}, sceneKey = null) {
   const positions = {};
+  const usedCells = new Set();
 
   const getPlayerSpawnRow = (playerName) => {
     const role = (characterSelections?.[playerName]?.role || '').toLowerCase();
@@ -461,8 +480,47 @@ function generatePlayerSpawnPositions(players = [], characterSelections = {}) {
     return 6;
   };
 
+  const findPlayerSpawnCell = (preferredRow, preferredCol) => {
+    const candidateRows = [preferredRow, preferredRow === 5 ? 6 : 5];
+
+    for (let offset = 0; offset < 10; offset++) {
+      const candidateCols = offset === 0
+        ? [preferredCol]
+        : [preferredCol - offset, preferredCol + offset];
+
+      for (const row of candidateRows) {
+        for (const col of candidateCols) {
+          if (col < 0 || col >= 10) continue;
+          if (isSewerSpawnBlockedTile(sceneKey, row, col)) continue;
+
+          const key = `${row},${col}`;
+          if (!usedCells.has(key)) {
+            usedCells.add(key);
+            return { row, col };
+          }
+        }
+      }
+    }
+
+    for (const row of candidateRows) {
+      for (let col = 0; col < 10; col++) {
+        if (isSewerSpawnBlockedTile(sceneKey, row, col)) continue;
+
+        const key = `${row},${col}`;
+        if (!usedCells.has(key)) {
+          usedCells.add(key);
+          return { row, col };
+        }
+      }
+    }
+
+    return { row: preferredRow, col: preferredCol };
+  };
+
   players.forEach((player, index) => {
-    positions[player] = { row: getPlayerSpawnRow(player), col: index + 3 };
+    const preferredRow = getPlayerSpawnRow(player);
+    const preferredCol = index + 3;
+    positions[player] = findPlayerSpawnCell(preferredRow, preferredCol);
   });
   return positions;
 }
@@ -918,7 +976,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on("start_combat", ({ room, generatedEnemies }) => {
+  socket.on("start_combat", ({ room, generatedEnemies, sceneKey }) => {
     if(!combatSessions[room]) {
       combatSessions[room] = {};
     }
@@ -926,10 +984,11 @@ io.on('connection', (socket) => {
     combatSessions[room].enemies = generatedEnemies;
 
     // Generate enemy positions (server decides so all clients see same positions)
-    const enemyPositions = generateEnemySpawnPositions(generatedEnemies);
+    const enemyPositions = generateEnemySpawnPositions(generatedEnemies, sceneKey);
     const playerPositions = generatePlayerSpawnPositions(
       rooms[room]?.players || [],
-      rooms[room]?.characterSelections || {}
+      rooms[room]?.characterSelections || {},
+      sceneKey
     );
     combatSessions[room].enemyPositions = enemyPositions;
     combatSessions[room].playerPositions = playerPositions;

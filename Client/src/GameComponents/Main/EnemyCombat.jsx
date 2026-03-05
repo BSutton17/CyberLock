@@ -8,6 +8,25 @@ const ROLE_PRIORITY = {
     'Tank': 2
 };
 
+const SEWER_SLOW_TILE_KEYS = new Set([
+    '3,0', '3,1', '3,2', '3,3', '3,4', '3,5', '3,6', '3,7', '3,8', '3,9',
+    '1,4', '1,5', '2,4', '2,5', '4,4', '5,4', '5,5'
+]);
+
+const isSewerSlowTile = (sceneKey, position) => {
+    if (sceneKey !== 'sewer' || !position) return false;
+    return SEWER_SLOW_TILE_KEYS.has(`${position.row},${position.col}`);
+};
+
+const getMovementFromSpeed = (speedValue, position, sceneKey) => {
+    const normalizedSpeed = Number.isFinite(speedValue) ? speedValue : 0;
+    const effectiveSpeed = isSewerSlowTile(sceneKey, position)
+        ? Math.floor(normalizedSpeed / 2)
+        : normalizedSpeed;
+
+    return Math.floor(effectiveSpeed / 10);
+};
+
 /**
  * Calculate attack priority for a target
  * Lower value = higher priority
@@ -247,7 +266,7 @@ function getReachableCells(startPos, maxMovement, characterPositions, activeEffe
 }
 
 //aggressive behavior type movement logic
-function calculateAggressiveMovement(enemy, allies, characterPositions, activeEffects = []) {
+function calculateAggressiveMovement(enemy, allies, characterPositions, activeEffects = [], sceneKey = null) {
     const enemyPos = characterPositions[enemy.id];
     if (!enemyPos) return null;
     
@@ -257,7 +276,7 @@ function calculateAggressiveMovement(enemy, allies, characterPositions, activeEf
     }
     
     // Calculate max movement based on speed
-    const maxMovement = Math.floor(enemy.stats.speed / 10);
+    const maxMovement = getMovementFromSpeed(enemy.stats.speed, enemyPos, sceneKey);
     
     // Find closest ally
     const closest = findClosestTarget(enemyPos, allies, characterPositions);
@@ -289,13 +308,13 @@ function calculateAggressiveMovement(enemy, allies, characterPositions, activeEf
 }
 
 //defensive behavior type movement logic
-function calculateDefensiveMovement(enemy, allies, characterPositions, activeEffects = []) {
+function calculateDefensiveMovement(enemy, allies, characterPositions, activeEffects = [], sceneKey = null) {
     const enemyPos = characterPositions[enemy.id];
     if (!enemyPos) return null;
     const weaponRange = enemy.weapon?.range || 1;
     
     // Calculate max movement based on speed
-    const maxMovement = Math.floor(enemy.stats.speed / 10);
+    const maxMovement = getMovementFromSpeed(enemy.stats.speed, enemyPos, sceneKey);
 
     const closest = findClosestTarget(enemyPos, allies, characterPositions);
     if (!closest || !closest.targetId) return null;
@@ -343,7 +362,7 @@ function calculateDefensiveMovement(enemy, allies, characterPositions, activeEff
 }
 
 //supports
-function calculateSupportMovement(enemy, alliedEnemies, characterPositions, activeEffects = []) {
+function calculateSupportMovement(enemy, alliedEnemies, characterPositions, activeEffects = [], sceneKey = null) {
     const enemyPos = characterPositions[enemy.id];
     if (!enemyPos) return null;
     
@@ -353,7 +372,7 @@ function calculateSupportMovement(enemy, alliedEnemies, characterPositions, acti
     }
     
     // Calculate max movement based on speed
-    const maxMovement = Math.floor(enemy.stats.speed / 10);
+    const maxMovement = getMovementFromSpeed(enemy.stats.speed, enemyPos, sceneKey);
     
     //Find closest allied enemy
     const closest = findClosestTarget(enemyPos, alliedEnemies, characterPositions);
@@ -373,7 +392,7 @@ function calculateSupportMovement(enemy, alliedEnemies, characterPositions, acti
     return bestMove;
 }
 
-function calculateRetreatToSupportMovement(enemy, supportAllies, characterPositions, activeEffects = []) {
+function calculateRetreatToSupportMovement(enemy, supportAllies, characterPositions, activeEffects = [], sceneKey = null) {
     const enemyPos = characterPositions[enemy.id];
     if (!enemyPos) return null;
 
@@ -383,7 +402,7 @@ function calculateRetreatToSupportMovement(enemy, supportAllies, characterPositi
         return null;
     }
 
-    const maxMovement = Math.floor(enemy.stats.speed / 10);
+    const maxMovement = getMovementFromSpeed(enemy.stats.speed, enemyPos, sceneKey);
     const closestSupport = findClosestTarget(enemyPos, supportAllies, characterPositions);
     if (!closestSupport || !closestSupport.targetId) return null;
 
@@ -402,20 +421,20 @@ function calculateRetreatToSupportMovement(enemy, supportAllies, characterPositi
 }
 
 
-export function calculateEnemyMovement(enemy, allies, alliedEnemies, supportAllies, playerCharacters, characterPositions, activeEffects = []) {
+export function calculateEnemyMovement(enemy, allies, alliedEnemies, supportAllies, playerCharacters, characterPositions, activeEffects = [], sceneKey = null) {
     const behavior = determineBehavior(enemy, allies, playerCharacters);
     const role = enemy.role || 'DPS';
     
     if (role === 'Support') {
-        return calculateSupportMovement(enemy, alliedEnemies, characterPositions, activeEffects);
+        return calculateSupportMovement(enemy, alliedEnemies, characterPositions, activeEffects, sceneKey);
     }
     
     if (behavior === 'aggressive') {
-        return calculateAggressiveMovement(enemy, allies, characterPositions, activeEffects);
+        return calculateAggressiveMovement(enemy, allies, characterPositions, activeEffects, sceneKey);
     }
     
     if (behavior === 'defensive') {
-        return calculateDefensiveMovement(enemy, allies, characterPositions, activeEffects);
+        return calculateDefensiveMovement(enemy, allies, characterPositions, activeEffects, sceneKey);
     }
 
     if (behavior === 'intelligent') {
@@ -424,19 +443,19 @@ export function calculateEnemyMovement(enemy, allies, alliedEnemies, supportAlli
         const healthRatio = currentHealth / Math.max(1, maxHealth);
 
         if (healthRatio < 0.25 && Array.isArray(supportAllies) && supportAllies.length > 0) {
-            const retreatMove = calculateRetreatToSupportMovement(enemy, supportAllies, characterPositions, activeEffects);
+            const retreatMove = calculateRetreatToSupportMovement(enemy, supportAllies, characterPositions, activeEffects, sceneKey);
             if (retreatMove) {
                 return retreatMove;
             }
         }
 
-        return calculateDefensiveMovement(enemy, allies, characterPositions, activeEffects);
+        return calculateDefensiveMovement(enemy, allies, characterPositions, activeEffects, sceneKey);
     }
     
     return null;
 }
 
-export function executeEnemyTurn(enemy, allies, alliedEnemies, battlefieldEnemies = [], playerCharacters, characterPositions, activeEffects = []) {
+export function executeEnemyTurn(enemy, allies, alliedEnemies, battlefieldEnemies = [], playerCharacters, characterPositions, activeEffects = [], sceneKey = null) {
     console.log(`[ENEMY TURN] ${enemy.name} (${enemy.id}) starting turn`);
     console.log(`[ENEMY TURN] Enemy abilities:`, enemy.abilities);
     console.log(`[ENEMY TURN] Enemy cooldowns:`, enemy.cooldowns);
@@ -492,7 +511,7 @@ export function executeEnemyTurn(enemy, allies, alliedEnemies, battlefieldEnemie
     // Calculate movement
     const newPosition = movementPrevented
         ? null
-        : calculateEnemyMovement(enemy, allies, alliedEnemies, supportAllies, playerCharacters, characterPositions, activeEffects);
+        : calculateEnemyMovement(enemy, allies, alliedEnemies, supportAllies, playerCharacters, characterPositions, activeEffects, sceneKey);
     
     // Create updated positions to check attack range AFTER moving
     const updatedPositions = newPosition ? {

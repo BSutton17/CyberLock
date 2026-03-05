@@ -198,7 +198,7 @@ export const ABILITIES = {
     blizzard: {
         id: 'blizzard',
         name: 'Blizzard',
-        description: 'Create a blizzard in a 3x3 area that halves enemy speed for 3 turns',
+        description: 'Create a blizzard that halves enemy speed for 3 turns',
         role: "DPS",
         level: 3,
         cooldown: 5,
@@ -1035,7 +1035,7 @@ export const ABILITIES = {
         description: 'Place a healing field that heals allies +5 for two turns',
         role: "Support",
         level: 1,
-        cooldown: 2,
+        cooldown: 3,
         targetType: 'ground-target',
         type: 'heal',
         range: 3,
@@ -1518,7 +1518,7 @@ export const ABILITIES = {
     iron_sharpens_iron: {
         id: 'iron_sharpens_iron',
         name: 'Iron Sharpens Iron',
-        description: 'DPS in your party receive +5 Strength for 1 turn',
+        description: 'DPS in your party receive +10 Strength for 1 turn',
         role: "Support",
         level: 1,
         cooldown: 1,
@@ -1543,7 +1543,7 @@ export const ABILITIES = {
                         type: 'stat_buff',
                         target: playerName,
                         stat: 'strength',
-                        value: 5,
+                        value: 10,
                         duration: 1
                     });
                 }
@@ -1641,7 +1641,7 @@ export const ABILITIES = {
     murus_fictilis: {
         id: 'murus_fictilis',
         name: "Murus Fictilis",
-        description: 'Grants all members of the party +25 Bonus Health and +20 Res for 2 turns',
+        description: 'Grants all members of the party +25 Bonus Health and +30 Res for 2 turns',
         role: "Tank",
         cooldown: 0, 
         isUltimate: true,
@@ -1674,7 +1674,7 @@ export const ABILITIES = {
                     type: 'stat_buff',
                     target: playerName,
                     stat: 'resistance',
-                    value: 20,
+                    value: 30,
                     duration: 2,
                     stackable: false
                 });

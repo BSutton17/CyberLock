@@ -48,6 +48,37 @@ const SCENE_ALIASES = {
     boss: 'boss'
 };
 
+const SEWER_SLOW_TILE_KEYS = new Set([
+    '3,0', '3,1', '3,2', '3,3', '3,4', '3,5', '3,6', '3,7', '3,8', '3,9',
+    '1,4', '1,5', '2,4', '2,5', '4,4', '5,4', '5,5'
+]);
+
+const SEWER_SPAWN_BLOCKED_TILE_KEYS = new Set([
+    ...SEWER_SLOW_TILE_KEYS,
+    '0,4', '0,5', '6,4', '6,5'
+]);
+
+const toTileKey = (row, col) => `${row},${col}`;
+const isSewerScene = (sceneKey) => sceneKey === 'sewer';
+
+const isSewerSlowTile = (sceneKey, position) => {
+    if (!isSewerScene(sceneKey) || !position) return false;
+    return SEWER_SLOW_TILE_KEYS.has(toTileKey(position.row, position.col));
+};
+
+const isSewerSpawnBlockedTile = (sceneKey, row, col) => {
+    if (!isSewerScene(sceneKey)) return false;
+    return SEWER_SPAWN_BLOCKED_TILE_KEYS.has(toTileKey(row, col));
+};
+
+const getSewerAdjustedSpeed = (sceneKey, speedValue, position) => {
+    const normalizedSpeed = Number.isFinite(speedValue) ? speedValue : 0;
+    if (isSewerSlowTile(sceneKey, position)) {
+        return Math.floor(normalizedSpeed / 2);
+    }
+    return normalizedSpeed;
+};
+
 const normalizeSceneToken = (value = '') =>
     value
         .toLowerCase()
@@ -87,7 +118,7 @@ function Main() {
     const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0);
     const [displayText, setDisplayText] = useState('');
     const [typingIndex, setTypingIndex] = useState(0);
-    const [currentSceneKey, setCurrentSceneKey] = useState('city');
+    const [currentSceneKey, setCurrentSceneKey] = useState('sewer');
     const aiLogRef = useRef(null);
     const hasRequestedIntroRef = useRef(false);
     const pendingStartCombatRef = useRef(false);
@@ -202,7 +233,9 @@ function Main() {
         if (!playerCharacter) return 0;
 
         const totalSpeed = calculateTotalStat(playerCharacter, playerName, 'speed', activeEffectsRef.current || []);
-        const maxMovement = Math.floor(totalSpeed / 10);
+        const currentPosition = characterPositions[playerName];
+        const effectiveSpeed = getSewerAdjustedSpeed(currentSceneKey, totalSpeed, currentPosition);
+        const maxMovement = Math.floor(effectiveSpeed / 10);
         return Math.max(0, maxMovement - (movementUsedRef.current || 0));
     };
 
@@ -689,7 +722,10 @@ function Main() {
 
         const findOpenCell = (preferredRow, preferredCol) => {
             const withinBounds = (row, col) => row >= 0 && row < 7 && col >= 0 && col < 10;
-            const isOpen = (row, col) => !usedCells.has(`${row},${col}`);
+            const isOpen = (row, col) => {
+                if (isSewerSpawnBlockedTile(currentSceneKey, row, col)) return false;
+                return !usedCells.has(`${row},${col}`);
+            };
 
             if (withinBounds(preferredRow, preferredCol) && isOpen(preferredRow, preferredCol)) {
                 return { row: preferredRow, col: preferredCol };
@@ -896,10 +932,56 @@ function Main() {
             return 6;
         };
 
+        const usedPlayerCells = new Set(
+            Object.entries(characterPositions)
+                .filter(([id]) => players.includes(id))
+                .map(([, pos]) => `${pos.row},${pos.col}`)
+        );
+
+        const findPlayerSpawnCell = (preferredRow, preferredCol) => {
+            const candidateRows = [preferredRow, preferredRow === 5 ? 6 : 5];
+            const maxOffset = 10;
+
+            for (let offset = 0; offset < maxOffset; offset++) {
+                const candidateCols = offset === 0
+                    ? [preferredCol]
+                    : [preferredCol - offset, preferredCol + offset];
+
+                for (const row of candidateRows) {
+                    for (const col of candidateCols) {
+                        if (col < 0 || col >= 10) continue;
+                        if (isSewerSpawnBlockedTile(currentSceneKey, row, col)) continue;
+
+                        const key = `${row},${col}`;
+                        if (!usedPlayerCells.has(key)) {
+                            usedPlayerCells.add(key);
+                            return { row, col };
+                        }
+                    }
+                }
+            }
+
+            for (const row of candidateRows) {
+                for (let col = 0; col < 10; col++) {
+                    if (isSewerSpawnBlockedTile(currentSceneKey, row, col)) continue;
+
+                    const key = `${row},${col}`;
+                    if (!usedPlayerCells.has(key)) {
+                        usedPlayerCells.add(key);
+                        return { row, col };
+                    }
+                }
+            }
+
+            return { row: preferredRow, col: preferredCol };
+        };
+
         const newPositions = {};
         players.forEach((player, index) => {
             if (!characterPositions[player]) {
-                newPositions[player] = { row: getPlayerSpawnRow(player), col: index + 3 };
+                const preferredRow = getPlayerSpawnRow(player);
+                const preferredCol = index + 3;
+                newPositions[player] = findPlayerSpawnCell(preferredRow, preferredCol);
             }
         });
         if (Object.keys(newPositions).length > 0) {
@@ -1083,7 +1165,8 @@ function Main() {
                 latestEnemies,
                 latestPlayerCharacters,
                 characterPositions,
-                latestActiveEffects
+                latestActiveEffects,
+                currentSceneKey
             );
             let abilityUsedSuccessfully = false;
 
@@ -1998,11 +2081,13 @@ function Main() {
 
         // Calculate max movement based on speed (including buffs from activeEffects)
         const totalSpeed = calculateTotalStat(currentPlayerCharacter, playerName, 'speed', activeEffects);
-        const maxMovement = Math.floor(totalSpeed / 10);
+        const effectiveSpeed = getSewerAdjustedSpeed(currentSceneKey, totalSpeed, currentPos);
+        const maxMovement = Math.floor(effectiveSpeed / 10);
         
         console.log('[MOVEMENT CALC]', {
             baseSpeed: currentPlayerCharacter.stats.speed,
             totalSpeed,
+            effectiveSpeed,
             maxMovement
         });
         
@@ -2202,6 +2287,7 @@ function Main() {
                         } ${isPlayerCharacter ? 'player-controlled' : ''} ${isEnemy ? (isCorpse ? 'enemy-corpse-cell' : 'enemy-cell') : ''} ${isHealingFieldCell ? 'healing-field-cell' : ''} ${isFireballZoneCell ? 'fireball-zone-cell' : ''} ${isBlackHoleZoneCell ? 'black-hole-zone-cell' : ''} ${isBlizzardFieldCell ? 'blizzard-field-cell' : ''} ${isToxicMistCell ? 'toxic-mist-cell' : ''} ${isBlueBarrierCell ? 'blue-barrier-cell' : ''} ${isGtgOriginCell ? 'gtg-origin-cell' : ''} ${isWhitePhospherusEnemy ? 'white-phospherus-glow' : ''} ${isGuardedBreathAlly ? 'guarded-breath-glow' : ''} ${isGtgTeleportedTarget ? 'gtg-target-glow' : ''}`}
                         onClick={() => handleGridClick(row, col)}
                     >
+                        <h3>{row} - {col}</h3>
                         {characterOnCell && (
                             <div className={`grid-character ${!isEnemy ? 'player-grid-character' : ''}`}>
                                 <div className='status'></div>
@@ -2257,7 +2343,7 @@ function Main() {
         const generatedEnemies = generateEnemies(normalizedSpawnType);
         setEnemies(normalizeEnemiesState(generatedEnemies));
         setGamePhase('combat');
-        socket.emit('start_combat', { room, generatedEnemies, spawnType: normalizedSpawnType });
+        socket.emit('start_combat', { room, generatedEnemies, spawnType: normalizedSpawnType, sceneKey: currentSceneKey });
     }
 
     function handleCombatComplete(rewards) {
@@ -3141,6 +3227,10 @@ function Main() {
                             <div className="stats-grid">
                                 {(() => {
                                     const statBonuses = getStatBonuses(playerName, activeEffects);
+                                    const currentPosition = characterPositions[playerName];
+                                    const sewerSpeedPenalty = isSewerSlowTile(currentSceneKey, currentPosition)
+                                        ? Math.floor((currentPlayerCharacter?.stats?.speed || 0) / 2)
+                                        : 0;
                                     return (
                                         <>
                                             <div className="stat-item">
@@ -3162,6 +3252,9 @@ function Main() {
                                                         <span className={statBonuses.speed > 0 ? 'stat-buff' : 'stat-debuff'}>
                                                             {statBonuses.speed > 0 ? ' +' : ' '}{statBonuses.speed}
                                                         </span>
+                                                    )}
+                                                    {sewerSpeedPenalty > 0 && (
+                                                        <span className="stat-debuff"> -{sewerSpeedPenalty}</span>
                                                     )}
                                                 </span>
                                             </div>

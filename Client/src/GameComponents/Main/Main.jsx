@@ -92,7 +92,7 @@ const resolveSceneKey = (rawKeyword = '') => {
 };
 
 function Main() {
-    const { players, playerCharacters, setPlayerCharacters, playerName, room, socket,getAbilityScaler, attributeAllocations, setGamePhase, isMyTurn, currentTurn, enemies, setEnemies, turnOrder, setTurnOrder, isAdmin, setScreen, getCharacterImage } = useGameContext();
+    const { players, playerCharacters, setPlayerCharacters, playerName, room, socket,getAbilityScaler, attributeAllocations, setGamePhase, isMyTurn, currentTurn, enemies, setEnemies, turnOrder, setTurnOrder, isAdmin, setScreen, getCharacterImage, getEnemyImage } = useGameContext();
     const [currentPlayerCharacter, setCurrentPlayerCharacter] = useState(null);
     const [ultimateReady, setUltimateReady] = useState(false);
     const [characterPositions, setCharacterPositions] = useState({});
@@ -118,12 +118,17 @@ function Main() {
     const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0);
     const [displayText, setDisplayText] = useState('');
     const [typingIndex, setTypingIndex] = useState(0);
-    const [currentSceneKey, setCurrentSceneKey] = useState('sewer');
+    const [currentSceneKey, setCurrentSceneKey] = useState('city');
     const aiLogRef = useRef(null);
     const hasRequestedIntroRef = useRef(false);
     const pendingStartCombatRef = useRef(false);
     const cooldownStorageKey = room && playerName ? `cooldowns_${room}_${playerName}` : null;
-   
+
+    //state for AI story flow
+    const [pendingChoice, setPendingChoice] = useState(null);
+    const [choiceOptions, setChoiceOptions] = useState([]);
+    const [choiceAttribute, setChoiceAttribute] = useState(null);
+    const [choiceStartCombat, setChoiceStartCombat] = useState(false);
 
     const getDecisionOwner = (requiredAttribute) => {
         if (!requiredAttribute) return null;
@@ -158,9 +163,18 @@ function Main() {
     const completedAllyTurnCyclesRef = useRef(new Set());
     const turnTimerIntervalRef = useRef(null);
     const turnTimerAutoEndedRef = useRef(false);
+    const playerCorpseRemovalTurnRef = useRef({});
 
     const isEnemyDeadBody = (enemy) => {
         return !!enemy && (enemy.isDeadBody || (enemy.stats?.health || 0) <= 0);
+    };
+
+    const schedulePlayerCorpseRemoval = (deadPlayerId) => {
+        if (!deadPlayerId) return;
+
+        if (Number.isFinite(playerCorpseRemovalTurnRef.current[deadPlayerId])) return;
+
+        playerCorpseRemovalTurnRef.current[deadPlayerId] = currentTurnCycleRef.current + 1;
     };
 
     const normalizeEnemiesState = (enemyList = []) => {
@@ -228,6 +242,59 @@ function Main() {
         currentTurnCycleRef.current += 1;
     }, [currentTurn?.type, currentTurn?.id]);
 
+    useEffect(() => {
+        return () => {
+            playerCorpseRemovalTurnRef.current = {};
+        };
+    }, []);
+
+    useEffect(() => {
+        players.forEach(playerId => {
+            const playerHealth = playerCharacters?.[playerId]?.stats?.health;
+            const hasPositionOnBoard = !!characterPositions[playerId];
+
+            if (Number.isFinite(playerHealth) && playerHealth <= 0 && hasPositionOnBoard) {
+                schedulePlayerCorpseRemoval(playerId);
+            } else if (Number.isFinite(playerHealth) && playerHealth > 0 && playerCorpseRemovalTurnRef.current[playerId] !== undefined) {
+                delete playerCorpseRemovalTurnRef.current[playerId];
+            }
+        });
+    }, [players, playerCharacters, characterPositions]);
+
+    useEffect(() => {
+        const dueRemovals = Object.entries(playerCorpseRemovalTurnRef.current)
+            .filter(([, removalTurn]) => currentTurnCycleRef.current >= removalTurn)
+            .map(([playerId]) => playerId);
+
+        if (dueRemovals.length === 0) return;
+
+        const storedPlayerPositions = sessionStorage.getItem(`playerPositions_${room}`);
+        const parsedPlayerPositions = storedPlayerPositions ? JSON.parse(storedPlayerPositions) : {};
+        let removedStoredPosition = false;
+
+        dueRemovals.forEach(playerId => {
+            if (parsedPlayerPositions[playerId]) {
+                delete parsedPlayerPositions[playerId];
+                removedStoredPosition = true;
+            }
+        });
+
+        if (removedStoredPosition) {
+            sessionStorage.setItem(`playerPositions_${room}`, JSON.stringify(parsedPlayerPositions));
+        }
+
+        setCharacterPositions(prev => {
+            const nextPositions = { ...prev };
+            dueRemovals.forEach(playerId => {
+                if ((playerCharactersRef.current?.[playerId]?.stats?.health || 0) <= 0) {
+                    delete nextPositions[playerId];
+                }
+                delete playerCorpseRemovalTurnRef.current[playerId];
+            });
+            return nextPositions;
+        });
+    }, [currentTurn?.type, currentTurn?.id]);
+
     const getMovementRemainingForAutoEnd = () => {
         const playerCharacter = currentPlayerCharacterRef.current;
         if (!playerCharacter) return 0;
@@ -271,6 +338,7 @@ function Main() {
             playerName
         });
     };
+    
 
     const handleFactionChoice = (choice) => {
         if (!canPlayerDecide('politician')) return;
@@ -451,7 +519,7 @@ function Main() {
             if (eventType === 'choice_made') {
                 if (pendingStartCombatRef.current && isAdmin) {
                     pendingStartCombatRef.current = false;
-                    handleStoryComplete("medium");
+                    handleStoryComplete("low");
                 }
             }
 
@@ -466,7 +534,7 @@ function Main() {
             if (eventType === 'next_encounter') {
                 if (pendingStartCombatRef.current && isAdmin) {
                     pendingStartCombatRef.current = false;
-                    handleStoryComplete();
+                    handleStoryComplete("low");
                 }
             }
         };
@@ -903,8 +971,19 @@ function Main() {
             try {
                 const serverPlayerPositions = JSON.parse(storedPlayerPositions);
                 const restoredPlayerPositions = {};
+                const nextStoredPlayerPositions = { ...serverPlayerPositions };
+                let removedDeadStoredPosition = false;
 
                 players.forEach((player) => {
+                    const isDeadPlayer = (playerCharacters[player]?.stats?.health || 0) <= 0;
+                    if (isDeadPlayer) {
+                        if (nextStoredPlayerPositions[player]) {
+                            delete nextStoredPlayerPositions[player];
+                            removedDeadStoredPosition = true;
+                        }
+                        return;
+                    }
+
                     const serverPosition = serverPlayerPositions[player];
                     if (!serverPosition) return;
 
@@ -912,6 +991,10 @@ function Main() {
                         restoredPlayerPositions[player] = serverPosition;
                     }
                 });
+
+                if (removedDeadStoredPosition) {
+                    sessionStorage.setItem(`playerPositions_${room}`, JSON.stringify(nextStoredPlayerPositions));
+                }
 
                 if (Object.keys(restoredPlayerPositions).length > 0) {
                     setCharacterPositions(prev => ({ ...prev, ...restoredPlayerPositions }));
@@ -978,6 +1061,9 @@ function Main() {
 
         const newPositions = {};
         players.forEach((player, index) => {
+            const isDeadPlayer = (playerCharacters[player]?.stats?.health || 0) <= 0;
+            if (isDeadPlayer) return;
+
             if (!characterPositions[player]) {
                 const preferredRow = getPlayerSpawnRow(player);
                 const preferredCol = index + 3;
@@ -2214,8 +2300,10 @@ function Main() {
                 );
                 
                 const enemyOnCell = characterOnCell ? enemies.find(e => e.id === characterOnCell[0]) : null;
+                console.log(enemyOnCell)
                 const isEnemy = !!enemyOnCell;
                 const isCorpse = isEnemyDeadBody(enemyOnCell);
+                const isDeadPlayer = !isEnemy && !!characterOnCell && (playerCharacters[characterOnCell[0]]?.stats?.health || 0) <= 0;
                 const isPlayerCharacter = characterOnCell && characterOnCell[0] === playerName;
                 const isHealingFieldCell = activeHealingFields.some(field => {
                     const radius = field.radius ?? 1;
@@ -2287,7 +2375,7 @@ function Main() {
                         } ${isPlayerCharacter ? 'player-controlled' : ''} ${isEnemy ? (isCorpse ? 'enemy-corpse-cell' : 'enemy-cell') : ''} ${isHealingFieldCell ? 'healing-field-cell' : ''} ${isFireballZoneCell ? 'fireball-zone-cell' : ''} ${isBlackHoleZoneCell ? 'black-hole-zone-cell' : ''} ${isBlizzardFieldCell ? 'blizzard-field-cell' : ''} ${isToxicMistCell ? 'toxic-mist-cell' : ''} ${isBlueBarrierCell ? 'blue-barrier-cell' : ''} ${isGtgOriginCell ? 'gtg-origin-cell' : ''} ${isWhitePhospherusEnemy ? 'white-phospherus-glow' : ''} ${isGuardedBreathAlly ? 'guarded-breath-glow' : ''} ${isGtgTeleportedTarget ? 'gtg-target-glow' : ''}`}
                         onClick={() => handleGridClick(row, col)}
                     >
-                        <h3>{row} - {col}</h3>
+                        {/* <h3>{row} - {col}</h3> */}
                         {characterOnCell && (
                             <div className={`grid-character ${!isEnemy ? 'player-grid-character' : ''}`}>
                                 <div className='status'></div>
@@ -2303,17 +2391,24 @@ function Main() {
                                                     {unitStatusIcon}
                                                 </div>
                                             )}
+                                            <img
+                                                className="enemy-grid-image"
+                                                src={getEnemyImage(enemyOnCell)}
+                                                alt={enemyOnCell?.name || 'Enemy'}
+                                            />
                                             {hasEnhancedVision && (
                                                 <div className="enemy-health">
                                                     {enemyOnCell?.stats.health || 0}
                                                 </div>
                                             )}
-                                            <div className="enemy-name">
-                                                {enemyOnCell?.name || 'E'}
-                                            </div>
                                         </>
                                     )
                                 ) : (
+                                    isDeadPlayer ? (
+                                        <div className="enemy-corpse-icon">
+                                            <GiDeathSkull />
+                                        </div>
+                                    ) : (
                                     playerCharacters[characterOnCell[0]] ? (
                                         <>
                                             {unitStatusIcon && (
@@ -2328,6 +2423,7 @@ function Main() {
                                             />
                                         </>
                                     ) : '?'
+                                    )
                                 )}
                             </div>
                         )}
@@ -3002,7 +3098,7 @@ function Main() {
         {showYouDiedScreen && (
             <div className="you-died-screen">
                 <div className="you-died-content">
-                    <h1>YOU DIED</h1>
+                    <h1>YOU HAVE FALLEN</h1>
                 </div>
             </div>
         )}
@@ -3180,7 +3276,7 @@ function Main() {
                 </div>
             )}
         {/* <button style={{ width: '150px' }} onClick={handleLevelUp}>Level Up</button> */}
-        <button style={{ width: '150px' }} onClick={() => handleStoryComplete("medium")}>Combat</button>
+        <button style={{ width: '150px' }} onClick={() => handleStoryComplete()}>Combat</button>
             </div>
             <span className="ai-text">
                 {displayText}

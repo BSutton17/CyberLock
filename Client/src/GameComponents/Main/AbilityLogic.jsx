@@ -424,7 +424,7 @@ export function tickActiveEffects(activeEffects, playerCharacters, enemies, endi
             }
         }
         
-        updatedEffect.turnsRemaining--;
+        updatedEffect.turnsRemaining = Math.max(0, updatedEffect.turnsRemaining - 1);
         if (effect.source === 'dead_calm') {
             console.log('[POWER BOOST DEBUG] Ticked down:', {
                 target: effect.target,

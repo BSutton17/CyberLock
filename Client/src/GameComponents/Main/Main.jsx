@@ -2365,7 +2365,6 @@ function Main() {
                 );
                 
                 const enemyOnCell = characterOnCell ? enemies.find(e => e.id === characterOnCell[0]) : null;
-                console.log(enemyOnCell)
                 const isEnemy = !!enemyOnCell;
                 const isCorpse = isEnemyDeadBody(enemyOnCell);
                 const isDeadPlayer = !isEnemy && !!characterOnCell && (playerCharacters[characterOnCell[0]]?.stats?.health || 0) <= 0;

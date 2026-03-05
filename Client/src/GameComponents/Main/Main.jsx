@@ -611,6 +611,15 @@ function Main() {
 
         const handleCombatEnded = ({ result }) => {
             console.log('[COMBAT ENDED] Received with result:', result);
+            console.group('[COMBAT DEBUG] AFTER COMBAT_ENDED event');
+            console.log('room:', room);
+            console.log('result:', result);
+            console.log('currentTurn:', currentTurnRef.current);
+            console.log('local characterPositions (post-combat):', characterPositions);
+            console.log('cached playerPositions (post-combat):', sessionStorage.getItem(`playerPositions_${room}`));
+            console.log('cached enemyPositions (post-combat):', sessionStorage.getItem(`enemyPositions_${room}`));
+            console.log('enemies count (post-combat):', enemiesRef.current?.length || 0);
+            console.groupEnd();
             
             if (result === 'all_dead') {
                 setTurnOrder([]);
@@ -1157,7 +1166,7 @@ function Main() {
                     const enemyPositions = {};
 
                     enemies.forEach((enemy) => {
-                        if (serverPositions[enemy.id]) {
+                        if (!characterPositions[enemy.id] && serverPositions[enemy.id]) {
                             enemyPositions[enemy.id] = serverPositions[enemy.id];
                         }
                     });
@@ -1172,7 +1181,7 @@ function Main() {
                 return;
             }
         }
-    }, [enemies, room]);
+    }, [enemies, room, characterPositions]);
 
     useEffect(() => {
         setCharacterPositions(prev => {
@@ -1802,6 +1811,13 @@ function Main() {
                     }));
                 }, stepDelay * index);
             });
+
+            if (finalPosition) {
+                const storedEnemyPositions = sessionStorage.getItem(`enemyPositions_${room}`);
+                const parsedEnemyPositions = storedEnemyPositions ? JSON.parse(storedEnemyPositions) : {};
+                parsedEnemyPositions[enemyId] = finalPosition;
+                sessionStorage.setItem(`enemyPositions_${room}`, JSON.stringify(parsedEnemyPositions));
+            }
             
             // After movement animation completes, check blizzard field effects
             setTimeout(() => {
@@ -2497,7 +2513,20 @@ function Main() {
     function handleStoryComplete(spawnType = 'low') {
         const normalizedSpawnType = ['low', 'medium', 'boss'].includes(spawnType) ? spawnType : 'low';
         const generatedEnemies = generateEnemies(normalizedSpawnType);
-        setEnemies(normalizeEnemiesState(generatedEnemies));
+
+        console.group('[COMBAT DEBUG] BEFORE START_COMBAT emit');
+        console.log('room:', room);
+        console.log('sceneKey:', currentSceneKey);
+        console.log('spawnType:', normalizedSpawnType);
+        console.log('players:', players);
+        console.log('local characterPositions (pre-start):', characterPositions);
+        console.log('cached playerPositions (pre-start):', sessionStorage.getItem(`playerPositions_${room}`));
+        console.log('cached enemyPositions (pre-start):', sessionStorage.getItem(`enemyPositions_${room}`));
+        console.log('generatedEnemies ids:', generatedEnemies.map(enemy => enemy.id));
+        console.groupEnd();
+
+        sessionStorage.removeItem(`enemyPositions_${room}`);
+        sessionStorage.removeItem(`playerPositions_${room}`);
         setGamePhase('combat');
         socket.emit('start_combat', { room, generatedEnemies, spawnType: normalizedSpawnType, sceneKey: currentSceneKey });
     }
@@ -3365,7 +3394,7 @@ function Main() {
                 </div>
             )}
         {/* <button style={{ width: '150px' }} onClick={handleLevelUp}>Level Up</button> */}
-        <button style={{ width: '150px' }} onClick={() => handleStoryComplete()}>Combat</button>
+        {/* <button style={{ width: '150px' }} onClick={() => handleStoryComplete()}>Combat</button> */}
             </div>
             <span className="ai-text">
                 {displayText}

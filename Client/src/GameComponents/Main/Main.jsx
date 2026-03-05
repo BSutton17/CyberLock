@@ -3370,7 +3370,7 @@ function Main() {
                 </div>
             )}
         {/* <button style={{ width: '150px' }} onClick={handleLevelUp}>Level Up</button> */}
-        <button style={{ width: '150px' }} onClick={() => handleStoryComplete()}>Combat</button>
+        {/* <button style={{ width: '150px' }} onClick={() => handleStoryComplete()}>Combat</button> */}
             </div>
             <span className="ai-text">
                 {displayText}

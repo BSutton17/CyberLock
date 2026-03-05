@@ -11,7 +11,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const ENV = process.env.NODE_ENV || 'development';
-const DB_TYPE = process.env.DB_TYPE || 'sqlite';
+const DB_TYPE = process.env.DB_TYPE || (ENV === 'production' ? 'mysql' : 'sqlite');
 
 let db = null;
 
@@ -134,8 +134,21 @@ export const initializeDatabase = async () => {
       db = await initSQLite();
       await createSQLiteTables(db);
     } else if (DB_TYPE === 'mysql') {
-      db = await initMySQL();
-      await createMySQLTables(db);
+      try {
+        db = await initMySQL();
+        await createMySQLTables(db);
+      } catch (mysqlError) {
+        console.error('MySQL connection failed:', mysqlError.message);
+        
+        // In production, if MySQL fails and no explicit DB_TYPE was set, fallback to SQLite
+        if (ENV === 'production' && !process.env.DB_TYPE) {
+          console.warn('Falling back to SQLite due to MySQL connection failure');
+          db = await initSQLite();
+          await createSQLiteTables(db);
+        } else {
+          throw mysqlError;
+        }
+      }
     }
     return db;
   } catch (error) {

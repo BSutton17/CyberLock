@@ -119,6 +119,8 @@ function Main() {
     const [displayText, setDisplayText] = useState('');
     const [typingIndex, setTypingIndex] = useState(0);
     const [currentSceneKey, setCurrentSceneKey] = useState('city');
+    const [aiOptions, setAiOptions] = useState(null);
+    const [aiAttribute, setAiAttribute] = useState(null);
     const aiLogRef = useRef(null);
     const hasRequestedIntroRef = useRef(false);
     const pendingStartCombatRef = useRef(false);
@@ -261,6 +263,8 @@ function Main() {
     const emitAiEvent = (eventType, message, data = {}, options = {}) => {
         if (!room) return;
         setAiBusy(true);
+        setAiOptions(null);
+        setAiAttribute(null);
         socket.emit('ai_request', {
             room,
             eventType,
@@ -280,6 +284,7 @@ function Main() {
         socket.emit('faction_selected', { room, faction: normalizedChoice });
 
         setPendingFactionChoice(false);
+        setAiOptions(null);
         pendingStartCombatRef.current = true;
         emitAiEvent('choice_made', `The party chooses to fight with ${choice}.`, { choice });
     };
@@ -314,6 +319,40 @@ function Main() {
         setPendingNextEncounterChoice(false);
         pendingStartCombatRef.current = true;
         emitAiEvent('next_encounter', 'Leaving the shop, the party moves toward the next encounter.', { choice: 'next_encounter' });
+    };
+
+    const handleAiOptionClick = (option) => {
+        // Determine which attribute governs this choice
+        const requiredAttribute = aiAttribute || null;
+        if (requiredAttribute && !canPlayerDecide(requiredAttribute)) return;
+        if (aiBusy) return;
+
+        // Detect common option patterns and route them to existing handlers
+        const lowerOption = option.toLowerCase();
+
+        if (lowerOption.includes('enforcer')) {
+            handleFactionChoice(option);
+            return;
+        }
+        if (lowerOption.includes('people') || lowerOption.includes('rebel')) {
+            handleFactionChoice(option);
+            return;
+        }
+        if (lowerOption.includes('shop')) {
+            handlePostEncounterChoice('shop');
+            return;
+        }
+        if (lowerOption.includes('next encounter') || lowerOption.includes('next_encounter')) {
+            setPendingPostEncounterChoice(false);
+            setPendingNextEncounterChoice(false);
+            pendingStartCombatRef.current = true;
+            emitAiEvent('next_encounter', `The party chose: ${option}`, { choice: option });
+            return;
+        }
+
+        // Generic: send as a choice_made event
+        setAiOptions(null);
+        emitAiEvent('choice_made', `The party chose: ${option}`, { choice: option });
     };
 
     useEffect(() => {
@@ -431,39 +470,61 @@ function Main() {
     }, [isAdmin, room, players, playerCharacters]);
 
     useEffect(() => {
-        const handleAiMessage = ({ eventType, response }) => {
+        const handleAiMessage = ({ eventType, response, location, attribute, startCombat, options }) => {
             setAiBusy(false);
             appendAiLog({ role: 'ai', text: response, eventType });
             setAiText(response || '');
 
-            const trimmedResponse = (response || '').trim();
-            const isSingleKeyword = /^[a-zA-Z0-9_-]+$/.test(trimmedResponse);
-            const isSceneEvent = eventType === 'scene' || eventType === 'scene_change' || eventType === 'location';
-
-            if (isSceneEvent || isSingleKeyword) {
-                setSceneFromKeyword(trimmedResponse);
+            // Update location from structured response
+            if (location) {
+                setSceneFromKeyword(location);
+            } else {
+                const trimmedResponse = (response || '').trim();
+                const isSingleKeyword = /^[a-zA-Z0-9_-]+$/.test(trimmedResponse);
+                const isSceneEvent = eventType === 'scene' || eventType === 'scene_change' || eventType === 'location';
+                if (isSceneEvent || isSingleKeyword) {
+                    setSceneFromKeyword(trimmedResponse);
+                }
             }
 
-            if (eventType === 'game_start') {
+            // Store attribute for decision-making
+            setAiAttribute(attribute || null);
+
+            // Display options from AI if provided
+            if (options && Array.isArray(options) && options.length > 0) {
+                setAiOptions(options);
+            } else {
+                setAiOptions(null);
+            }
+
+            // Handle start_combat flag from AI
+            if (startCombat && isAdmin) {
+                pendingStartCombatRef.current = false;
+                handleStoryComplete("medium");
+                return;
+            }
+
+            // Fallback event-type logic for cases where AI doesn't set structured fields
+            if (eventType === 'game_start' && !options) {
                 setPendingFactionChoice(true);
             }
 
-            if (eventType === 'choice_made') {
+            if (eventType === 'choice_made' && !startCombat) {
                 if (pendingStartCombatRef.current && isAdmin) {
                     pendingStartCombatRef.current = false;
                     handleStoryComplete("medium");
                 }
             }
 
-            if (eventType === 'encounter_end') {
+            if (eventType === 'encounter_end' && !options) {
                 setPendingPostEncounterChoice(true);
             }
 
-            if (eventType === 'shop_intro') {
+            if (eventType === 'shop_intro' && !options) {
                 setPendingNextEncounterChoice(true);
             }
 
-            if (eventType === 'next_encounter') {
+            if (eventType === 'next_encounter' && !startCombat) {
                 if (pendingStartCombatRef.current && isAdmin) {
                     pendingStartCombatRef.current = false;
                     handleStoryComplete();
@@ -476,11 +537,14 @@ function Main() {
             appendAiLog({ role: 'system', text: `AI error: ${error}`, eventType: 'error' });
         };
 
+        const handleAiThinking = ({ thinking }) => {
+            setAiBusy(thinking);
+        };
+
         const handleCombatEnded = ({ result }) => {
             console.log('[COMBAT ENDED] Received with result:', result);
             
             if (result === 'all_dead') {
-                // Stop all combat - clear turn order to prevent further enemy turns
                 setTurnOrder([]);
                 setEnemies([]);
                 setGameOver(true);
@@ -488,18 +552,19 @@ function Main() {
                 return;
             }
             
-            // Victory scenario
             if (!isAdmin) return;
             emitAiEvent('encounter_end', 'The encounter has ended.', { room });
         };
 
         socket.on('ai_message', handleAiMessage);
         socket.on('ai_error', handleAiError);
+        socket.on('ai_thinking', handleAiThinking);
         socket.on('combat_ended', handleCombatEnded);
 
         return () => {
             socket.off('ai_message', handleAiMessage);
             socket.off('ai_error', handleAiError);
+            socket.off('ai_thinking', handleAiThinking);
             socket.off('combat_ended', handleCombatEnded);
         };
     }, [socket, isAdmin, room, playerName, players, playerCharacters]);
@@ -2287,7 +2352,7 @@ function Main() {
                         } ${isPlayerCharacter ? 'player-controlled' : ''} ${isEnemy ? (isCorpse ? 'enemy-corpse-cell' : 'enemy-cell') : ''} ${isHealingFieldCell ? 'healing-field-cell' : ''} ${isFireballZoneCell ? 'fireball-zone-cell' : ''} ${isBlackHoleZoneCell ? 'black-hole-zone-cell' : ''} ${isBlizzardFieldCell ? 'blizzard-field-cell' : ''} ${isToxicMistCell ? 'toxic-mist-cell' : ''} ${isBlueBarrierCell ? 'blue-barrier-cell' : ''} ${isGtgOriginCell ? 'gtg-origin-cell' : ''} ${isWhitePhospherusEnemy ? 'white-phospherus-glow' : ''} ${isGuardedBreathAlly ? 'guarded-breath-glow' : ''} ${isGtgTeleportedTarget ? 'gtg-target-glow' : ''}`}
                         onClick={() => handleGridClick(row, col)}
                     >
-                        <h3>{row} - {col}</h3>
+                        {/* <h3>{row} - {col}</h3> */}
                         {characterOnCell && (
                             <div className={`grid-character ${!isEnemy ? 'player-grid-character' : ''}`}>
                                 <div className='status'></div>
@@ -2353,8 +2418,8 @@ function Main() {
     const handleAbilityClick = (ability) => {
         console.log('[ABILITY CLICK] Ability clicked:', ability.name, 'ID:', ability.id);
         
-        if (!isMyTurn || actionUsed || !isPlayerAlive) {
-            console.log('[ABILITY CLICK] Blocked - isMyTurn:', isMyTurn, 'actionUsed:', actionUsed, 'isPlayerAlive:', isPlayerAlive);
+        if (!isMyTurn || actionUsed || !isPlayerAlive || aiBusy) {
+            console.log('[ABILITY CLICK] Blocked - isMyTurn:', isMyTurn, 'actionUsed:', actionUsed, 'isPlayerAlive:', isPlayerAlive, 'aiBusy:', aiBusy);
             return;
         }
         
@@ -3150,37 +3215,66 @@ function Main() {
             <div className='Response'>
             <div className="ai-header">
                 <span className={`ai-status ${aiBusy ? 'busy' : ''}`}>
-                    {aiBusy ? 'Thinking...' : 'Ready'}
+                    {aiBusy ? 'DM is thinking...' : 'Ready'}
                 </span>
+                {currentSceneKey && SCENE_LABELS[currentSceneKey] && (
+                    <span className="ai-scene-label">{SCENE_LABELS[currentSceneKey]}</span>
+                )}
             </div>
-            {pendingFactionChoice && (
+            {aiBusy && (
+                <div className="ai-thinking-overlay">
+                    <div className="ai-thinking-spinner"></div>
+                    <span>The DM is crafting the story...</span>
+                </div>
+            )}
+            {/* AI-driven dynamic options */}
+            {aiOptions && aiOptions.length > 0 && !aiBusy && (
+                <div className="ai-choices">
+                    {aiAttribute && (
+                        <div className="ai-choice-owner">
+                            Decision owner: {getDecisionOwner(aiAttribute) || 'Admin'}
+                        </div>
+                    )}
+                    {aiOptions.map((option, idx) => (
+                        <button
+                            key={idx}
+                            onClick={() => handleAiOptionClick(option)}
+                            disabled={aiBusy || (aiAttribute && !canPlayerDecide(aiAttribute))}
+                        >
+                            {option}
+                        </button>
+                    ))}
+                </div>
+            )}
+            {/* Legacy faction choice fallback */}
+            {pendingFactionChoice && !aiOptions && (
                 <div className="ai-choices">
                     <div className="ai-choice-owner">
                         Decision owner: {getDecisionOwner('politician') || 'Admin'}
                     </div>
-                    <button onClick={() => handleFactionChoice('the Enforcers')} disabled={!canPlayerDecide('politician')}>Fight with Enforcers</button>
-                    <button onClick={() => handleFactionChoice('the People of the City')} disabled={!canPlayerDecide('politician')}>Fight with the People of the City</button>
+                    <button onClick={() => handleFactionChoice('the Enforcers')} disabled={aiBusy || !canPlayerDecide('politician')}>Fight with Enforcers</button>
+                    <button onClick={() => handleFactionChoice('the People of the City')} disabled={aiBusy || !canPlayerDecide('politician')}>Fight with the People of the City</button>
                 </div>
             )}
-            {pendingPostEncounterChoice && (
+            {pendingPostEncounterChoice && !aiOptions && (
                 <div className="ai-choices">
                     <div className="ai-choice-owner">
                         Shop decision: {getDecisionOwner('banker') || 'Admin'} | Travel decision: {getDecisionOwner('navigator') || 'Admin'}
                     </div>
-                    <button onClick={() => handlePostEncounterChoice('shop')} disabled={!canPlayerDecide('banker')}>Go to Shop</button>
-                    <button onClick={() => handlePostEncounterChoice('next_encounter')} disabled={!canPlayerDecide('navigator')}>Next Encounter</button>
+                    <button onClick={() => handlePostEncounterChoice('shop')} disabled={aiBusy || !canPlayerDecide('banker')}>Go to Shop</button>
+                    <button onClick={() => handlePostEncounterChoice('next_encounter')} disabled={aiBusy || !canPlayerDecide('navigator')}>Next Encounter</button>
                 </div>
             )}
-            {pendingNextEncounterChoice && (
+            {pendingNextEncounterChoice && !aiOptions && (
                 <div className="ai-choices">
                     <div className="ai-choice-owner">
                         Travel decision: {getDecisionOwner('navigator') || 'Admin'}
                     </div>
-                    <button onClick={handleNextEncounter} disabled={!canPlayerDecide('navigator')}>Next Encounter</button>
+                    <button onClick={handleNextEncounter} disabled={aiBusy || !canPlayerDecide('navigator')}>Next Encounter</button>
                 </div>
             )}
         {/* <button style={{ width: '150px' }} onClick={handleLevelUp}>Level Up</button> */}
-        <button style={{ width: '150px' }} onClick={() => handleStoryComplete("medium")}>Combat</button>
+        <button style={{ width: '150px' }} onClick={() => handleStoryComplete("medium")} disabled={aiBusy}>Combat</button>
             </div>
             <span className="ai-text">
                 {displayText}

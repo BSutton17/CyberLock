@@ -89,10 +89,11 @@
 	padding: 1.782vmin;
 	backdrop-filter: blur(1.485vmin);
 	box-shadow: 0 0.99vmin 3.465vmin rgba(0, 0, 0, 0.38);
+	height: 16vmin;
 }
 
 .current-abilities-section{
-	height: 47vmin;
+	height: 49vmin;
 }
 
 .character-section h3,

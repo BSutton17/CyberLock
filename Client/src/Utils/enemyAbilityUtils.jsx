@@ -1,5 +1,14 @@
 import { ABILITIES } from '../GameComponents/Main/AbilityStore';
 
+const ENEMY_BANNED_ABILITY_IDS = new Set([
+    'charge',
+    'eagle_eye',
+    'gtg',
+    'iron_sharpens_iron',
+    'zen',
+    ''
+]);
+
 /**
  * Get all abilities filtered by level and role
  * @param {number} level - The ability level to filter by
@@ -9,6 +18,9 @@ import { ABILITIES } from '../GameComponents/Main/AbilityStore';
 export function getAbilitiesByLevelAndRole(level, roles) {
     const allAbilities = Object.values(ABILITIES);
     return allAbilities.filter(ability => {
+        if (ENEMY_BANNED_ABILITY_IDS.has(ability.id)) {
+            return false;
+        }
         const matchesLevel = ability.level === level;
         const matchesRole = roles.includes(ability.role);
         return matchesLevel && matchesRole;

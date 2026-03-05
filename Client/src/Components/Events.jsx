@@ -114,6 +114,14 @@ function Events(){
           console.log('Received enemies:', enemies);
           console.log('Received enemy positions:', enemyPositions);
           console.log('Received character selections:', characterSelections);
+          console.group('[COMBAT DEBUG] AFTER phase_changed_combat');
+          console.log('room:', room);
+          console.log('enemyIds:', (enemies || []).map(enemy => enemy.id));
+          console.log('playerPositions keys:', Object.keys(playerPositions || {}));
+          console.log('enemyPositions keys:', Object.keys(enemyPositions || {}));
+          console.log('turnOrder length:', (turnOrder || []).length);
+          console.log('currentTurn:', currentTurn);
+          console.groupEnd();
 
           setGamePhase('combat');
           

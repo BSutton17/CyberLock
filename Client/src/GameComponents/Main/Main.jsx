@@ -1063,11 +1063,16 @@ function Main() {
 
                 if (Object.keys(restoredPlayerPositions).length > 0) {
                     setCharacterPositions(prev => ({ ...prev, ...restoredPlayerPositions }));
-                    return;
                 }
+
+                return;
             } catch (error) {
                 console.error('[POSITION RESTORE] Failed to parse stored player positions:', error);
             }
+        }
+
+        if ((enemies || []).length > 0) {
+            return;
         }
 
         const getPlayerSpawnRow = (playerId) => {
@@ -1138,7 +1143,7 @@ function Main() {
         if (Object.keys(newPositions).length > 0) {
             setCharacterPositions(prev => ({ ...prev, ...newPositions }));
         }
-    }, [players, room, characterPositions, playerCharacters]);
+    }, [players, room, characterPositions, playerCharacters, enemies]);
 
     useEffect(() => {
         if (enemies && enemies.length > 0) {
@@ -1147,36 +1152,27 @@ function Main() {
             
             if (storedPositions) {
                 // Use server-provided positions
-                const serverPositions = JSON.parse(storedPositions);
-                const enemyPositions = {};
-                
-                enemies.forEach((enemy) => {
-                    // Only set position if enemy doesn't already have one
-                    if (!characterPositions[enemy.id] && serverPositions[enemy.id]) {
-                        enemyPositions[enemy.id] = serverPositions[enemy.id];
+                try {
+                    const serverPositions = JSON.parse(storedPositions);
+                    const enemyPositions = {};
+
+                    enemies.forEach((enemy) => {
+                        if (serverPositions[enemy.id]) {
+                            enemyPositions[enemy.id] = serverPositions[enemy.id];
+                        }
+                    });
+
+                    if (Object.keys(enemyPositions).length > 0) {
+                        setCharacterPositions(prev => ({ ...prev, ...enemyPositions }));
                     }
-                });
-                
-                if (Object.keys(enemyPositions).length > 0) {
-                    setCharacterPositions(prev => ({ ...prev, ...enemyPositions }));
+                } catch (error) {
+                    console.error('[POSITION RESTORE] Failed to parse stored enemy positions:', error);
                 }
             } else {
-                // Fallback to client-side generation (shouldn't happen in multiplayer)
-                const generatedPositions = generateEnemyFallbackPositions(enemies);
-                const enemyPositions = {};
-
-                enemies.forEach((enemy) => {
-                    if (!characterPositions[enemy.id] && generatedPositions[enemy.id]) {
-                        enemyPositions[enemy.id] = generatedPositions[enemy.id];
-                    }
-                });
-
-                if (Object.keys(enemyPositions).length > 0) {
-                    setCharacterPositions(prev => ({ ...prev, ...enemyPositions }));
-                }
+                return;
             }
         }
-    }, [enemies]);
+    }, [enemies, room]);
 
     useEffect(() => {
         setCharacterPositions(prev => {
@@ -3369,7 +3365,7 @@ function Main() {
                 </div>
             )}
         {/* <button style={{ width: '150px' }} onClick={handleLevelUp}>Level Up</button> */}
-        {/* <button style={{ width: '150px' }} onClick={() => handleStoryComplete()}>Combat</button> */}
+        <button style={{ width: '150px' }} onClick={() => handleStoryComplete()}>Combat</button>
             </div>
             <span className="ai-text">
                 {displayText}

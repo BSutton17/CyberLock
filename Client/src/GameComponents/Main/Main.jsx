@@ -10,6 +10,87 @@ import { FaRegSnowflake, FaSkullCrossbones, FaFireAlt, FaShieldAlt } from 'react
 import { assignEnemyAbilities } from '../../Utils/enemyAbilityUtils';
 import './Main.css';
 
+const SCENE_BACKGROUNDS = {
+    city_square: '/Background-City Square.png',
+    warehouse: '/Background-Warehouse.png',
+    club: '/Background-Club.png',
+    hospital: '/Background-Hospital.png',
+    office: '/Background-office.png',
+    sewer: '/Background-sewer.png',
+    shop: '/Background-shop.png',
+    boss: '/Background-boss.png',
+    street: './Cyberpunk City Street.png'
+};
+
+const SCENE_LABELS = {
+    city_square: 'City Square',
+    warehouse: 'Warehouse',
+    club: 'Club',
+    hospital: 'Hospital',
+    office: 'Office',
+    sewer: 'Sewer',
+    shop: 'Shop',
+    boss: 'Boss Arena',
+    street: 'Street'
+};
+
+const SCENE_ALIASES = {
+    city: 'city_square',
+    citysquare: 'city_square',
+    city_square: 'city_square',
+    square: 'city_square',
+    warehouse: 'warehouse',
+    club: 'club',
+    hospital: 'hospital',
+    office: 'office',
+    sewer: 'sewer',
+    shop: 'shop',
+    boss: 'boss'
+};
+
+const SEWER_SLOW_TILE_KEYS = new Set([
+    '3,0', '3,1', '3,2', '3,3', '3,4', '3,5', '3,6', '3,7', '3,8', '3,9',
+    '1,4', '1,5', '2,4', '2,5', '4,4', '5,4', '5,5'
+]);
+
+const SEWER_SPAWN_BLOCKED_TILE_KEYS = new Set([
+    ...SEWER_SLOW_TILE_KEYS,
+    '0,4', '0,5', '6,4', '6,5'
+]);
+
+const toTileKey = (row, col) => `${row},${col}`;
+const isSewerScene = (sceneKey) => sceneKey === 'sewer';
+
+const isSewerSlowTile = (sceneKey, position) => {
+    if (!isSewerScene(sceneKey) || !position) return false;
+    return SEWER_SLOW_TILE_KEYS.has(toTileKey(position.row, position.col));
+};
+
+const isSewerSpawnBlockedTile = (sceneKey, row, col) => {
+    if (!isSewerScene(sceneKey)) return false;
+    return SEWER_SPAWN_BLOCKED_TILE_KEYS.has(toTileKey(row, col));
+};
+
+const getSewerAdjustedSpeed = (sceneKey, speedValue, position) => {
+    const normalizedSpeed = Number.isFinite(speedValue) ? speedValue : 0;
+    if (isSewerSlowTile(sceneKey, position)) {
+        return Math.floor(normalizedSpeed / 2);
+    }
+    return normalizedSpeed;
+};
+
+const normalizeSceneToken = (value = '') =>
+    value
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+
+const resolveSceneKey = (rawKeyword = '') => {
+    const normalizedKeyword = normalizeSceneToken(rawKeyword);
+    return SCENE_ALIASES[normalizedKeyword] || null;
+};
+
 function Main() {
     const { players, playerCharacters, setPlayerCharacters, playerName, room, socket,getAbilityScaler, attributeAllocations, setGamePhase, isMyTurn, currentTurn, enemies, setEnemies, turnOrder, setTurnOrder, isAdmin, setScreen, getCharacterImage } = useGameContext();
     const [currentPlayerCharacter, setCurrentPlayerCharacter] = useState(null);
@@ -37,6 +118,7 @@ function Main() {
     const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0);
     const [displayText, setDisplayText] = useState('');
     const [typingIndex, setTypingIndex] = useState(0);
+    const [currentSceneKey, setCurrentSceneKey] = useState('city');
     const aiLogRef = useRef(null);
     const hasRequestedIntroRef = useRef(false);
     const pendingStartCombatRef = useRef(false);
@@ -151,7 +233,9 @@ function Main() {
         if (!playerCharacter) return 0;
 
         const totalSpeed = calculateTotalStat(playerCharacter, playerName, 'speed', activeEffectsRef.current || []);
-        const maxMovement = Math.floor(totalSpeed / 10);
+        const currentPosition = characterPositions[playerName];
+        const effectiveSpeed = getSewerAdjustedSpeed(currentSceneKey, totalSpeed, currentPosition);
+        const maxMovement = Math.floor(effectiveSpeed / 10);
         return Math.max(0, maxMovement - (movementUsedRef.current || 0));
     };
 
@@ -167,6 +251,11 @@ function Main() {
             eventType: entry.eventType || 'chat'
         };
         setAiLog(prev => [...prev, logEntry]);
+    };
+
+    const setSceneFromKeyword = (keyword) => {
+        const resolvedScene = resolveSceneKey(keyword);
+        setCurrentSceneKey(resolvedScene || 'city_square');
     };
 
     const emitAiEvent = (eventType, message, data = {}, options = {}) => {
@@ -346,6 +435,14 @@ function Main() {
             setAiBusy(false);
             appendAiLog({ role: 'ai', text: response, eventType });
             setAiText(response || '');
+
+            const trimmedResponse = (response || '').trim();
+            const isSingleKeyword = /^[a-zA-Z0-9_-]+$/.test(trimmedResponse);
+            const isSceneEvent = eventType === 'scene' || eventType === 'scene_change' || eventType === 'location';
+
+            if (isSceneEvent || isSingleKeyword) {
+                setSceneFromKeyword(trimmedResponse);
+            }
 
             if (eventType === 'game_start') {
                 setPendingFactionChoice(true);
@@ -595,36 +692,23 @@ function Main() {
 
     const generateSpreadColumns = (count, totalCols = 10) => {
         if (count <= 0) return [];
-        if (count === 1) return [Math.floor(totalCols / 2)];
+        const preferredMiddle = [4, 5, 6].filter(col => col >= 0 && col < totalCols);
+        const center = (totalCols - 1) / 2;
 
-        const baseColumns = Array.from({ length: count }, (_, index) =>
-            Math.round((index * (totalCols - 1)) / (count - 1))
-        );
+        const remainingColumns = Array.from({ length: totalCols }, (_, col) => col)
+            .filter(col => !preferredMiddle.includes(col))
+            .sort((firstCol, secondCol) => {
+                const firstDistance = Math.abs(firstCol - center);
+                const secondDistance = Math.abs(secondCol - center);
 
-        const used = new Set();
-        return baseColumns.map((baseCol) => {
-            if (!used.has(baseCol)) {
-                used.add(baseCol);
-                return baseCol;
-            }
-
-            for (let offset = 1; offset < totalCols; offset++) {
-                const left = baseCol - offset;
-                const right = baseCol + offset;
-
-                if (left >= 0 && !used.has(left)) {
-                    used.add(left);
-                    return left;
+                if (firstDistance !== secondDistance) {
+                    return firstDistance - secondDistance;
                 }
 
-                if (right < totalCols && !used.has(right)) {
-                    used.add(right);
-                    return right;
-                }
-            }
+                return firstCol - secondCol;
+            });
 
-            return baseCol;
-        });
+        return [...preferredMiddle, ...remainingColumns].slice(0, count);
     };
 
     const generateEnemyFallbackPositions = (enemyList = []) => {
@@ -638,7 +722,10 @@ function Main() {
 
         const findOpenCell = (preferredRow, preferredCol) => {
             const withinBounds = (row, col) => row >= 0 && row < 7 && col >= 0 && col < 10;
-            const isOpen = (row, col) => !usedCells.has(`${row},${col}`);
+            const isOpen = (row, col) => {
+                if (isSewerSpawnBlockedTile(currentSceneKey, row, col)) return false;
+                return !usedCells.has(`${row},${col}`);
+            };
 
             if (withinBounds(preferredRow, preferredCol) && isOpen(preferredRow, preferredCol)) {
                 return { row: preferredRow, col: preferredCol };
@@ -809,7 +896,7 @@ function Main() {
         return genericEnemies;
     };
 
-    // Initialize character positions at bottom of grid
+    // Initialize player positions with role-based rows
     useEffect(() => {
         const storedPlayerPositions = sessionStorage.getItem(`playerPositions_${room}`);
         if (storedPlayerPositions) {
@@ -835,17 +922,72 @@ function Main() {
             }
         }
 
+        const getPlayerSpawnRow = (playerId) => {
+            const role = (playerCharacters[playerId]?.role || '').toLowerCase();
+
+            if (role === 'tank') {
+                return 5;
+            }
+
+            return 6;
+        };
+
+        const usedPlayerCells = new Set(
+            Object.entries(characterPositions)
+                .filter(([id]) => players.includes(id))
+                .map(([, pos]) => `${pos.row},${pos.col}`)
+        );
+
+        const findPlayerSpawnCell = (preferredRow, preferredCol) => {
+            const candidateRows = [preferredRow, preferredRow === 5 ? 6 : 5];
+            const maxOffset = 10;
+
+            for (let offset = 0; offset < maxOffset; offset++) {
+                const candidateCols = offset === 0
+                    ? [preferredCol]
+                    : [preferredCol - offset, preferredCol + offset];
+
+                for (const row of candidateRows) {
+                    for (const col of candidateCols) {
+                        if (col < 0 || col >= 10) continue;
+                        if (isSewerSpawnBlockedTile(currentSceneKey, row, col)) continue;
+
+                        const key = `${row},${col}`;
+                        if (!usedPlayerCells.has(key)) {
+                            usedPlayerCells.add(key);
+                            return { row, col };
+                        }
+                    }
+                }
+            }
+
+            for (const row of candidateRows) {
+                for (let col = 0; col < 10; col++) {
+                    if (isSewerSpawnBlockedTile(currentSceneKey, row, col)) continue;
+
+                    const key = `${row},${col}`;
+                    if (!usedPlayerCells.has(key)) {
+                        usedPlayerCells.add(key);
+                        return { row, col };
+                    }
+                }
+            }
+
+            return { row: preferredRow, col: preferredCol };
+        };
+
         const newPositions = {};
-        const bottomRow = 6; 
         players.forEach((player, index) => {
             if (!characterPositions[player]) {
-                newPositions[player] = { row: bottomRow, col: index + 3 };
+                const preferredRow = getPlayerSpawnRow(player);
+                const preferredCol = index + 3;
+                newPositions[player] = findPlayerSpawnCell(preferredRow, preferredCol);
             }
         });
         if (Object.keys(newPositions).length > 0) {
             setCharacterPositions(prev => ({ ...prev, ...newPositions }));
         }
-    }, [players, room, characterPositions]);
+    }, [players, room, characterPositions, playerCharacters]);
 
     useEffect(() => {
         if (enemies && enemies.length > 0) {
@@ -1023,7 +1165,8 @@ function Main() {
                 latestEnemies,
                 latestPlayerCharacters,
                 characterPositions,
-                latestActiveEffects
+                latestActiveEffects,
+                currentSceneKey
             );
             let abilityUsedSuccessfully = false;
 
@@ -1037,6 +1180,12 @@ function Main() {
                     ...character,
                     id
                 }));
+                const enemyAllyCharacters = latestEnemies
+                    .filter(aliveEnemy => !isEnemyDeadBody(aliveEnemy))
+                    .reduce((accumulator, aliveEnemy) => {
+                        accumulator[aliveEnemy.id] = aliveEnemy;
+                        return accumulator;
+                    }, {});
                 const enemyAbilityDef = getAbility(turnAction.abilityToUse.id);
                 const enemyTargetPosition = turnAction.target ? characterPositions[turnAction.target] : null;
 
@@ -1045,7 +1194,7 @@ function Main() {
                     playerName: enemy.id,
                     target: turnAction.target,
                     enemies: enemyAbilityTargets,
-                    playerCharacters: latestPlayerCharacters,
+                    playerCharacters: enemyAllyCharacters,
                     characterPositions,
                     cooldowns: enemy.cooldowns
                 };
@@ -1932,11 +2081,13 @@ function Main() {
 
         // Calculate max movement based on speed (including buffs from activeEffects)
         const totalSpeed = calculateTotalStat(currentPlayerCharacter, playerName, 'speed', activeEffects);
-        const maxMovement = Math.floor(totalSpeed / 10);
+        const effectiveSpeed = getSewerAdjustedSpeed(currentSceneKey, totalSpeed, currentPos);
+        const maxMovement = Math.floor(effectiveSpeed / 10);
         
         console.log('[MOVEMENT CALC]', {
             baseSpeed: currentPlayerCharacter.stats.speed,
             totalSpeed,
+            effectiveSpeed,
             maxMovement
         });
         
@@ -2136,6 +2287,7 @@ function Main() {
                         } ${isPlayerCharacter ? 'player-controlled' : ''} ${isEnemy ? (isCorpse ? 'enemy-corpse-cell' : 'enemy-cell') : ''} ${isHealingFieldCell ? 'healing-field-cell' : ''} ${isFireballZoneCell ? 'fireball-zone-cell' : ''} ${isBlackHoleZoneCell ? 'black-hole-zone-cell' : ''} ${isBlizzardFieldCell ? 'blizzard-field-cell' : ''} ${isToxicMistCell ? 'toxic-mist-cell' : ''} ${isBlueBarrierCell ? 'blue-barrier-cell' : ''} ${isGtgOriginCell ? 'gtg-origin-cell' : ''} ${isWhitePhospherusEnemy ? 'white-phospherus-glow' : ''} ${isGuardedBreathAlly ? 'guarded-breath-glow' : ''} ${isGtgTeleportedTarget ? 'gtg-target-glow' : ''}`}
                         onClick={() => handleGridClick(row, col)}
                     >
+                        <h3>{row} - {col}</h3>
                         {characterOnCell && (
                             <div className={`grid-character ${!isEnemy ? 'player-grid-character' : ''}`}>
                                 <div className='status'></div>
@@ -2191,7 +2343,7 @@ function Main() {
         const generatedEnemies = generateEnemies(normalizedSpawnType);
         setEnemies(normalizeEnemiesState(generatedEnemies));
         setGamePhase('combat');
-        socket.emit('start_combat', { room, generatedEnemies, spawnType: normalizedSpawnType });
+        socket.emit('start_combat', { room, generatedEnemies, spawnType: normalizedSpawnType, sceneKey: currentSceneKey });
     }
 
     function handleCombatComplete(rewards) {
@@ -2919,7 +3071,7 @@ function Main() {
         )}
         
         <div className="scene-name">
-            <h2>Location</h2>
+            <h2>{SCENE_LABELS[currentSceneKey] || SCENE_LABELS.city_square}</h2>
             <h2>
                 {isMyTurn ? (
                     <div className="turn">
@@ -2984,7 +3136,10 @@ function Main() {
         </div>
 
         <div className="main-game">
-            <div className="game-area">
+            <div
+                className="game-area"
+                style={{ backgroundImage: `url('${SCENE_BACKGROUNDS[currentSceneKey] || SCENE_BACKGROUNDS.city_square}')` }}
+            >
                 <div className="battle-grid">
                     {renderGrid()}
                 </div>
@@ -3072,6 +3227,10 @@ function Main() {
                             <div className="stats-grid">
                                 {(() => {
                                     const statBonuses = getStatBonuses(playerName, activeEffects);
+                                    const currentPosition = characterPositions[playerName];
+                                    const sewerSpeedPenalty = isSewerSlowTile(currentSceneKey, currentPosition)
+                                        ? Math.floor((currentPlayerCharacter?.stats?.speed || 0) / 2)
+                                        : 0;
                                     return (
                                         <>
                                             <div className="stat-item">
@@ -3093,6 +3252,9 @@ function Main() {
                                                         <span className={statBonuses.speed > 0 ? 'stat-buff' : 'stat-debuff'}>
                                                             {statBonuses.speed > 0 ? ' +' : ' '}{statBonuses.speed}
                                                         </span>
+                                                    )}
+                                                    {sewerSpeedPenalty > 0 && (
+                                                        <span className="stat-debuff"> -{sewerSpeedPenalty}</span>
                                                     )}
                                                 </span>
                                             </div>

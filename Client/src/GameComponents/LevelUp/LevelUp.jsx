@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useGameContext } from '../../Components/Context';
 import './LevelUp.css';
 
-const TOTAL_POINTS = 10;
+const TOTAL_POINTS = 15;
 const STATS = [
     { id: 'maxHealth', label: 'Max Health' },
     { id: 'speed', label: 'Speed' },

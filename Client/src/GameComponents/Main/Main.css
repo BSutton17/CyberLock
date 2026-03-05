@@ -162,7 +162,13 @@ h3, h4, p {
     justify-content: center;
     align-items: center;
     padding: 0.5rem;
+    border-radius: 18px;
     box-sizing: border-box;
+    background-image: url('/Background-City Square.png');
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+    image-rendering: pixelated;
 }
 
 .battle-grid {
@@ -171,12 +177,11 @@ h3, h4, p {
     grid-template-rows: repeat(7, 1fr);
     width: 73%;
     aspect-ratio: 11 / 5;
-    background: transparent;
 }
 
 .grid-cell {
     background: transparent;
-    border: 1px solid rgba(74, 106, 138, 0.2);
+    border: 1px solid rgba(138, 155, 173, 0.2);
     cursor: pointer;
     display: flex;
     justify-content: center;

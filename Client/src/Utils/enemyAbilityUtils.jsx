@@ -3,7 +3,10 @@ import { ABILITIES } from '../GameComponents/Main/AbilityStore';
 const ENEMY_BANNED_ABILITY_IDS = new Set([
     'charge',
     'eagle_eye',
-    'gtg'
+    'gtg',
+    'iron_sharpens_iron',
+    'zen',
+    ''
 ]);
 
 /**

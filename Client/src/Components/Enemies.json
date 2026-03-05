@@ -88,9 +88,9 @@
       "id": "division_command",
       "name": "Division Command",
       "tier": "mid-tier",
-      "role": "Support",
+      "role": "DPS",
       "level": 1,
-      "behavior": "support",
+      "behavior": "defensive",
       "stats": {
         "health": 70,
         "maxHealth": 70,
@@ -213,7 +213,7 @@
     {
       "id": "division_chief",
       "name": "Division Chief",
-      "tier": "boss",
+      "tier": "mini-boss",
       "role": "Tank",
       "level": 1,
       "behavior": "intelligent",
@@ -234,7 +234,7 @@
     {
       "id": "rebellion_chief",
       "name": "Rebellion Chief",
-      "tier": "boss",
+      "tier": "mini-boss",
       "role": "Tank",
       "level": 1,
       "behavior": "intelligent",

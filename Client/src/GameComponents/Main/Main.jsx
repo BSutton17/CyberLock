@@ -126,6 +126,37 @@ function Main() {
     const pendingStartCombatRef = useRef(false);
     const cooldownStorageKey = room && playerName ? `cooldowns_${room}_${playerName}` : null;
 
+    useEffect(() => {
+        if (!room || !playerName) return;
+
+        const currentPlayerPositionsKey = `playerPositions_${room}`;
+        const currentEnemyPositionsKey = `enemyPositions_${room}`;
+        const currentCooldownKey = `cooldowns_${room}_${playerName}`;
+
+        const removedKeys = [];
+
+        for (let index = sessionStorage.length - 1; index >= 0; index--) {
+            const key = sessionStorage.key(index);
+            if (!key) continue;
+
+            const isStalePlayerPositions = key.startsWith('playerPositions_') && key !== currentPlayerPositionsKey;
+            const isStaleEnemyPositions = key.startsWith('enemyPositions_') && key !== currentEnemyPositionsKey;
+            const isStaleCooldownForPlayer =
+                key.startsWith('cooldowns_') &&
+                key.endsWith(`_${playerName}`) &&
+                key !== currentCooldownKey;
+
+            if (isStalePlayerPositions || isStaleEnemyPositions || isStaleCooldownForPlayer) {
+                removedKeys.push(key);
+                sessionStorage.removeItem(key);
+            }
+        }
+
+        if (removedKeys.length > 0) {
+            console.log('[SESSION CLEANUP] Removed stale room keys:', removedKeys);
+        }
+    }, [room, playerName]);
+
     //state for AI story flow
     const [pendingChoice, setPendingChoice] = useState(null);
     const [choiceOptions, setChoiceOptions] = useState([]);
@@ -3394,7 +3425,7 @@ function Main() {
                 </div>
             )}
         {/* <button style={{ width: '150px' }} onClick={handleLevelUp}>Level Up</button> */}
-        {/* <button style={{ width: '150px' }} onClick={() => handleStoryComplete()}>Combat</button> */}
+        <button style={{ width: '150px' }} onClick={() => handleStoryComplete()}>Combat</button>
             </div>
             <span className="ai-text">
                 {displayText}

@@ -7,10 +7,23 @@ function Events(){
 
     const { socket, setPlayers, setDisplayGame, 
       setAdmin, setScreen, setPlayerCharacters, 
-      setReadyPlayers, setGamePhase, setStoryText, 
+      setReadyPlayers, setGamePhase, setStoryText, characterPositions,
       setCombatRewards, room, setEnemies, 
       setTurnOrder, setCurrentTurn, 
-      setIsMyTurn, playerName, setAttributeAllocations, playerCharacters } = useGameContext();
+      setIsMyTurn, playerName, setAttributeAllocations, playerCharacters, debugLogLevel } = useGameContext();
+
+    const isQuiet = debugLogLevel === 'quiet';
+    const isVerbose = debugLogLevel === 'verbose';
+
+    const logImportant = (...args) => {
+      if (isQuiet) return;
+      console.log(...args);
+    };
+
+    const logVerbose = (...args) => {
+      if (!isVerbose) return;
+      console.log(...args);
+    };
 
     const resolveAbilities = (incomingCharacter, previousCharacter) => {
       const incomingAbilities = incomingCharacter?.abilities;
@@ -110,18 +123,18 @@ function Events(){
 
         // Game phase transitions
         socket.on("phase_changed_combat", ({ enemies, enemyPositions, playerPositions, turnOrder, currentTurn, characterSelections }) => {
-          console.log('Combat Phase Started - Turn Order:', turnOrder);
-          console.log('Received enemies:', enemies);
-          console.log('Received enemy positions:', enemyPositions);
-          console.log('Received character selections:', characterSelections);
-          console.group('[COMBAT DEBUG] AFTER phase_changed_combat');
-          console.log('room:', room);
-          console.log('enemyIds:', (enemies || []).map(enemy => enemy.id));
-          console.log('playerPositions keys:', Object.keys(playerPositions || {}));
-          console.log('enemyPositions keys:', Object.keys(enemyPositions || {}));
-          console.log('turnOrder length:', (turnOrder || []).length);
-          console.log('currentTurn:', currentTurn);
-          console.groupEnd();
+          logImportant('[COMBAT] phase_changed_combat', {
+            room,
+            turnOrderLength: (turnOrder || []).length,
+            currentTurn,
+            enemyCount: (enemies || []).length,
+            playerPositionCount: Object.keys(playerPositions || {}).length,
+            enemyPositionCount: Object.keys(enemyPositions || {}).length
+          });
+          logVerbose('[COMBAT][VERBOSE] turnOrder:', turnOrder);
+          logVerbose('[COMBAT][VERBOSE] enemies:', enemies);
+          logVerbose('[COMBAT][VERBOSE] enemyPositions:', enemyPositions);
+          logVerbose('[COMBAT][VERBOSE] playerPositions:', playerPositions);
 
           setGamePhase('combat');
           
@@ -157,15 +170,15 @@ function Events(){
         });
 
         socket.on("turn_changed", ({ currentTurn }) => {
-          console.log('TURN CHANGED EVENT RECEIVED');
-          console.log('Current Turn:', currentTurn);
-          console.log('Turn Type:', currentTurn.type);
-          console.log('Turn ID:', currentTurn.id);
-          console.log('[TURN DEBUG] playerName in Events:', playerName);
-          console.log('[TURN DEBUG] Comparison:', currentTurn.id === playerName, 'type check:', currentTurn.type === 'ally');
-          console.log('[TURN DEBUG] Setting isMyTurn to:', currentTurn.id === playerName && currentTurn.type === 'ally');
+          const nextIsMyTurn = currentTurn.id === playerName && currentTurn.type === 'ally';
+          logImportant('[TURN] changed', {
+            id: currentTurn.id,
+            type: currentTurn.type,
+            isMyTurn: nextIsMyTurn
+          });
+          logVerbose('[TURN][VERBOSE] playerName:', playerName);
           setCurrentTurn(currentTurn);
-          setIsMyTurn(currentTurn.id === playerName && currentTurn.type === 'ally');
+          setIsMyTurn(nextIsMyTurn);
         });
 
         socket.on("turn_order_updated", ({ turnOrder, currentTurnIndex }) => {

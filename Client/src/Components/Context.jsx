@@ -4,6 +4,15 @@ import { FaFistRaised } from "react-icons/fa";
 import io from 'socket.io-client';
 
 const GameContext = createContext();
+const DEBUG_LOG_LEVEL = 'quiet';
+
+const normalizeDebugLogLevel = (value) => {
+  const normalized = (value || '').toLowerCase();
+  if (normalized === 'quiet' || normalized === 'verbose' || normalized === 'important') {
+    return normalized;
+  }
+  return 'important';
+};
 
 export const useGameContext = () => {
   return useContext(GameContext);
@@ -11,6 +20,7 @@ export const useGameContext = () => {
 
 export const GameProvider = ({ children }) => {
   const SOCKET_BASE_URL =  import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    const debugLogLevel = normalizeDebugLogLevel(DEBUG_LOG_LEVEL);
     const [players, setPlayers] = useState([]);
     const [isAdmin, setAdmin] = useState(false);
     const [room, setRoom] = useState("");
@@ -94,6 +104,7 @@ export const GameProvider = ({ children }) => {
         isMyTurn, setIsMyTurn,
         enemies, setEnemies,
         attributeAllocations, setAttributeAllocations,
+        debugLogLevel,
         characterImageMap,
         enemyImageMap,
         getCharacterImage,

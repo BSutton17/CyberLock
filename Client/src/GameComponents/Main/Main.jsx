@@ -92,7 +92,7 @@ const resolveSceneKey = (rawKeyword = '') => {
 };
 
 function Main() {
-    const { players, playerCharacters, setPlayerCharacters, playerName, room, socket,getAbilityScaler, attributeAllocations, setGamePhase, isMyTurn, currentTurn, enemies, setEnemies, turnOrder, setTurnOrder, isAdmin, setScreen, getCharacterImage, getEnemyImage } = useGameContext();
+    const { players, playerCharacters, setPlayerCharacters, playerName, room, socket,getAbilityScaler, attributeAllocations, setGamePhase, isMyTurn, currentTurn, enemies, setEnemies, turnOrder, setTurnOrder, isAdmin, setScreen, getCharacterImage, getEnemyImage, debugLogLevel } = useGameContext();
     const [currentPlayerCharacter, setCurrentPlayerCharacter] = useState(null);
     const [ultimateReady, setUltimateReady] = useState(false);
     const [characterPositions, setCharacterPositions] = useState({});
@@ -124,7 +124,22 @@ function Main() {
     const aiLogRef = useRef(null);
     const hasRequestedIntroRef = useRef(false);
     const pendingStartCombatRef = useRef(false);
+    const selectedFactionRef = useRef(selectedFaction);
+    const pendingAiRequestResolversRef = useRef(new Map());
+    const completedAiRequestIdsRef = useRef(new Set());
     const cooldownStorageKey = room && playerName ? `cooldowns_${room}_${playerName}` : null;
+    const isQuietLogs = debugLogLevel === 'quiet';
+    const isVerboseLogs = debugLogLevel === 'verbose';
+
+    const logImportant = (...args) => {
+        if (isQuietLogs) return;
+        console.log(...args);
+    };
+
+    const logVerbose = (...args) => {
+        if (!isVerboseLogs) return;
+        console.log(...args);
+    };
 
     useEffect(() => {
         if (!room || !playerName) return;
@@ -153,7 +168,7 @@ function Main() {
         }
 
         if (removedKeys.length > 0) {
-            console.log('[SESSION CLEANUP] Removed stale room keys:', removedKeys);
+            logVerbose('[SESSION CLEANUP] Removed stale room keys:', removedKeys);
         }
     }, [room, playerName]);
 
@@ -276,6 +291,10 @@ function Main() {
     }, [currentTurn?.type, currentTurn?.id]);
 
     useEffect(() => {
+        selectedFactionRef.current = selectedFaction;
+    }, [selectedFaction]);
+
+    useEffect(() => {
         return () => {
             playerCorpseRemovalTurnRef.current = {};
         };
@@ -343,6 +362,82 @@ function Main() {
         return actionUsedRef.current === true && getMovementRemainingForAutoEnd() <= 0;
     };
 
+    const calculateCounterReflection = (damageEvents = [], enemyList = [], effects = []) => {
+        if (!Array.isArray(damageEvents) || damageEvents.length === 0) {
+            return { totalDamage: 0, reflectedBy: [] };
+        }
+
+        let totalDamage = 0;
+        const reflectedBy = [];
+
+        damageEvents.forEach(({ target, amount }) => {
+            const targetEnemy = (enemyList || []).find(enemy => enemy.id === target && !isEnemyDeadBody(enemy));
+            if (!targetEnemy) return;
+
+            if (!hasDamageReflection(effects, targetEnemy.id)) return;
+
+            const reflectedDamage = applyDamageKeywords(Math.max(0, amount || 0), effects, targetEnemy.id, { minimumDamage: 1 });
+            if (reflectedDamage <= 0) return;
+
+            totalDamage += reflectedDamage;
+            reflectedBy.push(targetEnemy.name || targetEnemy.id);
+        });
+
+        return { totalDamage, reflectedBy: [...new Set(reflectedBy)] };
+    };
+
+    const applyReflectionDamageToPlayer = (baseCharacters, reflectedDamage, reflectedByNames = []) => {
+        if (!Number.isFinite(reflectedDamage) || reflectedDamage <= 0) {
+            return { updatedCharacters: baseCharacters, didDie: false, newHealth: null };
+        }
+
+        const attacker = baseCharacters?.[playerName];
+        if (!attacker) {
+            return { updatedCharacters: baseCharacters, didDie: false, newHealth: null };
+        }
+
+        const oldHealth = attacker.stats?.health || 0;
+        const newHealth = Math.max(0, oldHealth - reflectedDamage);
+
+        const updatedCharacters = {
+            ...baseCharacters,
+            [playerName]: {
+                ...attacker,
+                stats: {
+                    ...attacker.stats,
+                    health: newHealth
+                }
+            }
+        };
+
+        const didDie = oldHealth > 0 && newHealth <= 0;
+
+        socket.emit('player_damaged', {
+            room,
+            playerName,
+            damage: reflectedDamage,
+            newHealth,
+            reflected: true,
+            reflectedBy: reflectedByNames
+        });
+
+        if (didDie) {
+            setTurnOrder(prevOrder => prevOrder.filter(turn => turn.id !== playerName));
+
+            const survivingPlayers = players.filter(p => (updatedCharacters[p]?.stats?.health || 0) > 0);
+            if (survivingPlayers.length === 0) {
+                setGameOver(true);
+            } else {
+                setShowYouDiedScreen(true);
+                setTimeout(() => {
+                    setShowYouDiedScreen(false);
+                }, 2500);
+            }
+        }
+
+        return { updatedCharacters, didDie, newHealth };
+    };
+
     const appendAiLog = (entry) => {
         const logEntry = {
             id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -359,11 +454,13 @@ function Main() {
     };
 
     const emitAiEvent = (eventType, message, data = {}, options = {}) => {
-        if (!room) return;
+        if (!room) return null;
+        const requestId = options.requestId || `${eventType}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         setAiBusy(true);
         setAiOptions(null);
         setAiAttribute(null);
         socket.emit('ai_request', {
+            requestId,
             room,
             eventType,
             message,
@@ -371,6 +468,43 @@ function Main() {
             scenarioType: options.scenarioType,
             characterName: currentPlayerCharacter?.name,
             playerName
+        });
+
+        return requestId;
+    };
+
+    const markAiRequestCompleted = (requestId) => {
+        if (!requestId) return;
+
+        const resolver = pendingAiRequestResolversRef.current.get(requestId);
+        if (resolver) {
+            pendingAiRequestResolversRef.current.delete(requestId);
+            resolver();
+            return;
+        }
+
+        completedAiRequestIdsRef.current.add(requestId);
+    };
+
+    const waitForAiRequestCompletion = (requestId, timeoutMs = 10000) => {
+        if (!requestId) return Promise.resolve();
+
+        if (completedAiRequestIdsRef.current.has(requestId)) {
+            completedAiRequestIdsRef.current.delete(requestId);
+            return Promise.resolve();
+        }
+
+        return new Promise((resolve) => {
+            const timeoutId = setTimeout(() => {
+                pendingAiRequestResolversRef.current.delete(requestId);
+                resolve();
+            }, timeoutMs);
+
+            pendingAiRequestResolversRef.current.set(requestId, () => {
+                clearTimeout(timeoutId);
+                completedAiRequestIdsRef.current.delete(requestId);
+                resolve();
+            });
         });
     };
     
@@ -380,6 +514,7 @@ function Main() {
 
         const normalizedChoice = choice?.toLowerCase().includes('enforcer') ? 'enforcers' : 'rebels';
         setSelectedFaction(normalizedChoice);
+        selectedFactionRef.current = normalizedChoice;
         socket.emit('faction_selected', { room, faction: normalizedChoice });
 
         setPendingFactionChoice(false);
@@ -392,6 +527,12 @@ function Main() {
         const handleFactionSelected = (faction) => {
             if (faction === 'enforcers' || faction === 'rebels') {
                 setSelectedFaction(faction);
+                selectedFactionRef.current = faction;
+
+                if (pendingStartCombatRef.current && isAdmin) {
+                    pendingStartCombatRef.current = false;
+                    handleStoryComplete();
+                }
             }
         };
 
@@ -399,7 +540,7 @@ function Main() {
         return () => {
             socket.off('faction_selected', handleFactionSelected);
         };
-    }, [socket]);
+    }, [socket, isAdmin]);
 
     const handlePostEncounterChoice = (choice) => {
         const requiredAttribute = choice === 'shop' ? 'banker' : 'navigator';
@@ -457,7 +598,7 @@ function Main() {
     useEffect(() => {
         if (playerCharacters[playerName]) {
             const nextCharacter = playerCharacters[playerName];
-            console.log('[ABILITY DEBUG] Hydrating current player character:', {
+            logVerbose('[ABILITY DEBUG] Hydrating current player character:', {
                 playerName,
                 hasCharacter: !!nextCharacter,
                 abilitiesType: Array.isArray(nextCharacter?.abilities) ? 'array' : typeof nextCharacter?.abilities,
@@ -569,7 +710,8 @@ function Main() {
     }, [isAdmin, room, players, playerCharacters]);
 
     useEffect(() => {
-        const handleAiMessage = ({ eventType, response, location, attribute, startCombat, options }) => {
+        const handleAiMessage = ({ requestId, eventType, response, location, attribute, startCombat, options }) => {
+            markAiRequestCompleted(requestId);
             setAiBusy(false);
             appendAiLog({ role: 'ai', text: response, eventType });
             setAiText(response || '');
@@ -599,7 +741,7 @@ function Main() {
             // Handle start_combat flag from AI
             if (startCombat && isAdmin) {
                 pendingStartCombatRef.current = false;
-                handleStoryComplete("medium");
+                handleStoryComplete();
                 return;
             }
 
@@ -610,8 +752,12 @@ function Main() {
 
             if (eventType === 'choice_made' && !startCombat) {
                 if (pendingStartCombatRef.current && isAdmin) {
-                    pendingStartCombatRef.current = false;
-                    handleStoryComplete("low");
+                    if (selectedFactionRef.current) {
+                        pendingStartCombatRef.current = false;
+                        handleStoryComplete();
+                    } else {
+                        logImportant('[FACTION] Waiting for faction_selected before starting combat');
+                    }
                 }
             }
 
@@ -631,7 +777,8 @@ function Main() {
             }
         };
 
-        const handleAiError = ({ error }) => {
+        const handleAiError = ({ requestId, error }) => {
+            markAiRequestCompleted(requestId);
             setAiBusy(false);
             appendAiLog({ role: 'system', text: `AI error: ${error}`, eventType: 'error' });
         };
@@ -676,6 +823,13 @@ function Main() {
             socket.off('combat_ended', handleCombatEnded);
         };
     }, [socket, isAdmin, room, playerName, players, playerCharacters]);
+
+    useEffect(() => {
+        return () => {
+            pendingAiRequestResolversRef.current.clear();
+            completedAiRequestIdsRef.current.clear();
+        };
+    }, []);
 
     // Reset movement tracking when turn starts
     useEffect(() => {
@@ -1017,20 +1171,18 @@ function Main() {
             return null;
         };
 
+        const activeSelectedFaction = selectedFactionRef.current || selectedFaction;
         const opposingFaction =
-            selectedFaction === 'enforcers'
+            activeSelectedFaction === 'enforcers'
                 ? 'rebels'
-                : selectedFaction === 'rebels'
+                : activeSelectedFaction === 'rebels'
                     ? 'enforcers'
                     : null;
 
         let tierEnemies = EnemiesData.enemies.filter(enemy => enemy.tier === tier);
 
         if (opposingFaction) {
-            const factionTierEnemies = tierEnemies.filter(enemy => getEnemyFaction(enemy) === opposingFaction);
-            if (factionTierEnemies.length > 0) {
-                tierEnemies = factionTierEnemies;
-            }
+            tierEnemies = tierEnemies.filter(enemy => getEnemyFaction(enemy) === opposingFaction);
         }
 
         if (tierEnemies.length === 0) return [];
@@ -1316,34 +1468,39 @@ function Main() {
             const latestPlayerCharacters = playerCharactersRef.current;
             const latestActiveEffects = activeEffectsRef.current;
 
+            const queueEnemyNarration = (message, data = {}) => {
+                emitAiEvent('turn_action', message, data);
+            };
+
             // Check if game is over - don't execute enemy turns
             if (gameOverRef.current) {
-                console.log('[ENEMY TURN] Game is over, skipping enemy turn');
+                logImportant('[ENEMY TURN] Game is over, skipping enemy turn');
                 return;
             }
-            
-            console.log('EXECUTE_ENEMY_TURN EVENT RECEIVED');
-            console.log('Enemy ID:', enemyId);
-            console.log('Player Name:', playerName);
-            console.log('Allies list:', allies);
+
+            logImportant('[ENEMY TURN] execute request', {
+                enemyId,
+                handler: playerName,
+                alliesCount: allies?.length || 0,
+                alliedEnemiesCount: alliedEnemies?.length || 0
+            });
+            logVerbose('[ENEMY TURN][VERBOSE] allies list:', allies);
+            logVerbose('[ENEMY TURN][VERBOSE] alliedEnemies list:', alliedEnemies);
             
             // Only the first player in the allies list handles enemy turns
             if (allies[0] !== playerName) {
-                console.log('[ENEMY TURN] Not the designated handler, skipping');
+                logVerbose('[ENEMY TURN] Not the designated handler, skipping');
                 return;
             }
-            
-            console.log('[ENEMY TURN] This player will handle the enemy turn');
-            console.log('Allied Enemies:', alliedEnemies);
             
             const enemy = latestEnemies.find(e => e.id === enemyId && !isEnemyDeadBody(e));
             if (!enemy) {
                 console.error('Enemy not found:', enemyId);
-                console.log('Available enemies:', latestEnemies.map(e => e.id));
+                logVerbose('[ENEMY TURN] Available enemies:', latestEnemies.map(e => e.id));
                 return;
             }
 
-            console.log(`\nExecuting AI turn for: ${enemy.name}`);
+            logImportant('[ENEMY TURN] Executing AI turn for enemy:', enemy.name);
 
             const turnAction = executeEnemyTurn(
                 enemy,
@@ -1357,7 +1514,7 @@ function Main() {
             );
             let abilityUsedSuccessfully = false;
 
-            console.log('Turn Action:', turnAction);
+            logVerbose('[ENEMY TURN] Turn Action:', turnAction);
 
             // Handle enemy ability usage - execute the ability if one is selected
             if (turnAction.abilityToUse && !turnAction.immobilized) {
@@ -1469,8 +1626,7 @@ function Main() {
                         effects: abilityResult.effects
                     });
                     
-                    emitAiEvent(
-                        'turn_action',
+                    queueEnemyNarration(
                         abilityResult.message || `${enemy.name} uses ${turnAction.abilityToUse.name}!`,
                         {
                             actor: enemy.name,
@@ -1493,6 +1649,13 @@ function Main() {
                 const path = findShortestWalkablePath(startPos, endPos, characterPositions, enemyId) || calculatePath(startPos, endPos);
                 const stepDelay = 10000 / enemy.stats.speed;
                 movementDelay = path.length * stepDelay;
+
+                if (!turnAction.target) {
+                    queueEnemyNarration(
+                        `${enemy.name} advances across the grid, scanning for a target.`,
+                        { actor: enemy.name, actionType: 'enemy_move', to: endPos }
+                    );
+                }
                 
                 // Emit the path for animation
                 socket.emit('enemy_moved', {
@@ -1501,20 +1664,40 @@ function Main() {
                     path: path,
                     stepDelay: stepDelay
                 });
-
-                if (!turnAction.target) {
-                    setTimeout(() => {
-                        emitAiEvent(
-                            'turn_action',
-                            `${enemy.name} advances across the grid, scanning for a target.`,
-                            { actor: enemy.name, actionType: 'enemy_move', to: endPos }
-                        );
-                    }, movementDelay);
-                }
             }
 
             // Apply damage after movement delay
             if (turnAction.target && !turnAction.abilityToUse) {
+                const target = playerCharacters[turnAction.target];
+
+                if (target) {
+                    const hasReflection = hasDamageReflection(activeEffects, turnAction.target);
+                    let damageAmount = Math.max(1, (enemy.stats.strength / 10) * enemy.weapon.damage - (target.stats.resistance / 10));
+                    damageAmount = applyDamageKeywords(damageAmount, activeEffects, turnAction.target, { minimumDamage: 0 });
+
+                    if (hasReflection && damageAmount > 0) {
+                        queueEnemyNarration(
+                            `${enemy.name} attacks ${turnAction.target}, but the damage is reflected back! ${enemy.name} takes ${damageAmount.toFixed(1)} damage.`,
+                            {
+                                actor: enemy.name,
+                                target: turnAction.target,
+                                damage: Number(damageAmount.toFixed(1)),
+                                actionType: 'enemy_attack_reflected'
+                            }
+                        );
+                    } else {
+                        queueEnemyNarration(
+                            `${enemy.name} closes in and attacks ${turnAction.target} for ${damageAmount.toFixed(1)} damage.`,
+                            {
+                                actor: enemy.name,
+                                target: turnAction.target,
+                                damage: Number(damageAmount.toFixed(1)),
+                                actionType: 'enemy_attack'
+                            }
+                        );
+                    }
+                }
+
                 setTimeout(() => {
                     const target = playerCharacters[turnAction.target];
                 if (target) {
@@ -1530,17 +1713,6 @@ function Main() {
                     // Handle damage reflection
                     if (hasReflection && damageAmount > 0) {
                         console.log(`[DAMAGE REFLECTION] ${turnAction.target} reflects ${damageAmount.toFixed(1)} damage back to ${enemy.name}!`);
-                        
-                        emitAiEvent(
-                            'turn_action',
-                            `${enemy.name} attacks ${turnAction.target}, but the damage is reflected back! ${enemy.name} takes ${damageAmount.toFixed(1)} damage.`,
-                            {
-                                actor: enemy.name,
-                                target: turnAction.target,
-                                damage: Number(damageAmount.toFixed(1)),
-                                actionType: 'enemy_attack_reflected'
-                            }
-                        );
 
                         // Apply reflected damage to the attacking enemy
                         const enemyIndex = enemies.findIndex(e => e.id === enemy.id);
@@ -1562,17 +1734,6 @@ function Main() {
                         }
                     } else {
                         // Normal damage application to player
-                        emitAiEvent(
-                            'turn_action',
-                            `${enemy.name} closes in and attacks ${turnAction.target} for ${damageAmount.toFixed(1)} damage.`,
-                            {
-                                actor: enemy.name,
-                                target: turnAction.target,
-                                damage: Number(damageAmount.toFixed(1)),
-                                actionType: 'enemy_attack'
-                            }
-                        );
-                        
                         // Check for health buffs (bonus health) - consume them first
                         const healthBuffs = activeEffects.filter(e => 
                             e.target === turnAction.target && 
@@ -1674,7 +1835,7 @@ function Main() {
             const totalDelay = movementDelay + (turnAction.target ? 500 : 0) + 1000;
             const turnCycleAtSchedule = currentTurnCycleRef.current;
             const completionKey = `${enemyId}:${turnCycleAtSchedule}`;
-            setTimeout(() => {
+            setTimeout(async () => {
                 const liveTurn = currentTurnRef.current;
                 if (!liveTurn || liveTurn.type !== 'enemy' || liveTurn.id !== enemyId) {
                     console.log('[ENEMY TURN] Skipping stale completion callback:', {
@@ -1737,7 +1898,7 @@ function Main() {
         };
 
         const handleEnemiesUpdated = ({ enemies: updatedEnemies }) => {
-            console.log('Enemies updated:', updatedEnemies);
+            logVerbose('[SYNC] Enemies updated:', updatedEnemies);
             if (updatedEnemies && Array.isArray(updatedEnemies)) {
                 setEnemies(normalizeEnemiesState(updatedEnemies));
             } else {
@@ -1746,7 +1907,7 @@ function Main() {
         };
 
         const handleCharactersUpdated = (updatedCharacters) => {
-            console.log('[CHARACTERS UPDATED] Received from server:', updatedCharacters);
+            logVerbose('[SYNC] Characters updated from server:', updatedCharacters);
             if (!updatedCharacters) return;
             setPlayerCharacters(prevChars => {
                 const normalizedUpdates = Object.fromEntries(
@@ -1773,7 +1934,7 @@ function Main() {
                                 : (Array.isArray(incomingAbilities) ? incomingAbilities : previousAbilities),
                             ultimate: hasValidIncomingUltimate ? incomingUltimate : prevCharacter?.ultimate
                         };
-                        console.log('[ABILITY DEBUG] Merged character result:', {
+                        logVerbose('[ABILITY DEBUG] Merged character result:', {
                             player: name,
                             mergedAbilitiesType: Array.isArray(mergedCharacter?.abilities) ? 'array' : typeof mergedCharacter?.abilities,
                             mergedAbilitiesLength: Array.isArray(mergedCharacter?.abilities) ? mergedCharacter.abilities.length : null,
@@ -1796,7 +1957,7 @@ function Main() {
         };
 
         const handleActiveEffectsUpdated = (updatedEffects) => {
-            console.log('[ACTIVE EFFECTS UPDATED] Received from server:', updatedEffects);
+            logVerbose('[SYNC] Active effects updated from server:', updatedEffects);
             setActiveEffects(updatedEffects);
         };
 
@@ -1850,16 +2011,20 @@ function Main() {
                 sessionStorage.setItem(`enemyPositions_${room}`, JSON.stringify(parsedEnemyPositions));
             }
             
-            // After movement animation completes, check blizzard field effects
+            // After movement animation completes, apply hazard field effects
             setTimeout(() => {
-                const { updatedEffects, updatedEnemies } = updateBlizzardFieldEffects(
-                    activeEffects,
-                    enemies,
-                    characterPositions
+                const latestPositions = {
+                    ...characterPositions,
+                    ...(finalPosition ? { [enemyId]: finalPosition } : {})
+                };
+
+                const { updatedEffects, updatedEnemies, hasChanges } = updateBlizzardFieldEffects(
+                    activeEffectsRef.current,
+                    enemiesRef.current,
+                    latestPositions
                 );
-                
-                if (updatedEffects.length !== activeEffects.length || 
-                    updatedEnemies.some((e, i) => e.stats.speed !== enemies[i]?.stats.speed)) {
+
+                if (hasChanges) {
                     setActiveEffects(updatedEffects);
                     setEnemies(normalizeEnemiesState(updatedEnemies));
                     socket.emit('active_effects_updated', { room, effects: updatedEffects });
@@ -2240,6 +2405,13 @@ function Main() {
                         e.id === enemyId ? { ...e, stats: { ...e.stats, health: Math.max(0, newHealth) } } : e
                     )
                 );
+
+                if (hasDamageReflection(activeEffects, enemyId) && damage > 0) {
+                    const reflectionResult = applyReflectionDamageToPlayer(playerCharacters, damage, [enemy.name]);
+                    if (reflectionResult.updatedCharacters !== playerCharacters) {
+                        setPlayerCharacters(reflectionResult.updatedCharacters);
+                    }
+                }
                 
                 setEnemies(updatedEnemies);
                 
@@ -2544,6 +2716,19 @@ function Main() {
     function handleStoryComplete(spawnType = 'low') {
         const normalizedSpawnType = ['low', 'medium', 'boss'].includes(spawnType) ? spawnType : 'low';
         const generatedEnemies = generateEnemies(normalizedSpawnType);
+        const proposedPlayerPositions = {};
+
+        players.forEach((playerId) => {
+            const isAlive = (playerCharacters[playerId]?.stats?.health || 0) > 0;
+            const position = characterPositions[playerId];
+
+            if (isAlive && position && Number.isInteger(position.row) && Number.isInteger(position.col)) {
+                proposedPlayerPositions[playerId] = {
+                    row: position.row,
+                    col: position.col
+                };
+            }
+        });
 
         console.group('[COMBAT DEBUG] BEFORE START_COMBAT emit');
         console.log('room:', room);
@@ -2551,6 +2736,7 @@ function Main() {
         console.log('spawnType:', normalizedSpawnType);
         console.log('players:', players);
         console.log('local characterPositions (pre-start):', characterPositions);
+        console.log('proposedPlayerPositions (pre-start):', proposedPlayerPositions);
         console.log('cached playerPositions (pre-start):', sessionStorage.getItem(`playerPositions_${room}`));
         console.log('cached enemyPositions (pre-start):', sessionStorage.getItem(`enemyPositions_${room}`));
         console.log('generatedEnemies ids:', generatedEnemies.map(enemy => enemy.id));
@@ -2559,7 +2745,13 @@ function Main() {
         sessionStorage.removeItem(`enemyPositions_${room}`);
         sessionStorage.removeItem(`playerPositions_${room}`);
         setGamePhase('combat');
-        socket.emit('start_combat', { room, generatedEnemies, spawnType: normalizedSpawnType, sceneKey: currentSceneKey });
+        socket.emit('start_combat', {
+            room,
+            generatedEnemies,
+            spawnType: normalizedSpawnType,
+            sceneKey: currentSceneKey,
+            playerPositions: proposedPlayerPositions
+        });
     }
 
     function handleCombatComplete(rewards) {
@@ -2796,6 +2988,17 @@ function Main() {
         }
 
         let postEffectEnemies = finalEnemies;
+        let postEffectPlayerCharacters = updates.playerCharacters;
+
+        const onTargetReflection = calculateCounterReflection(result.damage, enemies, activeEffects);
+        if (onTargetReflection.totalDamage > 0) {
+            const reflectionResult = applyReflectionDamageToPlayer(
+                postEffectPlayerCharacters,
+                onTargetReflection.totalDamage,
+                onTargetReflection.reflectedBy
+            );
+            postEffectPlayerCharacters = reflectionResult.updatedCharacters;
+        }
 
         if (result.forcedMovement && result.forcedMovement.length > 0) {
             result.forcedMovement.forEach(({ enemyId, path, to }) => {
@@ -2865,7 +3068,7 @@ function Main() {
         }
 
         setEnemies(postEffectEnemies);
-        setPlayerCharacters(updates.playerCharacters);
+        setPlayerCharacters(postEffectPlayerCharacters);
         setActiveEffects(updates.activeEffects);
         
         // Update cooldowns
@@ -2887,7 +3090,7 @@ function Main() {
             playerName,
             abilityId,
             result,
-            updatedPlayerCharacters: updates.playerCharacters,
+            updatedPlayerCharacters: postEffectPlayerCharacters,
             updatedEnemies: postEffectEnemies,
             updatedActiveEffects: updates.activeEffects
         });
@@ -2956,9 +3159,20 @@ function Main() {
             activeEffects,
             effectOwnerTurnId: playerName
         });
+
+        let reflectedMultiTargetCharacters = updates.playerCharacters;
+        const multiTargetReflection = calculateCounterReflection(result.damage, enemies, activeEffects);
+        if (multiTargetReflection.totalDamage > 0) {
+            const reflectionResult = applyReflectionDamageToPlayer(
+                reflectedMultiTargetCharacters,
+                multiTargetReflection.totalDamage,
+                multiTargetReflection.reflectedBy
+            );
+            reflectedMultiTargetCharacters = reflectionResult.updatedCharacters;
+        }
         
         setEnemies(normalizeEnemiesState(updates.enemies));
-        setPlayerCharacters(updates.playerCharacters);
+        setPlayerCharacters(reflectedMultiTargetCharacters);
         setActiveEffects(updates.activeEffects);
 
         if (result.forcedMovement && result.forcedMovement.length > 0) {
@@ -3000,7 +3214,7 @@ function Main() {
             playerName,
             abilityId,
             result,
-            updatedPlayerCharacters: updates.playerCharacters
+            updatedPlayerCharacters: reflectedMultiTargetCharacters
         });
         
         console.log('[ABILITY SYNC] Emitting updated playerCharacters to server (multi-target)');
@@ -3067,9 +3281,20 @@ function Main() {
             activeEffects,
             effectOwnerTurnId: playerName
         });
+
+        let reflectedGroundTargetCharacters = updates.playerCharacters;
+        const groundTargetReflection = calculateCounterReflection(result.damage, enemies, activeEffects);
+        if (groundTargetReflection.totalDamage > 0) {
+            const reflectionResult = applyReflectionDamageToPlayer(
+                reflectedGroundTargetCharacters,
+                groundTargetReflection.totalDamage,
+                groundTargetReflection.reflectedBy
+            );
+            reflectedGroundTargetCharacters = reflectionResult.updatedCharacters;
+        }
         
         setEnemies(normalizeEnemiesState(updates.enemies));
-        setPlayerCharacters(updates.playerCharacters);
+        setPlayerCharacters(reflectedGroundTargetCharacters);
         setActiveEffects(updates.activeEffects);
 
         if (result.forcedMovement && result.forcedMovement.length > 0) {
@@ -3115,7 +3340,7 @@ function Main() {
             playerName,
             abilityId,
             result,
-            updatedPlayerCharacters: updates.playerCharacters,
+            updatedPlayerCharacters: reflectedGroundTargetCharacters,
             updatedEnemies: updates.enemies,
             updatedActiveEffects: updates.activeEffects
         });
@@ -3366,7 +3591,7 @@ function Main() {
             <div className='Response'>
             <div className="ai-header">
                 <span className={`ai-status ${aiBusy ? 'busy' : ''}`}>
-                    {aiBusy ? 'DM is thinking...' : 'Ready'}
+                    {/* {aiBusy ? 'DM is thinking...' : 'Ready'} */}
                 </span>
                 {currentSceneKey && SCENE_LABELS[currentSceneKey] && (
                     <span className="ai-scene-label">{SCENE_LABELS[currentSceneKey]}</span>
@@ -3425,7 +3650,7 @@ function Main() {
                 </div>
             )}
         {/* <button style={{ width: '150px' }} onClick={handleLevelUp}>Level Up</button> */}
-        <button style={{ width: '150px' }} onClick={() => handleStoryComplete()}>Combat</button>
+        {/* <button style={{ width: '150px' }} onClick={() => handleStoryComplete()}>Combat</button> */}
             </div>
             <span className="ai-text">
                 {displayText}

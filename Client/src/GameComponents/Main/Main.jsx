@@ -1012,12 +1012,65 @@ function Main() {
                 return;
             }
 
+            const restoredPlayerCharacters = Object.fromEntries(
+                Object.entries(playerCharactersRef.current || {}).map(([id, character]) => {
+                    const maxHealth = Math.max(
+                        1,
+                        character?.stats?.maxHealth || character?.stats?.max_health || character?.stats?.health || 1
+                    );
+
+                    return [
+                        id,
+                        {
+                            ...character,
+                            stats: {
+                                ...character?.stats,
+                                health: maxHealth,
+                                maxHealth: maxHealth
+                            }
+                        }
+                    ];
+                })
+            );
+
+            setPlayerCharacters(prevChars => ({
+                ...prevChars,
+                ...restoredPlayerCharacters
+            }));
+
+            if (isAdmin && Object.keys(restoredPlayerCharacters).length > 0) {
+                socket.emit('ability_used', {
+                    room,
+                    playerName,
+                    updatedPlayerCharacters: restoredPlayerCharacters
+                });
+            }
+
+            setCooldowns(prevCooldowns => {
+                const resetCooldowns = {};
+
+                Object.keys(prevCooldowns || {}).forEach((abilityId) => {
+                    resetCooldowns[abilityId] = 0;
+                });
+
+                const myCharacter = playerCharactersRef.current?.[playerName];
+                const abilityIds = [
+                    ...(Array.isArray(myCharacter?.abilities) ? myCharacter.abilities.map(ability => ability?.id).filter(Boolean) : []),
+                    myCharacter?.ultimate?.id
+                ].filter(Boolean);
+
+                abilityIds.forEach((abilityId) => {
+                    resetCooldowns[abilityId] = 0;
+                });
+
+                return resetCooldowns;
+            });
+
             const preCombatPositions = preCombatPlayerPositionsRef.current || {};
             const restoredPlayerPositions = {};
             players.forEach((playerId) => {
-                const isAlive = (playerCharactersRef.current?.[playerId]?.stats?.health || 0) > 0;
                 const savedPosition = preCombatPositions[playerId];
-                if (isAlive && savedPosition && Number.isInteger(savedPosition.row) && Number.isInteger(savedPosition.col)) {
+                if (savedPosition && Number.isInteger(savedPosition.row) && Number.isInteger(savedPosition.col)) {
                     restoredPlayerPositions[playerId] = {
                         row: savedPosition.row,
                         col: savedPosition.col

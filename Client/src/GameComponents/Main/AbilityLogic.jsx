@@ -176,10 +176,14 @@ export function applyAbilityEffects(result, gameState) {
     if (result.effects) {
         console.log('[APPLY EFFECTS] Processing effects:', result.effects);
         result.effects.forEach(effect => {
+            const normalizedTurnsRemaining = Number.isFinite(effect.duration)
+                ? effect.duration
+                : (Number.isFinite(effect.turnsRemaining) ? effect.turnsRemaining : 1);
+
             //Add to active effects list for duration tracking
             const newEffect = {
                 ...effect,
-                turnsRemaining: effect.duration,
+                turnsRemaining: Math.max(1, normalizedTurnsRemaining),
                 appliedThisTurn: !effect.tickOnCastTurn, // Most effects skip first tick; some visuals should expire on caster end-turn
                 ownerTurnId: effect.ownerTurnId ?? effectOwnerTurnId ?? result.ownerTurnId ?? result.casterId ?? null
             };

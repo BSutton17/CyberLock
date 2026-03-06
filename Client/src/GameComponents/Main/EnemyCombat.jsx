@@ -129,6 +129,93 @@ function isInRangeOfAny(enemyPos, targetIds, characterPositions) {
     });
 }
 
+function hasAdjacentAlliedEnemy(enemy, alliedEnemies = [], battlefieldEnemies = [], characterPositions = {}) {
+    const enemyPos = characterPositions[enemy.id];
+    if (!enemyPos) return false;
+
+    return alliedEnemies.some(allyEnemyId => {
+        if (allyEnemyId === enemy.id) return false;
+
+        const allyEnemy = battlefieldEnemies.find(candidate =>
+            candidate.id === allyEnemyId &&
+            !candidate.isDeadBody &&
+            (candidate.stats?.health || 0) > 0
+        );
+
+        if (!allyEnemy) return false;
+
+        const allyPos = characterPositions[allyEnemyId];
+        if (!allyPos) return false;
+
+        const rowDiff = Math.abs(enemyPos.row - allyPos.row);
+        const colDiff = Math.abs(enemyPos.col - allyPos.col);
+        return rowDiff <= 1 && colDiff <= 1;
+    });
+}
+
+function canUseAbilityNow(ability, enemy, allies, alliedEnemies, battlefieldEnemies, playerCharacters, characterPositions) {
+    const abilityDef = ABILITIES[ability.id];
+    if (!abilityDef) return false;
+
+    const targetType = abilityDef.targetType;
+    const abilityRange = abilityDef.range || 1;
+    const enemyPos = characterPositions[enemy.id];
+
+    if (!enemyPos) return false;
+
+    if (targetType === 'self') {
+        return true;
+    }
+
+    if (ability.id === 'stonewall') {
+        return hasAdjacentAlliedEnemy(enemy, alliedEnemies, battlefieldEnemies, characterPositions);
+    }
+
+    if (targetType === 'all-allies') {
+        return (alliedEnemies || []).some(allyEnemyId => {
+            if (allyEnemyId === enemy.id) return false;
+
+            const allyEnemy = battlefieldEnemies.find(candidate =>
+                candidate.id === allyEnemyId &&
+                !candidate.isDeadBody &&
+                (candidate.stats?.health || 0) > 0
+            );
+
+            return !!allyEnemy;
+        });
+    }
+
+    if (targetType === 'all-enemies') {
+        return (allies || []).some(targetId => {
+            const target = playerCharacters[targetId];
+            const targetPos = characterPositions[targetId];
+            return !!target && (target.stats?.health || 0) > 0 && !!targetPos;
+        });
+    }
+
+    const targetsToCheck = targetType === 'ally'
+        ? (alliedEnemies || []).filter(allyEnemyId => allyEnemyId !== enemy.id)
+        : (allies || []);
+
+    return targetsToCheck.some(targetId => {
+        const target = targetType === 'ally'
+            ? battlefieldEnemies.find(candidate =>
+                candidate.id === targetId &&
+                !candidate.isDeadBody &&
+                (candidate.stats?.health || 0) > 0
+            )
+            : playerCharacters[targetId];
+
+        if (!target || (target.stats?.health || 0) <= 0) return false;
+
+        const targetPos = characterPositions[targetId];
+        if (!targetPos) return false;
+
+        const distance = getDistance(enemyPos, targetPos);
+        return distance <= abilityRange;
+    });
+}
+
 /**
  * Check if a cell is in a danger zone that this enemy should avoid
  * @param {Object} cell - { row, col } position to check
@@ -535,50 +622,27 @@ export function executeEnemyTurn(enemy, allies, alliedEnemies, battlefieldEnemie
                 console.log(`[ENEMY ABILITIES]   - ${ability.name} (level ${ability.level}): cooldown ${currentCooldown}`);
                 return false;
             }
-            
+
             const abilityDef = ABILITIES[ability.id];
             const abilityType = abilityDef?.type;
-            const targetType = abilityDef?.targetType;
-            const abilityRange = abilityDef?.range || 1;
-            const enemyPos = characterPositions[enemy.id];
+            const usableNow = canUseAbilityNow(
+                ability,
+                enemy,
+                allies,
+                alliedEnemies,
+                battlefieldEnemies,
+                playerCharacters,
+                characterPositions
+            );
 
             // Non-damage abilities should be used immediately when ready
             if (abilityType !== 'damage') {
-                console.log(`[ENEMY ABILITIES]   - ${ability.name} (level ${ability.level}): cooldown ${currentCooldown}, non-damage ready=true`);
-                return true;
+                console.log(`[ENEMY ABILITIES]   - ${ability.name} (level ${ability.level}): cooldown ${currentCooldown}, non-damage ready=${usableNow}`);
+                return usableNow;
             }
 
-            // Damage abilities that don't need a direct target are immediately usable
-            if (targetType === 'self' || targetType === 'all-enemies' || targetType === 'all-allies') {
-                console.log(`[ENEMY ABILITIES]   - ${ability.name} (level ${ability.level}): cooldown ${currentCooldown}, no direct target required`);
-                return true;
-            }
-            
-            // Check if any valid target is in ability range
-            const targetsToCheck = targetType === 'ally'
-                ? (alliedEnemies || []).filter(allyEnemyId => allyEnemyId !== enemy.id)
-                : allies;
-
-            const targetInRange = targetsToCheck.some(targetId => {
-                const target = targetType === 'ally'
-                    ? battlefieldEnemies.find(candidate =>
-                        candidate.id === targetId &&
-                        !candidate.isDeadBody &&
-                        (candidate.stats?.health || 0) > 0
-                    )
-                    : playerCharacters[targetId];
-
-                if (!target || (target.stats?.health || 0) <= 0) return false;
-
-                const targetPos = characterPositions[targetId];
-                if (!targetPos) return false;
-                
-                const distance = getDistance(enemyPos, targetPos);
-                return distance <= abilityRange;
-            });
-            
-            console.log(`[ENEMY ABILITIES]   - ${ability.name} (level ${ability.level}, range ${abilityRange}): cooldown ${currentCooldown}, targetInRange ${targetInRange}`);
-            return targetInRange;
+            console.log(`[ENEMY ABILITIES]   - ${ability.name} (level ${ability.level}): cooldown ${currentCooldown}, usableNow ${usableNow}`);
+            return usableNow;
         });
         
         // If there is a ready non-damage ability, use it immediately (highest level among them)

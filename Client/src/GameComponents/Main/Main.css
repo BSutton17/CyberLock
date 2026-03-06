@@ -181,7 +181,7 @@ h3, h4, p {
 
 .grid-cell {
     background: transparent;
-    border: 1px solid rgba(138, 155, 173, 0.2);
+    border: 1px solid rgba(95, 102, 110, 0.2);
     cursor: pointer;
     display: flex;
     justify-content: center;
@@ -209,7 +209,7 @@ h3, h4, p {
 
 
 .grid-cell.enemy-cell {
-    border-color: rgba(194, 15, 15, 0.5);
+    /* border-color: rgba(194, 15, 15, 0.5); */
 }
 
 .grid-cell.enemy-cell.white-phospherus-glow {
@@ -417,6 +417,53 @@ h3, h4, p {
 .ai-status.busy {
     background: rgba(202, 106, 106, 0.2);
     color: #f0b1b1;
+    animation: ai-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes ai-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.ai-scene-label {
+    font-size: 0.65rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    background: rgba(90, 122, 170, 0.15);
+    color: #8aa8c8;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.ai-thinking-overlay {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.6rem;
+    background: rgba(202, 106, 106, 0.1);
+    border: 1px solid rgba(202, 106, 106, 0.25);
+    border-radius: 0.5rem;
+    color: #f0b1b1;
+    font-size: 0.75rem;
+    animation: ai-pulse 1.5s ease-in-out infinite;
+}
+
+.ai-thinking-spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(240, 177, 177, 0.3);
+    border-top-color: #f0b1b1;
+    border-radius: 50%;
+    animation: ai-spin 0.8s linear infinite;
+}
+
+@keyframes ai-spin {
+    to { transform: rotate(360deg); }
+}
+
+.ai-choices button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
 }
 
 .ai-log {
@@ -622,6 +669,14 @@ h3, h4, p {
     object-fit: cover;
     object-position: center 2.5vmin;
     border-radius: 0.25rem;
+}
+
+.enemy-grid-image {
+    width: 100%;
+    height: 90%;
+    object-fit: cover;
+    object-position: center -1vmin;
+    image-rendering: pixelated;
 }
 
 .character-title {
@@ -1047,14 +1102,31 @@ h3, h4, p {
     text-align: center;
 }
 
+.enemies-defeated-content {
+    text-align: center;
+}
+
 .you-died-content h1 {
     font-size: 4vmin;
-    color: #ff4444;
+    color: #c2bf08;
     font-weight: bold;
     text-shadow: 0 0 20px rgba(255, 68, 68, 0.8);
     margin: 0;
     text-transform: uppercase;
     letter-spacing: 4px;
+}
+
+.enemies-defeated-content h1 {
+    font-size: 4vmin;
+    font-weight: bold;
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 4px;
+    background: linear-gradient(90deg, #4aa3ff 0%, #7b61ff 55%, #5b8dff 100%);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 0 20px rgba(91, 141, 255, 0.45), 0 0 24px rgba(123, 97, 255, 0.35);
 }
 
 .you-died-content p {

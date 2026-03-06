@@ -221,6 +221,26 @@ function removeDeadEnemiesFromTurnOrder(combat) {
   }
 }
 
+function emitEnemyDefeatVictoryIfNeeded(io, room, combat) {
+  if (!combat?.turnOrder) return false;
+  if (combat.endedResult) return true;
+
+  const allyTurnsRemaining = combat.turnOrder.filter(turn => turn.type === 'ally').length;
+  if (allyTurnsRemaining === 0) return false;
+
+  const aliveEnemyCount = (combat.enemies || []).filter(isEnemyAlive).length;
+  const enemyTurnsRemaining = combat.turnOrder.filter(turn => turn.type === 'enemy').length;
+
+  if (aliveEnemyCount > 0 && enemyTurnsRemaining > 0) {
+    return false;
+  }
+
+  combat.endedResult = 'enemies_defeated';
+  clearEnemyTurnWatchdog(room);
+  io.to(room).emit('combat_ended', { result: 'enemies_defeated' });
+  return true;
+}
+
 function getAlliedEnemyIds(combat, actingEnemyId) {
   return (combat.enemies || [])
     .filter(isEnemyAlive)
@@ -525,6 +545,33 @@ function generatePlayerSpawnPositions(players = [], characterSelections = {}, sc
   return positions;
 }
 
+function sanitizeProposedPlayerPositions(players = [], proposedPlayerPositions = {}, sceneKey = null) {
+  if (!proposedPlayerPositions || typeof proposedPlayerPositions !== 'object') return null;
+
+  const sanitized = {};
+  const usedCells = new Set();
+
+  for (const player of players) {
+    const position = proposedPlayerPositions[player];
+    if (!position) return null;
+
+    const row = Number(position.row);
+    const col = Number(position.col);
+
+    if (!Number.isInteger(row) || !Number.isInteger(col)) return null;
+    if (row < 0 || row > 6 || col < 0 || col > 9) return null;
+    if (isSewerSpawnBlockedTile(sceneKey, row, col)) return null;
+
+    const key = `${row},${col}`;
+    if (usedCells.has(key)) return null;
+
+    usedCells.add(key);
+    sanitized[player] = { row, col };
+  }
+
+  return Object.keys(sanitized).length === players.length ? sanitized : null;
+}
+
 function cloneDeep(value) {
   return JSON.parse(JSON.stringify(value));
 }
@@ -547,6 +594,40 @@ function updateEnemyPositionInCombat(room, enemyId, path = []) {
 
 function getEnemyPositionsSnapshot(room) {
   return combatSessions[room]?.enemyPositions || {};
+}
+
+function buildAiFallbackResponse(eventType, message, data) {
+  const safeMessage = typeof message === 'string' ? message.trim() : '';
+
+  if (eventType === 'turn_action') {
+    return safeMessage || 'A combat action resolves amid signal interference.';
+  }
+
+  if (eventType === 'game_start') {
+    return 'Static crackles across comms as the mission begins.';
+  }
+
+  if (eventType === 'choice_made') {
+    return safeMessage || 'The team locks in their decision and pushes forward.';
+  }
+
+  if (eventType === 'encounter_end') {
+    return 'The dust settles after the encounter.';
+  }
+
+  if (eventType === 'shop_intro') {
+    return 'The crew heads to regroup and resupply.';
+  }
+
+  if (eventType === 'next_encounter') {
+    return 'The party advances toward the next engagement.';
+  }
+
+  if (data && typeof data === 'object' && typeof data.actor === 'string' && data.actor.trim()) {
+    return `${data.actor.trim()} takes action.`;
+  }
+
+  return safeMessage || 'Comms interference disrupts narration, but the operation continues.';
 }
 
 async function requestAiNarration(payload) {
@@ -797,14 +878,14 @@ function finalizeDisconnectedPlayer(io, room, playerName) {
 }
 
 io.on('connection', (socket) => {
-  socket.on('ai_request', async ({ room, eventType, message, data, scenarioType, characterName, playerName }) => {
+  socket.on('ai_request', async ({ requestId, room, eventType, message, data, scenarioType, characterName, playerName }) => {
     if (!room || !eventType) return;
 
-    try {
-      const resolvedPlayer = playerName || playerNames[socket.id] || 'system';
+    const resolvedPlayer = playerName || playerNames[socket.id] || 'system';
 
+    try {
       // Broadcast AI thinking state to ALL players in the room
-      io.to(room).emit('ai_thinking', { thinking: true, from: resolvedPlayer, eventType });
+      io.to(room).emit('ai_thinking', { requestId: requestId || null, thinking: true, from: resolvedPlayer, eventType });
 
       const aiResponse = await requestAiNarration({
         session_id: room,
@@ -816,10 +897,19 @@ io.on('connection', (socket) => {
         use_memory: true
       });
 
+      console.log('[AI RAW RESPONSE]', {
+        requestId,
+        room,
+        eventType,
+        requestedBy: resolvedPlayer,
+        aiResponse
+      });
+
       // Broadcast AI done thinking to ALL players
-      io.to(room).emit('ai_thinking', { thinking: false });
+      io.to(room).emit('ai_thinking', { requestId: requestId || null, thinking: false });
 
       io.to(room).emit('ai_message', {
+        requestId: requestId || null,
         eventType,
         response: aiResponse.response,
         location: aiResponse.location || null,
@@ -830,8 +920,22 @@ io.on('connection', (socket) => {
       });
     } catch (error) {
       console.error('[AI] Request failed:', error.message);
-      io.to(room).emit('ai_thinking', { thinking: false });
-      socket.emit('ai_error', { error: error.message });
+      io.to(room).emit('ai_thinking', { requestId: requestId || null, thinking: false });
+
+      const fallbackResponse = buildAiFallbackResponse(eventType, message, data);
+      io.to(room).emit('ai_message', {
+        requestId: requestId || null,
+        eventType,
+        response: fallbackResponse,
+        location: null,
+        attribute: null,
+        startCombat: false,
+        options: null,
+        from: resolvedPlayer,
+        fallback: true
+      });
+
+      socket.emit('ai_error', { requestId: requestId || null, error: error.message });
     }
   });
 
@@ -988,7 +1092,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on("start_combat", ({ room, generatedEnemies, sceneKey }) => {
+  socket.on("start_combat", ({ room, generatedEnemies, sceneKey, playerPositions: proposedPlayerPositions }) => {
     if(!combatSessions[room]) {
       combatSessions[room] = {};
     }
@@ -997,11 +1101,30 @@ io.on('connection', (socket) => {
 
     // Generate enemy positions (server decides so all clients see same positions)
     const enemyPositions = generateEnemySpawnPositions(generatedEnemies, sceneKey);
-    const playerPositions = generatePlayerSpawnPositions(
-      rooms[room]?.players || [],
+    const roomPlayers = rooms[room]?.players || [];
+    const sanitizedPlayerPositions = sanitizeProposedPlayerPositions(roomPlayers, proposedPlayerPositions, sceneKey);
+    const playerPositions = sanitizedPlayerPositions || generatePlayerSpawnPositions(
+      roomPlayers,
       rooms[room]?.characterSelections || {},
       sceneKey
     );
+
+    console.log('[COMBAT START DEBUG] Server-authoritative spawn snapshot', {
+      room,
+      sceneKey,
+      playersOrder: rooms[room]?.players || [],
+      playerRoles: Object.fromEntries(
+        Object.entries(rooms[room]?.characterSelections || {}).map(([player, character]) => [
+          player,
+          character?.role || null
+        ])
+      ),
+      usingClientPlayerPositions: !!sanitizedPlayerPositions,
+      playerPositions,
+      enemyIds: (generatedEnemies || []).map(enemy => enemy.id),
+      enemyPositions
+    });
+
     combatSessions[room].enemyPositions = enemyPositions;
     combatSessions[room].playerPositions = playerPositions;
 
@@ -1028,10 +1151,10 @@ io.on('connection', (socket) => {
     if (firstTurn.type === 'enemy') {
       const combat = combatSessions[room];
       
-      // Small delay to ensure client has set up enemy positions
+      // Delay to allow combat-start narration before first turn actions
       setTimeout(() => {
         dispatchEnemyTurn(io, room, combat, firstTurn.id);
-      }, 500);
+      }, 7500);
     }
   });
 
@@ -1072,6 +1195,9 @@ io.on('connection', (socket) => {
     if (updatedEnemies && Array.isArray(updatedEnemies)) {
       combat.enemies = normalizeEnemiesForCombat(updatedEnemies, combat.enemies || []);
       removeDeadEnemiesFromTurnOrder(combat);
+      if (emitEnemyDefeatVictoryIfNeeded(io, room, combat)) {
+        return;
+      }
     }
 
     if (rooms[room] && updatedPlayerCharacters) {
@@ -1121,6 +1247,10 @@ io.on('connection', (socket) => {
     }
 
     const removedCorpses = tickEnemyCorpses(combat);
+
+    if (emitEnemyDefeatVictoryIfNeeded(io, room, combat)) {
+      return;
+    }
     
     if (combat.turnOrder.length === 0) {
       io.to(room).emit('combat_ended', { result: 'all_dead' });
@@ -1156,6 +1286,9 @@ io.on('connection', (socket) => {
       combat.enemies = normalizeEnemiesForCombat(updatedEnemies, combat.enemies || []);
       removeDeadEnemiesFromTurnOrder(combat);
       io.to(room).emit("enemies_updated", { enemies: combat.enemies });
+      if (emitEnemyDefeatVictoryIfNeeded(io, room, combat)) {
+        return;
+      }
     }
 
     if (rooms[room] && updatedPlayerCharacters) {
@@ -1190,6 +1323,10 @@ io.on('connection', (socket) => {
     }
 
     const removedCorpses = tickEnemyCorpses(combat);
+
+    if (emitEnemyDefeatVictoryIfNeeded(io, room, combat)) {
+      return;
+    }
     
     if (combat.turnOrder.length === 0) {
       io.to(room).emit('combat_ended', { result: 'all_dead' });
@@ -1261,6 +1398,10 @@ io.on('connection', (socket) => {
       }
 
       removeDeadEnemiesFromTurnOrder(combat);
+
+      if (emitEnemyDefeatVictoryIfNeeded(io, room, combat)) {
+        return;
+      }
       
       // If the dead enemy was the current turn, advance immediately
       if (wasCurrentTurn) {

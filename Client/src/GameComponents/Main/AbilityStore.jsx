@@ -178,7 +178,7 @@ export const ABILITIES = {
             if (roll >= successChance) {
                 return {
                     success: true,
-                    message: `${caster.name} uses Blackjack on ${ally.name}... but it fails! (${successChance.toFixed(0)}% chance)`
+                    message: `${caster.name} uses Blackjack on ${ally.name}... but it fails!`
                 };
             }
             
@@ -191,7 +191,7 @@ export const ABILITIES = {
                     target: target,
                     amount: healAmount
                 }],
-                message: `${caster.name} uses Blackjack on ${ally.name}! Restored ${healAmount} HP! (${successChance.toFixed(0)}% chance)`
+                message: `${caster.name} uses Blackjack on ${ally.name}! Restored ${healAmount} HP!`
             };
         }
     },
@@ -1380,43 +1380,10 @@ export const ABILITIES = {
             return result;
         }
     },
-    shield_up: {
-        id: 'shield_up',
-        name: 'Shield Up',
-        description: 'Set your Speed to 0, but negate all incoming damage for 1 turn',
-        role: "Tank",
-        level: 3,
-        cooldown: 2,
-        targetType: 'self',
-        type: 'buff',
-
-        execute: ({ caster, playerName }) => {
-            return {
-                success: true,
-                effects: [
-                    {
-                        type: 'stat_debuff',
-                        target: playerName,
-                        stat: 'speed',
-                        value: -(caster.stats.speed || 0),
-                        duration: 1,
-                        stackable: false
-                    },
-                    {
-                        type: 'damage_immunity',
-                        target: playerName,
-                        duration: 1,
-                        stackable: false
-                    }
-                ],
-                message: `${caster.name} uses Shield Up! Speed drops to 0, but all incoming damage is negated for 1 turn!`
-            };
-        }
-    },
     here_we_go_again: {
         id: 'here_we_go_again',
         name: 'Here We Go Again',
-        description: 'Reset all allies cooldowns except your own and Here We Go Again',
+        description: 'Reset all allies cooldowns',
         role: "Support",
         level: 5,
         cooldown: 5,
@@ -1456,7 +1423,7 @@ export const ABILITIES = {
             return {
                 success: true,
                 effects: effects,
-                message: `${caster.name} uses Here We Go Again! Cooldowns reset for ${allyNames.join(', ')} (excluding Here We Go Again).`
+                message: `${caster.name} uses Here We Go Again! Ability cooldowns reset for ${allyNames.join(', ')}.`
             };
         }
     },
@@ -2028,6 +1995,39 @@ export const ABILITIES = {
             };
         }
     },
+    shield_up: {
+        id: 'shield_up',
+        name: 'Shield Up',
+        description: 'Set your Speed to 0, but negate all incoming damage for 1 turn',
+        role: "Tank",
+        level: 3,
+        cooldown: 2,
+        targetType: 'self',
+        type: 'buff',
+
+        execute: ({ caster, playerName }) => {
+            return {
+                success: true,
+                effects: [
+                    {
+                        type: 'stat_debuff',
+                        target: playerName,
+                        stat: 'speed',
+                        value: -(caster.stats.speed || 0),
+                        duration: 1,
+                        stackable: false
+                    },
+                    {
+                        type: 'damage_immunity',
+                        target: playerName,
+                        duration: 1,
+                        stackable: false
+                    }
+                ],
+                message: `${caster.name} put up a shield, negating all damage but setting speed to 0 for 1 turn!`
+            };
+        }
+    },
     sword_slash: {
         id: 'sword_slash',
         name: 'Sword Slash',
@@ -2103,10 +2103,9 @@ export const ABILITIES = {
             
             // Calculate total damage (1.25x) and divide equally
             const baseDamage = Math.max(1, Math.round(
-                (caster.stats.strength / 10) * 20
+                (caster.stats.strength / 10) * 8 - (Math.max(...affectedEnemies.map(e => e.stats.resistance)) / 10)
             ));
-            const totalDamage = Math.floor(baseDamage * 1.25);
-            const damagePerEnemy = Math.floor(totalDamage / affectedEnemies.length);
+            const damagePerEnemy = Math.floor(baseDamage / affectedEnemies.length);
             
             const damageResults = affectedEnemies.map(enemy => ({
                 target: enemy.id,
@@ -2187,7 +2186,8 @@ export const ABILITIES = {
                 type: 'toxic_mist_field',
                 center: { row, col },
                 radius: 1,
-                duration: 2
+                duration: 2,
+                amount: totalDamage
             });
 
             enemies.forEach(enemy => {
@@ -2203,7 +2203,8 @@ export const ABILITIES = {
                         type: 'damage_over_time',
                         target: enemy.id,
                         amount: totalDamage,
-                        duration: 2
+                        duration: 2,
+                        source: 'toxic_mist_field'
                     });
                 }
             });

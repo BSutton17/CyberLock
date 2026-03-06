@@ -48,6 +48,8 @@ const SCENE_ALIASES = {
     boss: 'boss'
 };
 
+
+const TURN_START_ACTION_LOCK_MS = 500;
 const SEWER_SLOW_TILE_KEYS = new Set([
     '3,0', '3,1', '3,2', '3,3', '3,4', '3,5', '3,6', '3,7', '3,8', '3,9',
     '1,4', '1,5', '2,4', '2,5', '4,4', '5,4', '5,5'
@@ -91,6 +93,24 @@ const resolveSceneKey = (rawKeyword = '') => {
     return SCENE_ALIASES[normalizedKeyword] || null;
 };
 
+
+// number of generic enemies for low is always party size + 2 I just put 0 here as a placeholder
+const STORY_COMBAT_FLOW = [
+    { combatType: 'low', numOfGeneric: 0, numOfMid: 0, numOfMini: 0, Boss: false, postCombat: 'none' },
+    { combatType: 'low', numOfGeneric: 0, numOfMid: 0, numOfMini: 0, Boss: false, postCombat: 'levelUp' },
+    { combatType: 'medium', numOfGeneric: 2, numOfMid: 2, numOfMini: 0, Boss: false, postCombat: 'none' },
+    { combatType: 'boss', numOfGeneric: 2, numOfMid: 1, numOfMini: 0, Boss: true, postCombat: 'levelUp' },
+
+    { combatType: 'low', numOfGeneric: 0, numOfMid: 0, numOfMini: 0, Boss: false, postCombat: 'none' },
+    { combatType: 'medium', numOfGeneric: 3, numOfMid: 2, numOfMini: 0, Boss: false, postCombat: 'levelUp' },
+    { combatType: 'low', numOfGeneric: 0, numOfMid: 0, numOfMini: 0, Boss: false, postCombat: 'none' },
+    { combatType: 'boss', numOfGeneric: 2, numOfMid: 1, numOfMini: 0, Boss: true, postCombat: 'levelUp' },
+
+    { combatType: 'low', numOfGeneric: 0, numOfMid: 0, numOfMini: 0, Boss: false, postCombat: 'none' },
+    { combatType: 'mini-boss', numOfGeneric: 5, numOfMid: 0, numOfMini: 1, Boss: false, postCombat: 'none' },
+    { combatType: 'boss', numOfGeneric: 4, numOfMid: 1, numOfMini: 0, Boss: true, postCombat: 'none' }
+];
+
 function Main() {
     const { players, playerCharacters, setPlayerCharacters, playerName, room, socket,getAbilityScaler, attributeAllocations, setGamePhase, isMyTurn, currentTurn, enemies, setEnemies, turnOrder, setTurnOrder, isAdmin, setScreen, getCharacterImage, getEnemyImage, debugLogLevel } = useGameContext();
     const [currentPlayerCharacter, setCurrentPlayerCharacter] = useState(null);
@@ -107,6 +127,8 @@ function Main() {
     const [actionUsed, setActionUsed] = useState(false);
     const [extraWeaponAttacksRemaining, setExtraWeaponAttacksRemaining] = useState(0);
     const [turnTimeLeft, setTurnTimeLeft] = useState(null);
+    const [isTurnActionLocked, setIsTurnActionLocked] = useState(false);
+    const [turnStartLockRemainingMs, setTurnStartLockRemainingMs] = useState(0);
     const [aiLog, setAiLog] = useState([]);
     const [aiBusy, setAiBusy] = useState(false);
     const [pendingFactionChoice, setPendingFactionChoice] = useState(false);
@@ -125,8 +147,14 @@ function Main() {
     const hasRequestedIntroRef = useRef(false);
     const pendingStartCombatRef = useRef(false);
     const selectedFactionRef = useRef(selectedFaction);
+    const combatFlowIndexRef = useRef(0);
+    const lastCombatConfigRef = useRef(null);
     const pendingAiRequestResolversRef = useRef(new Map());
     const completedAiRequestIdsRef = useRef(new Set());
+    const pendingPostCombatActionRef = useRef(null);
+    const pendingPostCombatNarrationRequestIdRef = useRef(null);
+    const postCombatOverlayTimeoutRef = useRef(null);
+    const preCombatPlayerPositionsRef = useRef(null);
     const cooldownStorageKey = room && playerName ? `cooldowns_${room}_${playerName}` : null;
     const isQuietLogs = debugLogLevel === 'quiet';
     const isVerboseLogs = debugLogLevel === 'verbose';
@@ -177,6 +205,7 @@ function Main() {
     const [choiceOptions, setChoiceOptions] = useState([]);
     const [choiceAttribute, setChoiceAttribute] = useState(null);
     const [choiceStartCombat, setChoiceStartCombat] = useState(false);
+    const [combatFlowIndex, setCombatFlowIndex] = useState(0);
 
     const getDecisionOwner = (requiredAttribute) => {
         if (!requiredAttribute) return null;
@@ -195,12 +224,14 @@ function Main() {
         return owner === playerName;
     };
     const [showYouDiedScreen, setShowYouDiedScreen] = useState(false);
+    const [showEnemiesDefeatedScreen, setShowEnemiesDefeatedScreen] = useState(false);
     const [gameOver, setGameOver] = useState(false);
 
     // Refs to track latest state values for handleEndTurn
     const activeEffectsRef = useRef(activeEffects);
     const playerCharactersRef = useRef(playerCharacters);
     const enemiesRef = useRef(enemies);
+    const characterPositionsRef = useRef(characterPositions);
     const gameOverRef = useRef(gameOver);
     const movementUsedRef = useRef(movementUsed);
     const currentPlayerCharacterRef = useRef(currentPlayerCharacter);
@@ -210,6 +241,8 @@ function Main() {
     const completedEnemyTurnCyclesRef = useRef(new Set());
     const completedAllyTurnCyclesRef = useRef(new Set());
     const turnTimerIntervalRef = useRef(null);
+    const turnStartLockTimeoutRef = useRef(null);
+    const turnStartLockIntervalRef = useRef(null);
     const turnTimerAutoEndedRef = useRef(false);
     const playerCorpseRemovalTurnRef = useRef({});
 
@@ -261,6 +294,10 @@ function Main() {
     }, [enemies]);
 
     useEffect(() => {
+        characterPositionsRef.current = characterPositions;
+    }, [characterPositions]);
+
+    useEffect(() => {
         gameOverRef.current = gameOver;
     }, [gameOver]);
 
@@ -295,7 +332,30 @@ function Main() {
     }, [selectedFaction]);
 
     useEffect(() => {
+        combatFlowIndexRef.current = combatFlowIndex;
+    }, [combatFlowIndex]);
+
+    useEffect(() => {
+        combatFlowIndexRef.current = 0;
+        lastCombatConfigRef.current = null;
+        preCombatPlayerPositionsRef.current = null;
+        setCombatFlowIndex(0);
+    }, [room]);
+
+    useEffect(() => {
         return () => {
+            if (postCombatOverlayTimeoutRef.current) {
+                clearTimeout(postCombatOverlayTimeoutRef.current);
+                postCombatOverlayTimeoutRef.current = null;
+            }
+            if (turnStartLockTimeoutRef.current) {
+                clearTimeout(turnStartLockTimeoutRef.current);
+                turnStartLockTimeoutRef.current = null;
+            }
+            if (turnStartLockIntervalRef.current) {
+                clearInterval(turnStartLockIntervalRef.current);
+                turnStartLockIntervalRef.current = null;
+            }
             playerCorpseRemovalTurnRef.current = {};
         };
     }, []);
@@ -710,6 +770,22 @@ function Main() {
     }, [isAdmin, room, players, playerCharacters]);
 
     useEffect(() => {
+        const proceedPostCombatAction = (postCombatAction) => {
+            if (postCombatAction === 'levelUp') {
+                socket.emit('level_up', { room });
+                return;
+            }
+
+            if (postCombatAction === 'shop') {
+                setSceneFromKeyword('shop');
+                setPendingNextEncounterChoice(true);
+                return;
+            }
+
+            pendingStartCombatRef.current = false;
+            setPendingNextEncounterChoice(true);
+        };
+
         const handleAiMessage = ({ requestId, eventType, response, location, attribute, startCombat, options }) => {
             markAiRequestCompleted(requestId);
             setAiBusy(false);
@@ -745,6 +821,18 @@ function Main() {
                 return;
             }
 
+            if (
+                isAdmin &&
+                requestId &&
+                requestId === pendingPostCombatNarrationRequestIdRef.current
+            ) {
+                const postCombatAction = pendingPostCombatActionRef.current || 'none';
+                pendingPostCombatNarrationRequestIdRef.current = null;
+                pendingPostCombatActionRef.current = null;
+                proceedPostCombatAction(postCombatAction);
+                return;
+            }
+
             // Fallback event-type logic for cases where AI doesn't set structured fields
             if (eventType === 'game_start' && !options) {
                 setPendingFactionChoice(true);
@@ -762,7 +850,7 @@ function Main() {
             }
 
             if (eventType === 'encounter_end' && !options) {
-                setPendingPostEncounterChoice(true);
+                setPendingPostEncounterChoice(false);
             }
 
             if (eventType === 'shop_intro' && !options) {
@@ -781,6 +869,17 @@ function Main() {
             markAiRequestCompleted(requestId);
             setAiBusy(false);
             appendAiLog({ role: 'system', text: `AI error: ${error}`, eventType: 'error' });
+
+            if (
+                isAdmin &&
+                requestId &&
+                requestId === pendingPostCombatNarrationRequestIdRef.current
+            ) {
+                const postCombatAction = pendingPostCombatActionRef.current || 'none';
+                pendingPostCombatNarrationRequestIdRef.current = null;
+                pendingPostCombatActionRef.current = null;
+                proceedPostCombatAction(postCombatAction);
+            }
         };
 
         const handleAiThinking = ({ thinking }) => {
@@ -788,16 +887,6 @@ function Main() {
         };
 
         const handleCombatEnded = ({ result }) => {
-            console.log('[COMBAT ENDED] Received with result:', result);
-            console.group('[COMBAT DEBUG] AFTER COMBAT_ENDED event');
-            console.log('room:', room);
-            console.log('result:', result);
-            console.log('currentTurn:', currentTurnRef.current);
-            console.log('local characterPositions (post-combat):', characterPositions);
-            console.log('cached playerPositions (post-combat):', sessionStorage.getItem(`playerPositions_${room}`));
-            console.log('cached enemyPositions (post-combat):', sessionStorage.getItem(`enemyPositions_${room}`));
-            console.log('enemies count (post-combat):', enemiesRef.current?.length || 0);
-            console.groupEnd();
             
             if (result === 'all_dead') {
                 setTurnOrder([]);
@@ -806,9 +895,57 @@ function Main() {
                 console.log('[COMBAT ENDED] All players defeated - showing game over screen');
                 return;
             }
-            
-            if (!isAdmin) return;
-            emitAiEvent('encounter_end', 'The encounter has ended.', { room });
+
+            const preCombatPositions = preCombatPlayerPositionsRef.current || {};
+            const restoredPlayerPositions = {};
+            players.forEach((playerId) => {
+                const isAlive = (playerCharactersRef.current?.[playerId]?.stats?.health || 0) > 0;
+                const savedPosition = preCombatPositions[playerId];
+                if (isAlive && savedPosition && Number.isInteger(savedPosition.row) && Number.isInteger(savedPosition.col)) {
+                    restoredPlayerPositions[playerId] = {
+                        row: savedPosition.row,
+                        col: savedPosition.col
+                    };
+                }
+            });
+
+            setEnemies([]);
+            setTurnOrder([]);
+            setCharacterPositions(restoredPlayerPositions);
+            sessionStorage.removeItem(`enemyPositions_${room}`);
+            sessionStorage.setItem(`playerPositions_${room}`, JSON.stringify(restoredPlayerPositions));
+            preCombatPlayerPositionsRef.current = null;
+
+            if (postCombatOverlayTimeoutRef.current) {
+                clearTimeout(postCombatOverlayTimeoutRef.current);
+                postCombatOverlayTimeoutRef.current = null;
+            }
+
+            setShowEnemiesDefeatedScreen(true);
+
+            const completedEncounter = lastCombatConfigRef.current;
+            const postCombatAction = completedEncounter?.postCombat || 'none';
+
+            postCombatOverlayTimeoutRef.current = setTimeout(() => {
+                setShowEnemiesDefeatedScreen(false);
+                postCombatOverlayTimeoutRef.current = null;
+
+                if (!isAdmin) return;
+
+                const narrationMessage =
+                    postCombatAction === 'levelUp'
+                        ? 'All enemies have been defeated. The team catches a breath and prepares to level up.'
+                        : postCombatAction === 'shop'
+                            ? 'All enemies have been defeated. The team regroups and heads toward the shop.'
+                            : 'All enemies have been defeated. The team regroups and pushes forward.';
+
+                pendingPostCombatActionRef.current = postCombatAction;
+                const requestId = emitAiEvent('encounter_end', narrationMessage, {
+                    room,
+                    postCombatAction
+                });
+                pendingPostCombatNarrationRequestIdRef.current = requestId;
+            }, 2000);
         };
 
         socket.on('ai_message', handleAiMessage);
@@ -851,12 +988,62 @@ function Main() {
     }, [isMyTurn, playerName]);
 
     useEffect(() => {
+        if (turnStartLockTimeoutRef.current) {
+            clearTimeout(turnStartLockTimeoutRef.current);
+            turnStartLockTimeoutRef.current = null;
+        }
+
+        if (turnStartLockIntervalRef.current) {
+            clearInterval(turnStartLockIntervalRef.current);
+            turnStartLockIntervalRef.current = null;
+        }
+
+        if (!isMyTurn) {
+            setIsTurnActionLocked(false);
+            setTurnStartLockRemainingMs(0);
+            return;
+        }
+
+        const lockStartTime = Date.now();
+        setIsTurnActionLocked(true);
+        setTurnStartLockRemainingMs(TURN_START_ACTION_LOCK_MS);
+
+        turnStartLockIntervalRef.current = setInterval(() => {
+            const elapsed = Date.now() - lockStartTime;
+            const remaining = Math.max(0, TURN_START_ACTION_LOCK_MS - elapsed);
+            setTurnStartLockRemainingMs(remaining);
+        }, 100);
+
+        turnStartLockTimeoutRef.current = setTimeout(() => {
+            setIsTurnActionLocked(false);
+            setTurnStartLockRemainingMs(0);
+
+            if (turnStartLockIntervalRef.current) {
+                clearInterval(turnStartLockIntervalRef.current);
+                turnStartLockIntervalRef.current = null;
+            }
+            turnStartLockTimeoutRef.current = null;
+        }, TURN_START_ACTION_LOCK_MS);
+
+        return () => {
+            if (turnStartLockTimeoutRef.current) {
+                clearTimeout(turnStartLockTimeoutRef.current);
+                turnStartLockTimeoutRef.current = null;
+            }
+            if (turnStartLockIntervalRef.current) {
+                clearInterval(turnStartLockIntervalRef.current);
+                turnStartLockIntervalRef.current = null;
+            }
+        };
+    }, [isMyTurn, currentTurn?.type, currentTurn?.id]);
+
+    useEffect(() => {
         if (turnTimerIntervalRef.current) {
             clearInterval(turnTimerIntervalRef.current);
             turnTimerIntervalRef.current = null;
         }
 
-        if (!isMyTurn) {
+        if (!isMyTurn || isTurnActionLocked) {
             turnTimerAutoEndedRef.current = false;
             setTurnTimeLeft(null);
             return;
@@ -878,7 +1065,7 @@ function Main() {
                 turnTimerIntervalRef.current = null;
             }
         };
-    }, [isMyTurn, currentTurn?.id]);
+    }, [isMyTurn, isTurnActionLocked, currentTurn?.id]);
 
     useEffect(() => {
         if (!isMyTurn || turnTimeLeft !== 0 || turnTimerAutoEndedRef.current) {
@@ -1150,27 +1337,27 @@ function Main() {
         return Math.max(...levels);
     };
 
-    const selectEnemiesByTier = (tier, count, partySize, partyLevel) => {
-        const getEnemyFaction = (enemy) => {
-            const enemyId = (enemy?.id || '').toLowerCase();
+    const getEnemyFaction = (enemy) => {
+        const enemyId = (enemy?.id || '').toLowerCase();
 
-            const isEnforcer =
-                enemyId.startsWith('enforcer_') ||
-                enemyId.startsWith('division_') ||
-                enemyId.startsWith('vanguard_');
+        const isEnforcer =
+            enemyId.startsWith('enforcer_') ||
+            enemyId.startsWith('division_') ||
+            enemyId.startsWith('vanguard_');
 
-            if (isEnforcer) return 'enforcers';
+        if (isEnforcer) return 'enforcers';
 
-            const isRebel =
-                enemyId.startsWith('rebel_') ||
-                enemyId === 'field_captain' ||
-                enemyId.startsWith('operations_') ||
-                enemyId.startsWith('rebellion_');
+        const isRebel =
+            enemyId.startsWith('rebel_') ||
+            enemyId === 'field_captain' ||
+            enemyId.startsWith('operations_') ||
+            enemyId.startsWith('rebellion_');
 
-            if (isRebel) return 'rebels';
-            return null;
-        };
+        if (isRebel) return 'rebels';
+        return null;
+    };
 
+    const getFilteredTierPool = (tier) => {
         const activeSelectedFaction = selectedFactionRef.current || selectedFaction;
         const opposingFaction =
             activeSelectedFaction === 'enforcers'
@@ -1180,45 +1367,60 @@ function Main() {
                     : null;
 
         let tierEnemies = EnemiesData.enemies.filter(enemy => enemy.tier === tier);
-
         if (opposingFaction) {
             tierEnemies = tierEnemies.filter(enemy => getEnemyFaction(enemy) === opposingFaction);
         }
 
+        return tierEnemies;
+    };
+
+    const selectEnemiesByTier = (tier, count, partySize, partyLevel, startInstanceNumber = 0) => {
+        if (count <= 0) return [];
+
+        const tierEnemies = getFilteredTierPool(tier);
         if (tierEnemies.length === 0) return [];
 
         const selectedEnemies = [];
         for (let index = 0; index < count; index++) {
             const randomIndex = Math.floor(Math.random() * tierEnemies.length);
-            selectedEnemies.push(createEnemyInstance(tierEnemies[randomIndex], index, partySize, partyLevel));
+            selectedEnemies.push(createEnemyInstance(tierEnemies[randomIndex], startInstanceNumber + index, partySize, partyLevel));
         }
 
         return selectedEnemies;
     };
 
-    const generateEnemies = (spawnType = 'low') => {
+    const generateEnemiesFromCombatConfig = (combatConfig) => {
         const partySize = players.length;
         const partyLevel = getPartyLevel();
 
-        if (spawnType === 'medium') {
-            const mediumCount = partySize <= 4 ? 2 : 3;
-            const mediumEnemies = selectEnemiesByTier('mid-tier', mediumCount, partySize, partyLevel);
-            return mediumEnemies.length > 0 ? mediumEnemies : selectEnemiesByTier('generic', mediumCount, partySize, partyLevel);
+        const config = combatConfig || STORY_COMBAT_FLOW[0];
+        const isLowEncounter = config?.combatType === 'low';
+        const genericCount = isLowEncounter
+            ? Math.max(0, partySize + 2)
+            : Math.max(0, Number(config.numOfGeneric) || 0);
+        const midCount = Math.max(0, Number(config.numOfMid) || 0);
+        const miniCount = Math.max(0, Number(config.numOfMini) || 0);
+
+        let instanceNumber = 0;
+        const generated = [];
+
+        const genericEnemies = selectEnemiesByTier('generic', genericCount, partySize, partyLevel, instanceNumber);
+        generated.push(...genericEnemies);
+        instanceNumber += genericEnemies.length;
+
+        const midEnemies = selectEnemiesByTier('mid-tier', midCount, partySize, partyLevel, instanceNumber);
+        generated.push(...midEnemies);
+        instanceNumber += midEnemies.length;
+
+        const miniEnemies = selectEnemiesByTier('mini-boss', miniCount, partySize, partyLevel, instanceNumber);
+        generated.push(...miniEnemies);
+
+        if (generated.length === 0) {
+            const fallbackEnemies = selectEnemiesByTier('generic', 1, partySize, partyLevel, 0);
+            generated.push(...fallbackEnemies);
         }
 
-        if (spawnType === 'boss') {
-            const bossEnemies = selectEnemiesByTier('boss', 1, partySize, partyLevel);
-            if (bossEnemies.length > 0) return bossEnemies;
-
-            const fallbackCount = partySize <= 4 ? 2: 3;
-            const mediumEnemies = selectEnemiesByTier('mid-tier', fallbackCount, partySize, partyLevel);
-            return mediumEnemies.length > 0 ? mediumEnemies : selectEnemiesByTier('generic', fallbackCount, partySize, partyLevel);
-        }
-
-        // Default: low spawn
-        const lowCount = partySize + 2;
-        const genericEnemies = selectEnemiesByTier('generic', lowCount, partySize, partyLevel);
-        return genericEnemies;
+        return generated;
     };
 
     // Initialize player positions with role-based rows
@@ -1652,7 +1854,7 @@ function Main() {
 
                 if (!turnAction.target) {
                     queueEnemyNarration(
-                        `${enemy.name} advances across the grid, scanning for a target.`,
+                        `${enemy.name} advances, closing in on their target.`,
                         { actor: enemy.name, actionType: 'enemy_move', to: endPos }
                     );
                 }
@@ -1674,10 +1876,13 @@ function Main() {
                     const hasReflection = hasDamageReflection(activeEffects, turnAction.target);
                     let damageAmount = Math.max(1, (enemy.stats.strength / 10) * enemy.weapon.damage - (target.stats.resistance / 10));
                     damageAmount = applyDamageKeywords(damageAmount, activeEffects, turnAction.target, { minimumDamage: 0 });
+                    const targetNameForNarration = target?.name || turnAction.target;
+                    const targetMaxHp = Math.max(1, target?.stats?.maxHealth || target?.stats?.max_health || target?.stats?.health || 1);
+                    const damageDescriptor = damageAmount > targetMaxHp * 0.35 ? 'heavy damage' : 'decent damage';
 
                     if (hasReflection && damageAmount > 0) {
                         queueEnemyNarration(
-                            `${enemy.name} attacks ${turnAction.target}, but the damage is reflected back! ${enemy.name} takes ${damageAmount.toFixed(1)} damage.`,
+                            `${enemy.name} attacks ${targetNameForNarration}, but the strike is reflected back!`,
                             {
                                 actor: enemy.name,
                                 target: turnAction.target,
@@ -1687,7 +1892,7 @@ function Main() {
                         );
                     } else {
                         queueEnemyNarration(
-                            `${enemy.name} closes in and attacks ${turnAction.target} for ${damageAmount.toFixed(1)} damage.`,
+                            `${enemy.name} closes in and attacks ${targetNameForNarration}, dealing ${damageDescriptor}.`,
                             {
                                 actor: enemy.name,
                                 target: turnAction.target,
@@ -1831,8 +2036,10 @@ function Main() {
                 }, movementDelay); // Apply attack after movement completes
             }
 
-            // Delay before completing turn (movement + attack + visual feedback)
-            const totalDelay = movementDelay + (turnAction.target ? 500 : 0) + 1000;
+            // Delay before completing turn (mock narration pacing)
+            const baseActionDelay = movementDelay + (turnAction.target ? 500 : 0) + 1000;
+            const mockNarrationDelay = 6500 + Math.floor(Math.random() * 1001); // 6.5s - 7.5s
+            const totalDelay = Math.max(baseActionDelay, mockNarrationDelay);
             const turnCycleAtSchedule = currentTurnCycleRef.current;
             const completionKey = `${enemyId}:${turnCycleAtSchedule}`;
             setTimeout(async () => {
@@ -2173,6 +2380,11 @@ function Main() {
 
     const handleGridClick = (row, col) => {
         console.log('[GRID CLICK]', { row, col, isMyTurn, playerName, hasCharacter: !!currentPlayerCharacter });
+
+        if (isTurnActionLocked) {
+            console.log('[GRID CLICK] Blocked - turn action lock active');
+            return;
+        }
         
         if (!isMyTurn || !isPlayerAlive) {
             console.log('[GRID CLICK] Blocked - not my turn or player is dead');
@@ -2389,7 +2601,7 @@ function Main() {
 
                 emitAiEvent(
                     'turn_action',
-                    `${currentPlayerCharacter.name} fires ${currentPlayerCharacter.weapon.name} at ${enemy.name}, dealing ${damage.toFixed(1)} damage.`,
+                    `${currentPlayerCharacter.name} uses their ${currentPlayerCharacter.weapon.name} to hit ${enemy.name}, dealing ${damage.toFixed(1)} damage.`,
                     {
                         actor: currentPlayerCharacter.name,
                         target: enemy.name,
@@ -2713,14 +2925,21 @@ function Main() {
         return grid;
     };
 
-    function handleStoryComplete(spawnType = 'low') {
-        const normalizedSpawnType = ['low', 'medium', 'boss'].includes(spawnType) ? spawnType : 'low';
-        const generatedEnemies = generateEnemies(normalizedSpawnType);
+    function handleStoryComplete() {
+        const encounterConfig = STORY_COMBAT_FLOW[combatFlowIndexRef.current] || STORY_COMBAT_FLOW[STORY_COMBAT_FLOW.length - 1];
+        const generatedEnemies = generateEnemiesFromCombatConfig(encounterConfig);
+        const normalizedSpawnType = encounterConfig?.combatType || 'low';
         const proposedPlayerPositions = {};
+        const latestCharacterPositions = characterPositionsRef.current || {};
+
+        lastCombatConfigRef.current = encounterConfig;
+        const nextIndex = Math.min(combatFlowIndexRef.current + 1, STORY_COMBAT_FLOW.length);
+        combatFlowIndexRef.current = nextIndex;
+        setCombatFlowIndex(nextIndex);
 
         players.forEach((playerId) => {
             const isAlive = (playerCharacters[playerId]?.stats?.health || 0) > 0;
-            const position = characterPositions[playerId];
+            const position = latestCharacterPositions[playerId];
 
             if (isAlive && position && Number.isInteger(position.row) && Number.isInteger(position.col)) {
                 proposedPlayerPositions[playerId] = {
@@ -2730,12 +2949,16 @@ function Main() {
             }
         });
 
+        preCombatPlayerPositionsRef.current = { ...proposedPlayerPositions };
+
         console.group('[COMBAT DEBUG] BEFORE START_COMBAT emit');
         console.log('room:', room);
         console.log('sceneKey:', currentSceneKey);
         console.log('spawnType:', normalizedSpawnType);
+        console.log('combatFlowIndex:', combatFlowIndexRef.current);
+        console.log('encounterConfig:', encounterConfig);
         console.log('players:', players);
-        console.log('local characterPositions (pre-start):', characterPositions);
+        console.log('local characterPositions (pre-start):', latestCharacterPositions);
         console.log('proposedPlayerPositions (pre-start):', proposedPlayerPositions);
         console.log('cached playerPositions (pre-start):', sessionStorage.getItem(`playerPositions_${room}`));
         console.log('cached enemyPositions (pre-start):', sessionStorage.getItem(`enemyPositions_${room}`));
@@ -2760,6 +2983,11 @@ function Main() {
 
     const handleAbilityClick = (ability) => {
         console.log('[ABILITY CLICK] Ability clicked:', ability.name, 'ID:', ability.id);
+
+        if (isTurnActionLocked) {
+            console.log('[ABILITY CLICK] Blocked - turn action lock active');
+            return;
+        }
         
         if (!isMyTurn || actionUsed || !isPlayerAlive || aiBusy) {
             console.log('[ABILITY CLICK] Blocked - isMyTurn:', isMyTurn, 'actionUsed:', actionUsed, 'isPlayerAlive:', isPlayerAlive, 'aiBusy:', aiBusy);
@@ -3362,6 +3590,11 @@ function Main() {
     };
 
     const handleEndTurn = () => {
+        if (isTurnActionLocked) {
+            console.log('[END TURN] Blocked - turn action lock active');
+            return;
+        }
+
         if (!isMyTurn) return;
 
         const liveTurn = currentTurnRef.current;
@@ -3447,6 +3680,14 @@ function Main() {
                 </div>
             </div>
         )}
+
+        {showEnemiesDefeatedScreen && (
+            <div className="you-died-screen">
+                <div className="enemies-defeated-content">
+                    <h1>ALL ENEMIES DEFEATED</h1>
+                </div>
+            </div>
+        )}
         
         {gameOver && (
             <div className="game-over-overlay">
@@ -3461,6 +3702,7 @@ function Main() {
                                 // Reset local state
                                 setGameOver(false);
                                 setShowYouDiedScreen(false);
+                                setShowEnemiesDefeatedScreen(false);
                                 setEnemies([]);
                                 setTurnOrder([]);
                                 setActiveEffects([]);
@@ -3488,6 +3730,7 @@ function Main() {
                                 // Reset game state
                                 setGameOver(false);
                                 setShowYouDiedScreen(false);
+                                setShowEnemiesDefeatedScreen(false);
                                 setEnemies([]);
                                 setTurnOrder([]);
                                 setActiveEffects([]);
@@ -3517,6 +3760,9 @@ function Main() {
                 {isMyTurn ? (
                     <div className="turn">
                         YOUR TURN
+                        {isTurnActionLocked && (
+                            <span className="turn-timer">{Math.ceil(turnStartLockRemainingMs / 1000)}s</span>
+                        )}
                         {turnTimeLeft !== null && turnTimeLeft < 16 && (
                             <span className="turn-timer">{turnTimeLeft}s</span>
                         )}
@@ -3590,8 +3836,8 @@ function Main() {
         <div className="AI-script">
             <div className='Response'>
             <div className="ai-header">
-                <span className={`ai-status ${aiBusy ? 'busy' : ''}`}>
-                    {/* {aiBusy ? 'DM is thinking...' : 'Ready'} */}
+                <span className={`ai-status ${aiBusy ? '' : ''}`}>
+                    {aiBusy ? '' : 'Ready'}
                 </span>
                 {currentSceneKey && SCENE_LABELS[currentSceneKey] && (
                     <span className="ai-scene-label">{SCENE_LABELS[currentSceneKey]}</span>
@@ -3771,9 +4017,9 @@ function Main() {
                     <div className="weapon-section">
                         <h4>Weapon</h4>
                         <div 
-                            className={`weapon-card ${weaponSelected ? 'weapon-selected' : ''} ${((actionUsed && extraWeaponAttacksRemaining <= 0) || !isPlayerAlive) ? 'weapon-disabled' : ''}`}
-                            onClick={() => isMyTurn && (!actionUsed || extraWeaponAttacksRemaining > 0) && isPlayerAlive && setWeaponSelected(!weaponSelected)}
-                            style={{ cursor: (isMyTurn && (!actionUsed || extraWeaponAttacksRemaining > 0) && isPlayerAlive) ? 'pointer' : 'not-allowed' }}
+                            className={`weapon-card ${weaponSelected ? 'weapon-selected' : ''} ${((actionUsed && extraWeaponAttacksRemaining <= 0) || !isPlayerAlive || isTurnActionLocked) ? 'weapon-disabled' : ''}`}
+                            onClick={() => isMyTurn && !isTurnActionLocked && (!actionUsed || extraWeaponAttacksRemaining > 0) && isPlayerAlive && setWeaponSelected(!weaponSelected)}
+                            style={{ cursor: (isMyTurn && !isTurnActionLocked && (!actionUsed || extraWeaponAttacksRemaining > 0) && isPlayerAlive) ? 'pointer' : 'not-allowed' }}
                         >
                             <div className="weapon-info">
                                 <i><div className="weapon-name">{currentPlayerCharacter.weapon.name}</div></i>
@@ -3820,7 +4066,7 @@ function Main() {
                                         } ${
                                             isSelected ? 'ability-selected' : ''
                                         }`}
-                                        disabled={!isMyTurn || isOnCooldown || actionUsed || !isPlayerAlive}
+                                        disabled={!isMyTurn || isTurnActionLocked || isOnCooldown || actionUsed || !isPlayerAlive}
                                     >
                                         <div className='damage-scaling'>{scalerIcon}</div>
                                         <div className="ability-header">
@@ -3851,7 +4097,7 @@ function Main() {
                             return (
                         <button 
                             className="ultimate-card" 
-                            disabled={!isMyTurn || actionUsed || !isPlayerAlive || !hasUltimate}
+                            disabled={!isMyTurn || isTurnActionLocked || actionUsed || !isPlayerAlive || !hasUltimate}
                             onClick={() => {
                                 if (!hasUltimate) {
                                     console.warn('[ABILITY DEBUG] Ultimate click blocked - invalid or missing ultimate:', rawUltimate);
@@ -3875,7 +4121,7 @@ function Main() {
             )}
         </div>
 
-        {isMyTurn && <button className="end-turn" onClick={handleEndTurn} disabled={!isMyTurn}>End Turn</button>}
+        {isMyTurn && <button className="end-turn" onClick={handleEndTurn} disabled={!isMyTurn || isTurnActionLocked}>End Turn</button>}
         </div>
 
     );

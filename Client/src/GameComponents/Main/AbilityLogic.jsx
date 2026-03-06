@@ -538,40 +538,66 @@ export function getStatBonuses(playerName, activeEffects) {
  * @returns {Object} { updatedEffects, updatedEnemies }
  */
 export function updateBlizzardFieldEffects(activeEffects, enemies, characterPositions) {
-    const blizzardFields = activeEffects.filter(e => e.type === 'blizzard_field');
+    const blizzardFields = activeEffects.filter(e => e.type === 'blizzard_field' && e.turnsRemaining > 0);
+    const toxicMistFields = activeEffects.filter(e => e.type === 'toxic_mist_field' && e.turnsRemaining > 0);
     
-    if (blizzardFields.length === 0) {
-        return { updatedEffects: activeEffects, updatedEnemies: enemies };
+    if (blizzardFields.length === 0 && toxicMistFields.length === 0) {
+        return { updatedEffects: activeEffects, updatedEnemies: enemies, hasChanges: false };
     }
     
     let updatedEffects = [...activeEffects];
     let updatedEnemies = [...enemies];
+    let hasChanges = false;
+
+    const isInsideField = (position, field) => {
+        if (!position || !field?.center) return false;
+        const fieldRadius = Number.isFinite(field.radius) ? field.radius : 1;
+        const rowDiff = Math.abs(position.row - field.center.row);
+        const colDiff = Math.abs(position.col - field.center.col);
+        return rowDiff <= fieldRadius && colDiff <= fieldRadius;
+    };
+
+    const getMaxFieldDurationAtPosition = (position, fields) => {
+        return fields.reduce((maxDuration, field) => {
+            if (!isInsideField(position, field)) return maxDuration;
+            return Math.max(maxDuration, Number.isFinite(field.turnsRemaining) ? field.turnsRemaining : 1);
+        }, 0);
+    };
+
+    const getMaxToxicDamageAtPosition = (position) => {
+        return toxicMistFields.reduce((maxDamage, field) => {
+            if (!isInsideField(position, field)) return maxDamage;
+            const fieldDamage = Number.isFinite(field.amount) ? field.amount : 0;
+            return Math.max(maxDamage, fieldDamage);
+        }, 0);
+    };
     
-    // Check each enemy against each blizzard field
+    // Check each enemy against active hazard fields
     enemies.forEach((enemy, enemyIndex) => {
         const enemyPos = characterPositions[enemy.id];
         if (!enemyPos) return;
-        
-        let inAnyBlizzard = false;
-        
-        // Check if enemy is in any active blizzard field
-        for (const field of blizzardFields) {
-            const rowDiff = Math.abs(enemyPos.row - field.center.row);
-            const colDiff = Math.abs(enemyPos.col - field.center.col);
-            
-            if (rowDiff <= field.radius && colDiff <= field.radius) {
-                inAnyBlizzard = true;
-                break;
-            }
-        }
+
+        const blizzardDurationAtPosition = getMaxFieldDurationAtPosition(enemyPos, blizzardFields);
+        const inAnyBlizzard = blizzardDurationAtPosition > 0;
+        const toxicDurationAtPosition = getMaxFieldDurationAtPosition(enemyPos, toxicMistFields);
+        const inAnyToxicMist = toxicDurationAtPosition > 0;
+        const toxicDamageAtPosition = getMaxToxicDamageAtPosition(enemyPos);
         
         // Check if enemy already has a blizzard speed debuff
-        const hasBlizzardDebuff = updatedEffects.some(e => 
+        const blizzardDebuffIndex = updatedEffects.findIndex(e =>
             e.type === 'stat_debuff' && 
             e.target === enemy.id && 
             e.stat === 'speed' && 
             e.source === 'blizzard'
         );
+        const hasBlizzardDebuff = blizzardDebuffIndex !== -1;
+
+        const toxicDotIndex = updatedEffects.findIndex(e =>
+            e.type === 'damage_over_time' &&
+            e.target === enemy.id &&
+            e.source === 'toxic_mist_field'
+        );
+        const hasToxicMistDot = toxicDotIndex !== -1;
         
         if (inAnyBlizzard && !hasBlizzardDebuff) {
             // Enemy entered blizzard - apply speed debuff
@@ -587,6 +613,7 @@ export function updateBlizzardFieldEffects(activeEffects, enemies, characterPosi
                 turnsRemaining: 1,
                 appliedThisTurn: true
             });
+            hasChanges = true;
             
             // Apply to enemy stats immediately
             updatedEnemies[enemyIndex] = {
@@ -596,46 +623,53 @@ export function updateBlizzardFieldEffects(activeEffects, enemies, characterPosi
                     speed: enemy.stats.speed + speedDebuff
                 }
             };
+            hasChanges = true;
             
             console.log(`[BLIZZARD] ${enemy.name} entered blizzard - speed halved`);
-        } else if (!inAnyBlizzard && hasBlizzardDebuff) {
-            // Enemy left blizzard - remove speed debuff
-            const debuffIndex = updatedEffects.findIndex(e =>
-                e.type === 'stat_debuff' &&
-                e.target === enemy.id &&
-                e.stat === 'speed' &&
-                e.source === 'blizzard'
-            );
-            
-            if (debuffIndex !== -1) {
-                const debuff = updatedEffects[debuffIndex];
-                updatedEnemies[enemyIndex] = {
-                    ...enemy,
-                    stats: {
-                        ...enemy.stats,
-                        speed: enemy.stats.speed - debuff.value // Remove the negative debuff
-                    }
-                };
-                updatedEffects.splice(debuffIndex, 1);
-                console.log(`[BLIZZARD] ${enemy.name} left blizzard - speed restored`);
-            }
         } else if (inAnyBlizzard && hasBlizzardDebuff) {
-            // Enemy still in blizzard - refresh debuff duration
-            const debuffIndex = updatedEffects.findIndex(e =>
-                e.type === 'stat_debuff' &&
-                e.target === enemy.id &&
-                e.stat === 'speed' &&
-                e.source === 'blizzard'
+            // Enemy in blizzard - keep debuff alive while area exists
+            const nextTurnsRemaining = Math.max(
+                updatedEffects[blizzardDebuffIndex].turnsRemaining || 0,
+                blizzardDurationAtPosition
             );
-            
-            if (debuffIndex !== -1) {
-                updatedEffects[debuffIndex] = {
-                    ...updatedEffects[debuffIndex],
-                    turnsRemaining: 1 // Keep it active for one more turn
+
+            if (nextTurnsRemaining !== updatedEffects[blizzardDebuffIndex].turnsRemaining) {
+                updatedEffects[blizzardDebuffIndex] = {
+                    ...updatedEffects[blizzardDebuffIndex],
+                    turnsRemaining: nextTurnsRemaining
                 };
+                hasChanges = true;
+            }
+        }
+
+        if (inAnyToxicMist && !hasToxicMistDot) {
+            const dotAmount = toxicDamageAtPosition > 0 ? toxicDamageAtPosition : 1;
+            updatedEffects.push({
+                type: 'damage_over_time',
+                target: enemy.id,
+                amount: dotAmount,
+                duration: toxicDurationAtPosition,
+                turnsRemaining: toxicDurationAtPosition,
+                appliedThisTurn: false,
+                source: 'toxic_mist_field'
+            });
+            hasChanges = true;
+            console.log(`[TOXIC MIST] ${enemy.name} entered toxic mist - DoT applied`);
+        } else if (inAnyToxicMist && hasToxicMistDot) {
+            const currentDot = updatedEffects[toxicDotIndex];
+            const nextTurnsRemaining = Math.max(currentDot.turnsRemaining || 0, toxicDurationAtPosition);
+            const nextAmount = Math.max(currentDot.amount || 0, toxicDamageAtPosition || 0);
+
+            if (nextTurnsRemaining !== currentDot.turnsRemaining || nextAmount !== currentDot.amount) {
+                updatedEffects[toxicDotIndex] = {
+                    ...currentDot,
+                    turnsRemaining: nextTurnsRemaining,
+                    amount: nextAmount > 0 ? nextAmount : currentDot.amount
+                };
+                hasChanges = true;
             }
         }
     });
     
-    return { updatedEffects, updatedEnemies };
+    return { updatedEffects, updatedEnemies, hasChanges };
 }

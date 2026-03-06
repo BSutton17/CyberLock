@@ -1416,7 +1416,7 @@ export const ABILITIES = {
     here_we_go_again: {
         id: 'here_we_go_again',
         name: 'Here We Go Again',
-        description: 'Reset all allies cooldowns except your own and Here We Go Again',
+        description: 'Reset all allies cooldowns',
         role: "Support",
         level: 5,
         cooldown: 5,
@@ -1456,7 +1456,7 @@ export const ABILITIES = {
             return {
                 success: true,
                 effects: effects,
-                message: `${caster.name} uses Here We Go Again! Cooldowns reset for ${allyNames.join(', ')} (excluding Here We Go Again).`
+                message: `${caster.name} uses Here We Go Again! Cooldowns reset for ${allyNames.join(', ')}.`
             };
         }
     },
@@ -2187,7 +2187,8 @@ export const ABILITIES = {
                 type: 'toxic_mist_field',
                 center: { row, col },
                 radius: 1,
-                duration: 2
+                duration: 2,
+                amount: totalDamage
             });
 
             enemies.forEach(enemy => {
@@ -2203,7 +2204,8 @@ export const ABILITIES = {
                         type: 'damage_over_time',
                         target: enemy.id,
                         amount: totalDamage,
-                        duration: 2
+                        duration: 2,
+                        source: 'toxic_mist_field'
                     });
                 }
             });

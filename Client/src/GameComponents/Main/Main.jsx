@@ -3812,6 +3812,12 @@ function Main() {
                                             <span className="stat-speed">SPD: {character.stats.speed}</span>
                                             <span className="stat-hp">HP: {character.stats.health}/{character.stats.maxHealth}</span>
                                         </div>
+                                        <div className="party-member-health-bar-container">
+                                            <div 
+                                                className="party-member-health-bar-fill"
+                                                style={{ width: `${Math.max(0, Math.min(100, (character.stats.health / character.stats.maxHealth) * 100))}%` }}
+                                            ></div>
+                                        </div>
                                     </div>
                                 </>
                             ) : (

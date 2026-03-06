@@ -131,6 +131,8 @@ const MAX_PARTY_SIZE = 6;
 const DISCONNECT_GRACE_MS = 60_000;
 const ENEMY_TURN_TIMEOUT_MS = 15_000;
 const ENEMY_TURN_MAX_RETRIES = 2;
+const ALLY_TURN_ADVANCE_DELAY_MS = 5000;
+let allyTurnAdvanceDelays = {};
 
 function isEnemyAlive(enemy) {
   return enemy && !enemy.isDeadBody && (enemy.stats?.health || 0) > 0;
@@ -257,6 +259,13 @@ function getConnectedPlayersInRoom(room) {
 
 function getEnemyTurnHandlers(room) {
   return getConnectedPlayersInRoom(room);
+}
+
+function clearAllyTurnAdvanceDelay(room) {
+  const timeoutId = allyTurnAdvanceDelays[room];
+  if (!timeoutId) return;
+  clearTimeout(timeoutId);
+  delete allyTurnAdvanceDelays[room];
 }
 
 function hasActiveEnemyTurnWatchdog(room, enemyId) {
@@ -604,7 +613,7 @@ function buildAiFallbackResponse(eventType, message, data) {
   }
 
   if (eventType === 'game_start') {
-    return 'Static crackles across comms as the mission begins.';
+    return 'The neon lights of the city pulse overhead as you stand on a crowded street corner, the hum of hover cars and flickering billboards filling your ears. The imposing silhouettes of towering corporate buildings loom behind you, casting long shadows across the asphalt. The air smells of ozone and burning oil. Suddenly, a commotion breaks out nearby, drawing the eyes of everyone present. A group of civilians, led by a charismatic figure, are confronting a squad of Enforcers. They shout demands for fair wages, better living conditions, and the end of corporate oppression. As you watch, a lone Enforcer steps forward, raising its weapon.';
   }
 
   if (eventType === 'choice_made') {
@@ -1154,7 +1163,7 @@ io.on('connection', (socket) => {
       // Delay to allow combat-start narration before first turn actions
       setTimeout(() => {
         dispatchEnemyTurn(io, room, combat, firstTurn.id);
-      }, 7500);
+      }, 25000);
     }
   });
 
@@ -1241,34 +1250,46 @@ io.on('connection', (socket) => {
       return;
     }
 
-    combat.currentTurnIndex++;
-    if(combat.currentTurnIndex >= combat.turnOrder.length) {
-      combat.currentTurnIndex = 0;
-    }
+    clearAllyTurnAdvanceDelay(room);
+    allyTurnAdvanceDelays[room] = setTimeout(() => {
+      delete allyTurnAdvanceDelays[room];
 
-    const removedCorpses = tickEnemyCorpses(combat);
+      const latestCombat = combatSessions[room];
+      if (!latestCombat) return;
 
-    if (emitEnemyDefeatVictoryIfNeeded(io, room, combat)) {
-      return;
-    }
-    
-    if (combat.turnOrder.length === 0) {
-      io.to(room).emit('combat_ended', { result: 'all_dead' });
-      return;
-    }
+      const latestTurn = latestCombat.turnOrder?.[latestCombat.currentTurnIndex];
+      if (!latestTurn || latestTurn.type !== 'ally' || latestTurn.id !== playerName) {
+        return;
+      }
 
-    const nextTurn = combat.turnOrder[combat.currentTurnIndex];
-    io.to(room).emit("turn_changed", { currentTurn: nextTurn });
-    if (removedCorpses) {
-      io.to(room).emit("enemies_updated", { enemies: combat.enemies });
-    }
-    
-    // If next turn is an enemy, trigger enemy AI
-    if (nextTurn.type === 'enemy') {
-      dispatchEnemyTurn(io, room, combat, nextTurn.id);
-    } else {
-      clearEnemyTurnWatchdog(room);
-    }
+      latestCombat.currentTurnIndex++;
+      if (latestCombat.currentTurnIndex >= latestCombat.turnOrder.length) {
+        latestCombat.currentTurnIndex = 0;
+      }
+
+      const removedCorpses = tickEnemyCorpses(latestCombat);
+
+      if (emitEnemyDefeatVictoryIfNeeded(io, room, latestCombat)) {
+        return;
+      }
+
+      if (latestCombat.turnOrder.length === 0) {
+        io.to(room).emit('combat_ended', { result: 'all_dead' });
+        return;
+      }
+
+      const nextTurn = latestCombat.turnOrder[latestCombat.currentTurnIndex];
+      io.to(room).emit("turn_changed", { currentTurn: nextTurn });
+      if (removedCorpses) {
+        io.to(room).emit("enemies_updated", { enemies: latestCombat.enemies });
+      }
+
+      if (nextTurn.type === 'enemy') {
+        dispatchEnemyTurn(io, room, latestCombat, nextTurn.id);
+      } else {
+        clearEnemyTurnWatchdog(room);
+      }
+    }, ALLY_TURN_ADVANCE_DELAY_MS);
   });
 
   socket.on("enemy_turn_complete", ({ room, enemyId, updatedEnemies, updatedPlayerCharacters, updatedActiveEffects, enemyFinalPosition }) => {

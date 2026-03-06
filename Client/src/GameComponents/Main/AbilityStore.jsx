@@ -2224,7 +2224,7 @@ export const ABILITIES = {
     white_phospherus: {
         id: 'white_phospherus',
         name: 'White Phospherus',
-        description: 'Burns all enemies for 10 damage per turn over 5 turns',
+        description: 'Burns all enemies for 15 damage per turn over 5 turns',
         role: "Tank",
         cooldown: 0,
         isUltimate: true,
@@ -2248,7 +2248,7 @@ export const ABILITIES = {
                 effects.push({
                     type: 'damage_over_time',
                     target: enemy.id,
-                    amount: 10,
+                    amount: 15,
                     duration: 5,
                     source: 'white_phospherus'
                 });
@@ -2257,7 +2257,7 @@ export const ABILITIES = {
             return {
                 success: true,
                 effects,
-                message: `${caster.name} unleashes White Phospherus! ${affectedNames.join(', ')} will take 10 damage for 5 turns!`
+                message: `${caster.name} unleashes White Phospherus! ${affectedNames.join(', ')} will take 15 damage for 5 turns!`
             };
         }
     },

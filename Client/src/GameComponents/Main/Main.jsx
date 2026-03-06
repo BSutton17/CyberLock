@@ -93,6 +93,36 @@ const resolveSceneKey = (rawKeyword = '') => {
     return SCENE_ALIASES[normalizedKeyword] || null;
 };
 
+const TYPEWRITER_CHAR_INTERVAL_MS = 20;
+const TYPEWRITER_SENTENCE_GAP_FACTOR_MS = 18;
+const TURN_ADVANCE_AFTER_TYPING_MS = 1000;
+
+const splitAiTextSegments = (message = '') => {
+    const trimmedMessage = String(message || '').trim();
+    if (!trimmedMessage) return [];
+
+    const segments = trimmedMessage
+        .split(/(?<=[.!?])\s+|\n+/)
+        .map(segment => segment.trim())
+        .filter(Boolean);
+
+    return segments.length > 0 ? segments : [trimmedMessage];
+};
+
+const estimateTypewriterDurationMs = (message = '') => {
+    const segments = splitAiTextSegments(message);
+    if (segments.length === 0) return 0;
+
+    return segments.reduce((durationMs, segment, index) => {
+        const typingDurationMs = segment.length * TYPEWRITER_CHAR_INTERVAL_MS;
+        const sentencePauseMs = index < segments.length - 1
+            ? segment.length * TYPEWRITER_SENTENCE_GAP_FACTOR_MS
+            : 0;
+
+        return durationMs + typingDurationMs + sentencePauseMs;
+    }, 0);
+};
+
 
 // number of generic enemies for low is always party size + 2 I just put 0 here as a placeholder
 const STORY_COMBAT_FLOW = [
@@ -151,10 +181,12 @@ function Main() {
     const lastCombatConfigRef = useRef(null);
     const pendingAiRequestResolversRef = useRef(new Map());
     const completedAiRequestIdsRef = useRef(new Set());
+    const aiTypingCompletionByRequestIdRef = useRef(new Map());
     const pendingPostCombatActionRef = useRef(null);
     const pendingPostCombatNarrationRequestIdRef = useRef(null);
     const postCombatOverlayTimeoutRef = useRef(null);
     const preCombatPlayerPositionsRef = useRef(null);
+    const combatLifecycleActiveRef = useRef(false);
     const cooldownStorageKey = room && playerName ? `cooldowns_${room}_${playerName}` : null;
     const isQuietLogs = debugLogLevel === 'quiet';
     const isVerboseLogs = debugLogLevel === 'verbose';
@@ -339,6 +371,7 @@ function Main() {
         combatFlowIndexRef.current = 0;
         lastCombatConfigRef.current = null;
         preCombatPlayerPositionsRef.current = null;
+        combatLifecycleActiveRef.current = false;
         setCombatFlowIndex(0);
     }, [room]);
 
@@ -567,12 +600,82 @@ function Main() {
             });
         });
     };
+
+    const markAiTypingExpectedCompletion = (requestId, responseText) => {
+        if (!requestId) return;
+
+        const estimatedTypingMs = estimateTypewriterDurationMs(responseText || '');
+        aiTypingCompletionByRequestIdRef.current.set(requestId, Date.now() + estimatedTypingMs);
+    };
+
+    const waitForNarrationTypingCompletion = async (requestIds = [], extraDelayMs = TURN_ADVANCE_AFTER_TYPING_MS) => {
+        const uniqueRequestIds = [...new Set((requestIds || []).filter(Boolean))];
+
+        if (uniqueRequestIds.length === 0) {
+            if (extraDelayMs > 0) {
+                await new Promise(resolve => setTimeout(resolve, extraDelayMs));
+            }
+            return;
+        }
+
+        await Promise.all(uniqueRequestIds.map(requestId => waitForAiRequestCompletion(requestId)));
+
+        let latestTypingDoneAt = Date.now();
+        uniqueRequestIds.forEach((requestId) => {
+            const expectedDoneAt = aiTypingCompletionByRequestIdRef.current.get(requestId);
+            if (Number.isFinite(expectedDoneAt)) {
+                latestTypingDoneAt = Math.max(latestTypingDoneAt, expectedDoneAt);
+            }
+        });
+
+        const waitMs = Math.max(0, latestTypingDoneAt - Date.now()) + Math.max(0, extraDelayMs || 0);
+        if (waitMs > 0) {
+            await new Promise(resolve => setTimeout(resolve, waitMs));
+        }
+
+        uniqueRequestIds.forEach((requestId) => {
+            aiTypingCompletionByRequestIdRef.current.delete(requestId);
+        });
+    };
+
+    const resolveFactionAlignment = (rawChoice = '') => {
+        const normalized = String(rawChoice || '').toLowerCase();
+
+        if (
+            normalized.includes('enforcer') ||
+            normalized.includes('division') ||
+            normalized.includes('authority') ||
+            normalized.includes('law')
+        ) {
+            return 'enforcers';
+        }
+
+        if (
+            normalized.includes('rebel') ||
+            normalized.includes('people') ||
+            normalized.includes('protester') ||
+            normalized.includes('protestor') ||
+            normalized.includes('protest') ||
+            normalized.includes('uprising') ||
+            normalized.includes('citizens') 
+        ) {
+            return 'rebels';
+        }
+
+        return null;
+    };
     
 
-    const handleFactionChoice = (choice) => {
+    const handleFactionChoice = (choice, explicitFaction = null) => {
         if (!canPlayerDecide('politician')) return;
 
-        const normalizedChoice = choice?.toLowerCase().includes('enforcer') ? 'enforcers' : 'rebels';
+        const normalizedChoice = explicitFaction || resolveFactionAlignment(choice);
+        if (!normalizedChoice) {
+            logImportant('[FACTION] Unable to resolve faction from choice:', choice);
+            setPendingFactionChoice(true);
+            return;
+        }
+
         setSelectedFaction(normalizedChoice);
         selectedFactionRef.current = normalizedChoice;
         socket.emit('faction_selected', { room, faction: normalizedChoice });
@@ -629,6 +732,12 @@ function Main() {
 
         // Detect common option patterns and route them to existing handlers
         const lowerOption = option.toLowerCase();
+
+        const parsedFaction = resolveFactionAlignment(lowerOption);
+        if (parsedFaction && (pendingFactionChoice || aiAttribute === 'politician')) {
+            handleFactionChoice(option, parsedFaction);
+            return;
+        }
 
         if (lowerOption.includes('enforcer')) {
             handleFactionChoice(option);
@@ -707,10 +816,7 @@ function Main() {
             return;
         }
 
-        const segments = message
-            .split(/(?<=[.!?])\s+|\n+/)
-            .map(segment => segment.trim())
-            .filter(Boolean);
+        const segments = splitAiTextSegments(message);
 
         setAiSentences(segments.length > 0 ? segments : [message]);
         setCurrentSentenceIndex(0);
@@ -727,7 +833,7 @@ function Main() {
         const interval = setInterval(() => {
             setDisplayText((prevText) => prevText + currentSentence.charAt(typingIndex));
             setTypingIndex((prevIndex) => prevIndex + 1);
-        }, 20);
+        }, TYPEWRITER_CHAR_INTERVAL_MS);
 
         return () => clearInterval(interval);
     }, [aiSentences, currentSentenceIndex, typingIndex]);
@@ -746,7 +852,7 @@ function Main() {
             setCurrentSentenceIndex((prevIndex) => prevIndex + 1);
             setDisplayText('');
             setTypingIndex(0);
-        }, currentSentence.length * 18);
+        }, currentSentence.length * TYPEWRITER_SENTENCE_GAP_FACTOR_MS);
 
         return () => clearTimeout(timer);
     }, [aiSentences, currentSentenceIndex, typingIndex]);
@@ -788,6 +894,7 @@ function Main() {
 
         const handleAiMessage = ({ requestId, eventType, response, location, attribute, startCombat, options }) => {
             markAiRequestCompleted(requestId);
+            markAiTypingExpectedCompletion(requestId, response || '');
             setAiBusy(false);
             appendAiLog({ role: 'ai', text: response, eventType });
             setAiText(response || '');
@@ -816,6 +923,13 @@ function Main() {
 
             // Handle start_combat flag from AI
             if (startCombat && isAdmin) {
+                if (!selectedFactionRef.current) {
+                    pendingStartCombatRef.current = true;
+                    setPendingFactionChoice(true);
+                    logImportant('[FACTION] start_combat received before faction selection; waiting for faction choice.');
+                    return;
+                }
+
                 pendingStartCombatRef.current = false;
                 handleStoryComplete();
                 return;
@@ -867,6 +981,7 @@ function Main() {
 
         const handleAiError = ({ requestId, error }) => {
             markAiRequestCompleted(requestId);
+            markAiTypingExpectedCompletion(requestId, '');
             setAiBusy(false);
             appendAiLog({ role: 'system', text: `AI error: ${error}`, eventType: 'error' });
 
@@ -887,6 +1002,7 @@ function Main() {
         };
 
         const handleCombatEnded = ({ result }) => {
+            combatLifecycleActiveRef.current = false;
             
             if (result === 'all_dead') {
                 setTurnOrder([]);
@@ -965,6 +1081,7 @@ function Main() {
         return () => {
             pendingAiRequestResolversRef.current.clear();
             completedAiRequestIdsRef.current.clear();
+            aiTypingCompletionByRequestIdRef.current.clear();
         };
     }, []);
 
@@ -1669,9 +1786,14 @@ function Main() {
             const latestEnemies = enemiesRef.current;
             const latestPlayerCharacters = playerCharactersRef.current;
             const latestActiveEffects = activeEffectsRef.current;
+            const narrationRequestIdsForTurn = [];
 
             const queueEnemyNarration = (message, data = {}) => {
-                emitAiEvent('turn_action', message, data);
+                const requestId = emitAiEvent('turn_action', message, data);
+                if (requestId) {
+                    narrationRequestIdsForTurn.push(requestId);
+                }
+                return requestId;
             };
 
             // Check if game is over - don't execute enemy turns
@@ -2036,10 +2158,8 @@ function Main() {
                 }, movementDelay); // Apply attack after movement completes
             }
 
-            // Delay before completing turn (mock narration pacing)
+            // Complete turn after movement/damage timing, then narration typing + 1s
             const baseActionDelay = movementDelay + (turnAction.target ? 500 : 0) + 1000;
-            const mockNarrationDelay = 6500 + Math.floor(Math.random() * 1001); // 6.5s - 7.5s
-            const totalDelay = Math.max(baseActionDelay, mockNarrationDelay);
             const turnCycleAtSchedule = currentTurnCycleRef.current;
             const completionKey = `${enemyId}:${turnCycleAtSchedule}`;
             setTimeout(async () => {
@@ -2057,6 +2177,17 @@ function Main() {
                         enemyId,
                         turnCycleAtSchedule,
                         completionKey
+                    });
+                    return;
+                }
+
+                await waitForNarrationTypingCompletion(narrationRequestIdsForTurn, TURN_ADVANCE_AFTER_TYPING_MS);
+
+                const refreshedLiveTurn = currentTurnRef.current;
+                if (!refreshedLiveTurn || refreshedLiveTurn.type !== 'enemy' || refreshedLiveTurn.id !== enemyId) {
+                    console.log('[ENEMY TURN] Narration wait finished but turn changed; skipping completion:', {
+                        enemyId,
+                        liveTurn: refreshedLiveTurn
                     });
                     return;
                 }
@@ -2101,7 +2232,7 @@ function Main() {
                     updatedActiveEffects: tickResult.updatedEffects,
                     enemyFinalPosition: enemyFinalPositionForTurn
                 });
-            }, totalDelay);
+            }, baseActionDelay);
         };
 
         const handleEnemiesUpdated = ({ enemies: updatedEnemies }) => {
@@ -2926,6 +3057,13 @@ function Main() {
     };
 
     function handleStoryComplete() {
+        if (combatLifecycleActiveRef.current) {
+            logImportant('[COMBAT FLOW] Ignoring duplicate handleStoryComplete call while combat is active/in-flight.');
+            return;
+        }
+
+        combatLifecycleActiveRef.current = true;
+
         const encounterConfig = STORY_COMBAT_FLOW[combatFlowIndexRef.current] || STORY_COMBAT_FLOW[STORY_COMBAT_FLOW.length - 1];
         const generatedEnemies = generateEnemiesFromCombatConfig(encounterConfig);
         const normalizedSpawnType = encounterConfig?.combatType || 'low';
@@ -3841,14 +3979,6 @@ function Main() {
 
         <div className="AI-script">
             <div className='Response'>
-            <div className="ai-header">
-                <span className={`ai-status ${aiBusy ? '' : ''}`}>
-                    {aiBusy ? '' : 'Ready'}
-                </span>
-                {currentSceneKey && SCENE_LABELS[currentSceneKey] && (
-                    <span className="ai-scene-label">{SCENE_LABELS[currentSceneKey]}</span>
-                )}
-            </div>
             {aiBusy && (
                 <div className="ai-thinking-overlay">
                     <div className="ai-thinking-spinner"></div>
@@ -3907,6 +4037,11 @@ function Main() {
             <span className="ai-text">
                 {displayText}
             </span>
+            <div className="ai-header">
+                <span className={`ai-status ${aiBusy ? '' : ''}`}>
+                    {aiBusy ? '' : 'Ready'}
+                </span>
+            </div>
        </div>
         <div className="inventory">
             {currentPlayerCharacter ? (

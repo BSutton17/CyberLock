@@ -4,13 +4,13 @@
       "id": "offensive_tank_1",
       "name": "Shipment",
       "role": "Tank",
-      "level": 5,
+      "level": 1,
       "stats": {
-        "health": 95,
-        "maxHealth": 95,
+        "health": 90,
+        "maxHealth": 90,
         "speed": 30,
-        "resistance": 30,
-        "strength": 30,
+        "resistance": 40,
+        "strength": 25,
         "ta": 15
       },
       "weapon": {
@@ -27,13 +27,13 @@
       "id": "defensive_tank_2",
       "name": "E.N.C.A.G.E",
       "role": "Tank",
-      "level": 5,
+      "level": 1,
       "stats": {
-        "health": 110,
-        "maxHealth": 110,
+        "health": 105,
+        "maxHealth": 105,
         "speed": 10,
-        "resistance": 40,
-        "strength": 35,
+        "resistance": 50,
+        "strength": 30,
         "ta": 5
       },
       "weapon": {
@@ -50,7 +50,7 @@
       "id": "spellcaster_dps_1",
       "name": "Shoot House",
       "role": "DPS",
-      "level": 5,
+      "level": 1,
       "stats": {
         "health": 75,
         "maxHealth": 75,
@@ -72,7 +72,7 @@
       "id": "aggressive_dps_2",
       "name": "Leo",
       "role": "DPS",
-      "level": 5,
+      "level": 1,
       "stats": {
         "health": 80,
         "maxHealth": 80,
@@ -95,7 +95,7 @@
       "id": "traditional_warrior_dps_3",
       "name": "Last Legion",
       "role": "DPS",
-      "level": 5,
+      "level": 1,
       "stats": {
         "health": 80,
         "maxHealth": 80,
@@ -118,7 +118,7 @@
       "id": "healing_support_1",
       "name": "Patchwork",
       "role": "Support",
-      "level": 5,
+      "level": 1,
       "stats": {
         "health": 60,
         "maxHealth": 60,
@@ -141,7 +141,7 @@
       "id": "offensive_support_2",
       "name": "Livewire",
       "role": "Support",
-      "level": 5,
+      "level": 1,
       "stats": {
         "health": 70,
         "maxHealth": 70,
@@ -164,7 +164,7 @@
       "id": "jack_of_all_trades_support_3",
       "name": "True North",
       "role": "Support",
-      "level": 5,
+      "level": 1,
       "stats": {
         "health": 65,
         "maxHealth": 65,
@@ -187,7 +187,7 @@
       "id": "hacker_support_4",
       "name": "Root Null",
       "role": "Support",
-      "level": 5,
+      "level": 1,
       "stats": {
         "health": 65,
         "maxHealth": 65,

@@ -249,6 +249,7 @@
     transition: all 0.3s ease;
     font-weight: 900;
     box-shadow: 0 0.557vmin 1.671vmin rgba(139, 92, 246, 0.4);
+    user-select: none;
 }
 
 .control-btn:hover:not(:disabled) {
@@ -280,6 +281,7 @@
     min-width: 3.713vmin;
     text-align: center;
     text-shadow: 0 0 1.671vmin rgba(139, 92, 246, 0.8), 0 0.279vmin 0.557vmin rgba(0, 0, 0, 0.8);
+    user-select: none;
 }
 
 .player-allocations {

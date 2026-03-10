@@ -4206,7 +4206,7 @@ function Main() {
                                                     </span>
                                                 </div>
                                                 <div className="stat-item">
-                                                    <span className="stat-label">Technical Ability</span>
+                                                    <span className="stat-label">Tech Ability</span>
                                                     <span className="stat-value">
                                                         {currentPlayerCharacter.stats.ta}
                                                         {statBonuses.ta && (

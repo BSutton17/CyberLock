@@ -199,6 +199,22 @@ function normalizeEnemiesForCombat(incomingEnemies = [], existingEnemies = []) {
   });
 }
 
+function shouldApplyEnemyUpdateForEncounter(combat, incomingEnemies = []) {
+  if (!combat || !Array.isArray(incomingEnemies) || incomingEnemies.length === 0) return false;
+
+  const currentEnemyIds = new Set((combat.enemies || []).map(enemy => enemy.id));
+  if (currentEnemyIds.size === 0) return true;
+
+  const incomingEnemyIds = new Set(incomingEnemies.map(enemy => enemy.id));
+  for (const incomingId of incomingEnemyIds) {
+    if (!currentEnemyIds.has(incomingId)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function removeDeadEnemiesFromTurnOrder(combat) {
   if (!combat?.turnOrder) return;
   const currentTurn = combat.turnOrder[combat.currentTurnIndex];
@@ -239,6 +255,7 @@ function emitEnemyDefeatVictoryIfNeeded(io, room, combat) {
 
   combat.endedResult = 'enemies_defeated';
   clearEnemyTurnWatchdog(room);
+  clearAllyTurnAdvanceDelay(room);
   io.to(room).emit('combat_ended', { result: 'enemies_defeated' });
   return true;
 }
@@ -1102,11 +1119,19 @@ io.on('connection', (socket) => {
   });
 
   socket.on("start_combat", ({ room, generatedEnemies, sceneKey, playerPositions: proposedPlayerPositions }) => {
-    if(!combatSessions[room]) {
-      combatSessions[room] = {};
-    }
+    const previousEncounterId = combatSessions[room]?.encounterId || 0;
+    clearEnemyTurnWatchdog(room);
+    clearAllyTurnAdvanceDelay(room);
 
-    combatSessions[room].enemies = generatedEnemies;
+    combatSessions[room] = {
+      encounterId: previousEncounterId + 1,
+      enemies: normalizeEnemiesForCombat(generatedEnemies || [], []),
+      enemyPositions: {},
+      playerPositions: {},
+      turnOrder: [],
+      currentTurnIndex: 0,
+      endedResult: null
+    };
 
     // Generate enemy positions (server decides so all clients see same positions)
     const enemyPositions = generateEnemySpawnPositions(generatedEnemies, sceneKey);
@@ -1118,21 +1143,7 @@ io.on('connection', (socket) => {
       sceneKey
     );
 
-    console.log('[COMBAT START DEBUG] Server-authoritative spawn snapshot', {
-      room,
-      sceneKey,
-      playersOrder: rooms[room]?.players || [],
-      playerRoles: Object.fromEntries(
-        Object.entries(rooms[room]?.characterSelections || {}).map(([player, character]) => [
-          player,
-          character?.role || null
-        ])
-      ),
-      usingClientPlayerPositions: !!sanitizedPlayerPositions,
-      playerPositions,
-      enemyIds: (generatedEnemies || []).map(enemy => enemy.id),
-      enemyPositions
-    });
+
 
     combatSessions[room].enemyPositions = enemyPositions;
     combatSessions[room].playerPositions = playerPositions;
@@ -1140,9 +1151,14 @@ io.on('connection', (socket) => {
     const turnOrder = calculateTurnOrder(room);
     combatSessions[room].turnOrder = turnOrder;
     combatSessions[room].currentTurnIndex = 0;
-    clearEnemyTurnWatchdog(room);
-
     const firstTurn = turnOrder[0];
+    console.log(`[TURN_ORDER] COMBAT_START - Room: ${room}`, {
+      encounterId: combatSessions[room].encounterId,
+      total: turnOrder.length,
+      allies: turnOrder.filter(t => t.type === 'ally').length,
+      enemies: turnOrder.filter(t => t.type === 'enemy').length,
+      order: turnOrder
+    });
     
     // Broadcast character selections to ensure all players have current data
     const characterSelections = rooms[room]?.characterSelections || {};
@@ -1182,8 +1198,17 @@ io.on('connection', (socket) => {
     // Update enemies with new stats (for debuffs/buffs)
     if (rooms[room] && updatedEnemies) {
       if (combatSessions[room]) {
-        combatSessions[room].enemies = normalizeEnemiesForCombat(updatedEnemies, combatSessions[room].enemies || []);
-        removeDeadEnemiesFromTurnOrder(combatSessions[room]);
+        if (shouldApplyEnemyUpdateForEncounter(combatSessions[room], updatedEnemies)) {
+          combatSessions[room].enemies = normalizeEnemiesForCombat(updatedEnemies, combatSessions[room].enemies || []);
+          removeDeadEnemiesFromTurnOrder(combatSessions[room]);
+        } else {
+          console.log('[TURN_ORDER] Ignored stale ability_used enemy payload', {
+            room,
+            encounterId: combatSessions[room].encounterId,
+            currentEnemyIds: (combatSessions[room].enemies || []).map(enemy => enemy.id),
+            incomingEnemyIds: (updatedEnemies || []).map(enemy => enemy.id)
+          });
+        }
       }
       
       io.to(room).emit("enemies_updated", { enemies: combatSessions[room]?.enemies || updatedEnemies });
@@ -1200,10 +1225,38 @@ io.on('connection', (socket) => {
     
     if (!combat) return;
 
+    const canonicalPlayerName = playerNames[socket.id] || playerName;
+    
+    console.log(`[TURN_ORDER] END_TURN from ${playerName} - Room: ${room}`, {
+      encounterId: combat.encounterId,
+      currentIndex: combat.currentTurnIndex,
+      totalTurns: (combat.turnOrder || []).length,
+      order: (combat.turnOrder || [])
+    });
+    const senderCharacterName = rooms[room]?.characterSelections?.[canonicalPlayerName]?.name;
+    const isSinglePlayerRoom = (rooms[room]?.players || []).length === 1;
+    const isSenderAllyTurn = (turn) => {
+      if (!turn || turn.type !== 'ally') return false;
+      if (turn.id === canonicalPlayerName) return true;
+      if (senderCharacterName && turn.id === senderCharacterName) return true;
+      if (isSinglePlayerRoom) return true;
+      return false;
+    };
+
     // Update enemies with any debuffs/buffs that were ticked
     if (updatedEnemies && Array.isArray(updatedEnemies)) {
-      combat.enemies = normalizeEnemiesForCombat(updatedEnemies, combat.enemies || []);
-      removeDeadEnemiesFromTurnOrder(combat);
+      if (shouldApplyEnemyUpdateForEncounter(combat, updatedEnemies)) {
+        combat.enemies = normalizeEnemiesForCombat(updatedEnemies, combat.enemies || []);
+        removeDeadEnemiesFromTurnOrder(combat);
+      } else {
+        console.log('[TURN_ORDER] Ignored stale end_turn enemy payload', {
+          room,
+          encounterId: combat.encounterId,
+          currentEnemyIds: (combat.enemies || []).map(enemy => enemy.id),
+          incomingEnemyIds: (updatedEnemies || []).map(enemy => enemy.id)
+        });
+      }
+
       if (emitEnemyDefeatVictoryIfNeeded(io, room, combat)) {
         return;
       }
@@ -1222,8 +1275,8 @@ io.on('connection', (socket) => {
     }
 
     const currentTurn = combat?.turnOrder[combat.currentTurnIndex];
+    console.log(`[END_TURN] Handler - room: ${room}, sender: ${playerName}, index: ${combat?.currentTurnIndex}`);
     
-    // Safety check for undefined currentTurn
     if (!currentTurn) {
       combat.currentTurnIndex = 0;
       if (combat.turnOrder.length === 0) {
@@ -1240,7 +1293,8 @@ io.on('connection', (socket) => {
       return;
     }
     
-    if (currentTurn.id !== playerName) {
+    if (!isSenderAllyTurn(currentTurn)) {
+      console.log(`[END_TURN] Sender validation FAILED for turn: ${currentTurn.id} (${currentTurn.type}), emitting current turn`);
       io.to(room).emit("turn_changed", { currentTurn });
       if (currentTurn.type === 'enemy') {
         dispatchEnemyTurn(io, room, combat, currentTurn.id);
@@ -1250,15 +1304,35 @@ io.on('connection', (socket) => {
       return;
     }
 
-    clearAllyTurnAdvanceDelay(room);
+    if (allyTurnAdvanceDelays[room]) {
+      return;
+    }
+
     allyTurnAdvanceDelays[room] = setTimeout(() => {
       delete allyTurnAdvanceDelays[room];
 
       const latestCombat = combatSessions[room];
-      if (!latestCombat) return;
+      if (!latestCombat) {
+        return;
+      }
 
       const latestTurn = latestCombat.turnOrder?.[latestCombat.currentTurnIndex];
-      if (!latestTurn || latestTurn.type !== 'ally' || latestTurn.id !== playerName) {
+      
+      if (!latestTurn) {
+        console.log(`[TURN_ORDER] Delayed: null turn, re-syncing`);
+        emitCurrentTurn(io, room, latestCombat);
+        return;
+      }
+
+      if (latestTurn.type !== 'ally') {
+        console.log(`[TURN_ORDER] Delayed: non-ally turn (${latestTurn.type}), skipping advance`);
+        emitCurrentTurn(io, room, latestCombat);
+        return;
+      }
+
+      if (!isSenderAllyTurn(latestTurn)) {
+        console.log(`[TURN_ORDER] Delayed: sender validation failed, re-syncing`);
+        emitCurrentTurn(io, room, latestCombat);
         return;
       }
 
@@ -1279,6 +1353,13 @@ io.on('connection', (socket) => {
       }
 
       const nextTurn = latestCombat.turnOrder[latestCombat.currentTurnIndex];
+      console.log(`[TURN_ORDER] Advancing`, {
+        fromIndex: latestCombat.currentTurnIndex - 1 < 0 ? latestCombat.turnOrder.length - 1 : latestCombat.currentTurnIndex - 1,
+        toIndex: latestCombat.currentTurnIndex,
+        nextTurnId: nextTurn.id,
+        nextTurnType: nextTurn.type,
+        order: latestCombat.turnOrder
+      });
       io.to(room).emit("turn_changed", { currentTurn: nextTurn });
       if (removedCorpses) {
         io.to(room).emit("enemies_updated", { enemies: latestCombat.enemies });
@@ -1304,11 +1385,20 @@ io.on('connection', (socket) => {
     clearEnemyTurnWatchdog(room);
 
     if (updatedEnemies && Array.isArray(updatedEnemies)) {
-      combat.enemies = normalizeEnemiesForCombat(updatedEnemies, combat.enemies || []);
-      removeDeadEnemiesFromTurnOrder(combat);
-      io.to(room).emit("enemies_updated", { enemies: combat.enemies });
-      if (emitEnemyDefeatVictoryIfNeeded(io, room, combat)) {
-        return;
+      if (shouldApplyEnemyUpdateForEncounter(combat, updatedEnemies)) {
+        combat.enemies = normalizeEnemiesForCombat(updatedEnemies, combat.enemies || []);
+        removeDeadEnemiesFromTurnOrder(combat);
+        io.to(room).emit("enemies_updated", { enemies: combat.enemies });
+        if (emitEnemyDefeatVictoryIfNeeded(io, room, combat)) {
+          return;
+        }
+      } else {
+        console.log('[TURN_ORDER] Ignored stale enemy_turn_complete enemy payload', {
+          room,
+          encounterId: combat.encounterId,
+          currentEnemyIds: (combat.enemies || []).map(enemy => enemy.id),
+          incomingEnemyIds: (updatedEnemies || []).map(enemy => enemy.id)
+        });
       }
     }
 

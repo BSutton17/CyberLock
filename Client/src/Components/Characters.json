@@ -6,11 +6,11 @@
       "role": "Tank",
       "level": 1,
       "stats": {
-        "health": 95,
-        "maxHealth": 95,
+        "health": 90,
+        "maxHealth": 90,
         "speed": 30,
-        "resistance": 30,
-        "strength": 30,
+        "resistance": 40,
+        "strength": 25,
         "ta": 15
       },
       "weapon": {
@@ -29,11 +29,11 @@
       "role": "Tank",
       "level": 1,
       "stats": {
-        "health": 110,
-        "maxHealth": 110,
-        "speed": 10,
+        "health": 105,
+        "maxHealth": 105,
+        "speed": 20,
         "resistance": 40,
-        "strength": 35,
+        "strength": 30,
         "ta": 5
       },
       "weapon": {
@@ -62,7 +62,7 @@
       "weapon": {
         "range": 3,
         "name": "Ray Gun",
-        "damage": 10
+        "damage": 9
       },
       "abilities": [
       ],

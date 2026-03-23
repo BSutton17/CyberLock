@@ -15,7 +15,7 @@ const NON_COMBAT_ATTRIBUTES = [
     { id: 'electrician', name: 'Electrician', description: 'Electricians are experts in power systems and circuitry. They thrive when repairing, sabotaging, or rerouting electrical systems and technology.' }
 ];
 
-const TOTAL_POINTS = 1;
+const TOTAL_POINTS = 45;
 const MAX_POINTS_PER_ATTRIBUTE = 9;
 
 function CharacterBuilder() {
@@ -113,7 +113,23 @@ function CharacterBuilder() {
         return attributePoints[attrId] > 0;
     };
 
-    const handleIncrement = (attrId) => {
+    const handleIncrement = (attrId, e) => {
+        if (e && e.shiftKey) {
+            const currentValue = attributePoints[attrId];
+            const usedValues = new Set(Object.entries(attributePoints)
+                .filter(([id, val]) => id !== attrId && val > 0)
+                .map(([, val]) => val));
+            
+            for (let val = MAX_POINTS_PER_ATTRIBUTE; val > currentValue; val--) {
+                if (!usedValues.has(val) && (val - currentValue) <= remainingPoints) {
+                    const newPoints = { ...attributePoints, [attrId]: val };
+                    setAttributePoints(newPoints);
+                    socket.emit('update_attribute_points', { room, playerName, points: newPoints });
+                    return;
+                }
+            }
+        }
+
         if (canIncrement(attrId)) {
             const newPoints = { ...attributePoints, [attrId]: attributePoints[attrId] + 1 };
             setAttributePoints(newPoints);
@@ -121,9 +137,60 @@ function CharacterBuilder() {
         }
     };
 
-    const handleDecrement = (attrId) => {
+    const handleDecrement = (attrId, e) => {
+        if (e && e.shiftKey && canDecrement(attrId)) {
+            const newPoints = { ...attributePoints, [attrId]: 0 };
+            setAttributePoints(newPoints);
+            socket.emit('update_attribute_points', { room, playerName, points: newPoints });
+            return;
+        }
+
         if (canDecrement(attrId)) {
             const newPoints = { ...attributePoints, [attrId]: attributePoints[attrId] - 1 };
+            setAttributePoints(newPoints);
+            socket.emit('update_attribute_points', { room, playerName, points: newPoints });
+        }
+    };
+
+    const handleBarClick = (attrId, e) => {
+        if (isReady) return;
+        
+        // Ensure we are clicking on the bar itself or the fill, not the buttons.
+        if (e.target.tagName.toLowerCase() === 'button' || e.target.closest('button')) {
+            return;
+        }
+
+        const rect = e.currentTarget.getBoundingClientRect();
+        // Calculate the percentage clicked along the bar
+        const clickX = e.clientX - rect.left;
+        let percentage = clickX / rect.width;
+        
+        // Boost percentage slightly so the user doesn't have to click the absolute right edge
+        percentage = Math.max(0, Math.min(1, percentage * 1.08));
+        
+        // We want the value to snap to the nearest integer from 0 to MAX_POINTS_PER_ATTRIBUTE
+        const targetValue = Math.round(percentage * MAX_POINTS_PER_ATTRIBUTE);
+        const currentValue = attributePoints[attrId];
+
+        if (targetValue === currentValue) return;
+
+        if (targetValue > currentValue) {
+            // Trying to increase
+            const difference = targetValue - currentValue;
+            if (difference > remainingPoints) {
+                // Not enough points, just add whatever is left
+                const newPoints = { ...attributePoints, [attrId]: currentValue + remainingPoints };
+                setAttributePoints(newPoints);
+                socket.emit('update_attribute_points', { room, playerName, points: newPoints });
+            } else {
+                // We have enough points to reach the target
+                const newPoints = { ...attributePoints, [attrId]: targetValue };
+                setAttributePoints(newPoints);
+                socket.emit('update_attribute_points', { room, playerName, points: newPoints });
+            }
+        } else {
+            // Trying to decrease
+            const newPoints = { ...attributePoints, [attrId]: targetValue };
             setAttributePoints(newPoints);
             socket.emit('update_attribute_points', { room, playerName, points: newPoints });
         }
@@ -169,23 +236,26 @@ function CharacterBuilder() {
                                     </div> 
                                 <div 
                                     key={attr.id} 
-                                    className={`attribute-item ${currentValue === MAX_POINTS_PER_ATTRIBUTE ? 'max-attribute' : ''}`}
+                                    className={`attribute-item ${currentValue === MAX_POINTS_PER_ATTRIBUTE ? 'max-attribute' : ''} ${!isReady ? 'clickable-bar' : ''}`}
                                     style={{ '--fill-percentage': `${fillPercentage}%` }}
+                                    onClick={(e) => handleBarClick(attr.id, e)}
                                 >
                                     <div className={`${currentValue === MAX_POINTS_PER_ATTRIBUTE ? 'max-attribute-fill' : ''}`}></div>
                                     <div className="attribute-controls">
                                         <button 
-                                            onClick={() => handleDecrement(attr.id)}
+                                            onClick={(e) => handleDecrement(attr.id, e)}
                                             disabled={isReady || !canDecrement(attr.id)}
-                                            className="control-btn"
+                                            className="control-btn title-tooltip"
+                                            title="Shift-click to immediately remove all points"
                                         >
                                             -
                                         </button>
                                         <span className="attribute-value">{currentValue}</span>
                                         <button 
-                                            onClick={() => handleIncrement(attr.id)}
+                                            onClick={(e) => handleIncrement(attr.id, e)}
                                             disabled={!canIncrement(attr.id)}
-                                            className="control-btn"
+                                            className="control-btn title-tooltip"
+                                            title="Shift-click to immediately assign highest available value"
                                         >
                                             +
                                         </button>

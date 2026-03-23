@@ -112,12 +112,14 @@ function HomeScreen() {
 
   // Get rid of the saved data
   const leaveGame = () => {
-    localStorage.removeItem("name");
-    localStorage.removeItem("room");
-    localStorage.removeItem("isAdmin");
-    localStorage.removeItem("screen");
-    window.location.reload(); 
-    socket.emit("disconnect");
+    if (window.confirm("Are you sure you want to leave the game? This will disconnect you from the current room.")) {
+      localStorage.removeItem("name");
+      localStorage.removeItem("room");
+      localStorage.removeItem("isAdmin");
+      localStorage.removeItem("screen");
+      window.location.reload(); 
+      socket.emit("disconnect");
+    }
   };
 
   // Logout from authentication

@@ -126,8 +126,8 @@ const estimateTypewriterDurationMs = (message = '') => {
 
 // number of generic enemies for low is always party size + 2 I just put 0 here as a placeholder
 const STORY_COMBAT_FLOW = [
-    { combatType: 'low', numOfGeneric: 0, numOfMid: 0, numOfMini: 0, Boss: false, postCombat: 'none' },
     { combatType: 'low', numOfGeneric: 0, numOfMid: 0, numOfMini: 0, Boss: false, postCombat: 'levelUp' },
+    { combatType: 'low', numOfGeneric: 0, numOfMid: 0, numOfMini: 0, Boss: false, postCombat: 'none' },
     { combatType: 'medium', numOfGeneric: 2, numOfMid: 2, numOfMini: 0, Boss: false, postCombat: 'none' },
     { combatType: 'boss', numOfGeneric: 2, numOfMid: 1, numOfMini: 0, Boss: true, postCombat: 'levelUp' },
 
@@ -142,7 +142,7 @@ const STORY_COMBAT_FLOW = [
 ];
 
 function Main() {
-    const { players, playerCharacters, setPlayerCharacters, playerName, room, socket,getAbilityScaler, attributeAllocations, setGamePhase, isMyTurn, currentTurn, enemies, setEnemies, turnOrder, setTurnOrder, isAdmin, setScreen, getCharacterImage, getEnemyImage, debugLogLevel } = useGameContext();
+    const { players, playerCharacters, setPlayerCharacters, playerName, room, socket, getAbilityScaler, attributeAllocations, setGamePhase, isMyTurn, currentTurn, enemies, setEnemies, turnOrder, setTurnOrder, isAdmin, setScreen, getCharacterImage, getEnemyImage, debugLogLevel } = useGameContext();
     const [currentPlayerCharacter, setCurrentPlayerCharacter] = useState(null);
     const [ultimateReady, setUltimateReady] = useState(false);
     const [characterPositions, setCharacterPositions] = useState({});
@@ -272,6 +272,8 @@ function Main() {
     const currentTurnCycleRef = useRef(0);
     const completedEnemyTurnCyclesRef = useRef(new Set());
     const completedAllyTurnCyclesRef = useRef(new Set());
+    const wasCombatTurnOrderActiveRef = useRef(false);
+    const lastEndTurnAttemptRef = useRef({ cycle: -1, timestamp: 0 });
     const turnTimerIntervalRef = useRef(null);
     const turnStartLockTimeoutRef = useRef(null);
     const turnStartLockIntervalRef = useRef(null);
@@ -358,6 +360,23 @@ function Main() {
     useEffect(() => {
         currentTurnCycleRef.current += 1;
     }, [currentTurn?.type, currentTurn?.id]);
+
+    useEffect(() => {
+        const hasTurnOrder = Array.isArray(turnOrder) && turnOrder.length > 0;
+
+        if (hasTurnOrder && !wasCombatTurnOrderActiveRef.current) {
+            currentTurnCycleRef.current += 1;
+            completedAllyTurnCyclesRef.current.clear();
+            completedEnemyTurnCyclesRef.current.clear();
+        }
+
+        if (!hasTurnOrder && wasCombatTurnOrderActiveRef.current) {
+            completedAllyTurnCyclesRef.current.clear();
+            completedEnemyTurnCyclesRef.current.clear();
+        }
+
+        wasCombatTurnOrderActiveRef.current = hasTurnOrder;
+    }, [turnOrder]);
 
     useEffect(() => {
         selectedFactionRef.current = selectedFaction;
@@ -657,14 +676,14 @@ function Main() {
             normalized.includes('protestor') ||
             normalized.includes('protest') ||
             normalized.includes('uprising') ||
-            normalized.includes('citizens') 
+            normalized.includes('citizens')
         ) {
             return 'rebels';
         }
 
         return null;
     };
-    
+
 
     const handleFactionChoice = (choice, explicitFaction = null) => {
         if (!canPlayerDecide('politician')) return;
@@ -691,6 +710,8 @@ function Main() {
             if (faction === 'enforcers' || faction === 'rebels') {
                 setSelectedFaction(faction);
                 selectedFactionRef.current = faction;
+                setPendingFactionChoice(false);
+                setAiOptions(null);
 
                 if (pendingStartCombatRef.current && isAdmin) {
                     pendingStartCombatRef.current = false;
@@ -707,19 +728,42 @@ function Main() {
 
     const handlePostEncounterChoice = (choice) => {
         const requiredAttribute = choice === 'shop' ? 'banker' : 'navigator';
-        if (!canPlayerDecide(requiredAttribute)) return;
+        const owner = getDecisionOwner(requiredAttribute);
+        
+        // Allow if: has required attribute, or is admin, or in single-player mode with one player
+        const canProceed = owner === playerName || isAdmin || players.length === 1;
+        
+        if (!canProceed) {
+            logImportant('[POST-ENCOUNTER CHOICE] Blocked - player lacks required attribute:', requiredAttribute);
+            return;
+        }
+        
+        logImportant('[POST-ENCOUNTER CHOICE] Choice made:', choice, 'by player:', playerName);
+        
         setPendingPostEncounterChoice(false);
+        setAiOptions(null);
+        
         if (choice === 'shop') {
             emitAiEvent('shop_intro', 'The party heads to the shop after the encounter.', { choice });
         } else {
             pendingStartCombatRef.current = true;
+            logImportant('[POST-ENCOUNTER CHOICE] Set pendingStartCombatRef to true, emitting next_encounter');
             emitAiEvent('next_encounter', 'The party pushes onward to the next encounter.', { choice });
         }
     };
 
     const handleNextEncounter = () => {
-        if (!canPlayerDecide('navigator')) return;
+        const owner = getDecisionOwner('navigator');
+        const canProceed = owner === playerName || isAdmin || players.length === 1;
+        
+        if (!canProceed) {
+            logImportant('[NEXT ENCOUNTER] Blocked - player lacks navigator attribute');
+            return;
+        }
+        
+        logImportant('[NEXT ENCOUNTER] Proceeding from shop');
         setPendingNextEncounterChoice(false);
+        setAiOptions(null);
         pendingStartCombatRef.current = true;
         emitAiEvent('next_encounter', 'Leaving the shop, the party moves toward the next encounter.', { choice: 'next_encounter' });
     };
@@ -734,28 +778,29 @@ function Main() {
         const lowerOption = option.toLowerCase();
 
         const parsedFaction = resolveFactionAlignment(lowerOption);
-        if (parsedFaction && (pendingFactionChoice || aiAttribute === 'politician')) {
+        if (parsedFaction && (pendingFactionChoice || (!selectedFactionRef.current && aiAttribute === 'politician'))) {
             handleFactionChoice(option, parsedFaction);
             return;
         }
 
-        if (lowerOption.includes('enforcer')) {
+        if (!selectedFactionRef.current && pendingFactionChoice && lowerOption.includes('enforcer')) {
             handleFactionChoice(option);
             return;
         }
-        if (lowerOption.includes('people') || lowerOption.includes('rebel')) {
+        if (!selectedFactionRef.current && pendingFactionChoice && (lowerOption.includes('people') || lowerOption.includes('rebel'))) {
             handleFactionChoice(option);
             return;
         }
-        if (lowerOption.includes('shop')) {
+        if (pendingPostEncounterChoice && lowerOption.includes('shop')) {
             handlePostEncounterChoice('shop');
             return;
         }
-        if (lowerOption.includes('next encounter') || lowerOption.includes('next_encounter')) {
-            setPendingPostEncounterChoice(false);
-            setPendingNextEncounterChoice(false);
-            pendingStartCombatRef.current = true;
-            emitAiEvent('next_encounter', `The party chose: ${option}`, { choice: option });
+        if (pendingPostEncounterChoice && (lowerOption.includes('next encounter') || lowerOption.includes('next_encounter') || lowerOption.includes('continue'))) {
+            handlePostEncounterChoice('next_encounter');
+            return;
+        }
+        if (pendingNextEncounterChoice && (lowerOption.includes('next encounter') || lowerOption.includes('next_encounter') || lowerOption.includes('continue'))) {
+            handleNextEncounter();
             return;
         }
 
@@ -859,6 +904,7 @@ function Main() {
 
     useEffect(() => {
         if (!isAdmin || !room || hasRequestedIntroRef.current) return;
+        if (selectedFactionRef.current) return;
         if (players.length === 0) return;
 
         hasRequestedIntroRef.current = true;
@@ -877,19 +923,27 @@ function Main() {
 
     useEffect(() => {
         const proceedPostCombatAction = (postCombatAction) => {
+            logImportant('[POST-COMBAT] Proceeding with postCombatAction:', postCombatAction);
+            
             if (postCombatAction === 'levelUp') {
                 socket.emit('level_up', { room });
+                // After level up, set pending choice so next encounter button appears
+                setPendingPostEncounterChoice(true);
+                logImportant('[POST-COMBAT] Level up sent; pending choice set for next phase');
                 return;
             }
 
             if (postCombatAction === 'shop') {
                 setSceneFromKeyword('shop');
-                setPendingNextEncounterChoice(true);
+                setPendingPostEncounterChoice(true);  // Changed from pendingNextEncounterChoice to pendingPostEncounterChoice
+                logImportant('[POST-COMBAT] Shop scene set; pending choice set');
                 return;
             }
 
+            // For 'none', proceed directly to next encounter
             pendingStartCombatRef.current = false;
-            setPendingNextEncounterChoice(true);
+            setPendingPostEncounterChoice(true);
+            logImportant('[POST-COMBAT] No post-combat action; pending choice set for next encounter');
         };
 
         const handleAiMessage = ({ requestId, eventType, response, location, attribute, startCombat, options }) => {
@@ -914,11 +968,24 @@ function Main() {
             // Store attribute for decision-making
             setAiAttribute(attribute || null);
 
-            // Display options from AI if provided
-            if (options && Array.isArray(options) && options.length > 0) {
-                setAiOptions(options);
-            } else {
-                setAiOptions(null);
+            // Handle post-combat narration FIRST, before options display logic
+            if (
+                isAdmin &&
+                requestId &&
+                requestId === pendingPostCombatNarrationRequestIdRef.current
+            ) {
+                const postCombatAction = pendingPostCombatActionRef.current || 'none';
+                pendingPostCombatNarrationRequestIdRef.current = null;
+                pendingPostCombatActionRef.current = null;
+                
+                // Generate default options if AI didn't provide them (fallback mode)
+                if (!options) {
+                    setAiOptions(['Continue to next encounter']);
+                    logImportant('[POST-COMBAT] Generated fallback option "Continue to next encounter" for postCombatAction:', postCombatAction);
+                }
+                
+                proceedPostCombatAction(postCombatAction);
+                return;
             }
 
             // Handle start_combat flag from AI
@@ -935,20 +1002,22 @@ function Main() {
                 return;
             }
 
-            if (
-                isAdmin &&
-                requestId &&
-                requestId === pendingPostCombatNarrationRequestIdRef.current
-            ) {
-                const postCombatAction = pendingPostCombatActionRef.current || 'none';
-                pendingPostCombatNarrationRequestIdRef.current = null;
-                pendingPostCombatActionRef.current = null;
-                proceedPostCombatAction(postCombatAction);
-                return;
+            // Display options from AI only when a decision state is active
+            const hasIncomingOptions = Array.isArray(options) && options.length > 0;
+            const shouldAcceptAiOptions =
+                pendingFactionChoice ||
+                pendingPostEncounterChoice ||
+                pendingNextEncounterChoice ||
+                (!selectedFactionRef.current && (eventType === 'game_start' || attribute === 'politician'));
+
+            if (hasIncomingOptions && shouldAcceptAiOptions) {
+                setAiOptions(options);
+            } else {
+                setAiOptions(null);
             }
 
             // Fallback event-type logic for cases where AI doesn't set structured fields
-            if (eventType === 'game_start' && !options) {
+            if (eventType === 'game_start' && !options && !selectedFactionRef.current) {
                 setPendingFactionChoice(true);
             }
 
@@ -964,7 +1033,10 @@ function Main() {
             }
 
             if (eventType === 'encounter_end' && !options) {
+                logImportant('[ENCOUNTER_END] No AI options provided in fallback/normal response');
                 setPendingPostEncounterChoice(false);
+            } else if (eventType === 'encounter_end') {
+                logImportant('[ENCOUNTER_END] AI provided options:', options);
             }
 
             if (eventType === 'shop_intro' && !options) {
@@ -1003,7 +1075,7 @@ function Main() {
 
         const handleCombatEnded = ({ result }) => {
             combatLifecycleActiveRef.current = false;
-            
+
             if (result === 'all_dead') {
                 setTurnOrder([]);
                 setEnemies([]);
@@ -1042,7 +1114,8 @@ function Main() {
                 socket.emit('ability_used', {
                     room,
                     playerName,
-                    updatedPlayerCharacters: restoredPlayerCharacters
+                    updatedPlayerCharacters: restoredPlayerCharacters,
+                    updatedActiveEffects: []
                 });
             }
 
@@ -1050,21 +1123,41 @@ function Main() {
                 const resetCooldowns = {};
 
                 Object.keys(prevCooldowns || {}).forEach((abilityId) => {
-                    resetCooldowns[abilityId] = 0;
+                    const abilityData = getAbility(abilityId);
+                    resetCooldowns[abilityId] = abilityData?.isUltimate
+                        ? (prevCooldowns?.[abilityId] || 0)
+                        : 0;
                 });
 
                 const myCharacter = playerCharactersRef.current?.[playerName];
-                const abilityIds = [
+                const nonUltimateAbilityIds = [
                     ...(Array.isArray(myCharacter?.abilities) ? myCharacter.abilities.map(ability => ability?.id).filter(Boolean) : []),
-                    myCharacter?.ultimate?.id
                 ].filter(Boolean);
 
-                abilityIds.forEach((abilityId) => {
+                nonUltimateAbilityIds.forEach((abilityId) => {
                     resetCooldowns[abilityId] = 0;
                 });
 
+                const ultimateId = myCharacter?.ultimate?.id;
+                if (ultimateId) {
+                    resetCooldowns[ultimateId] = prevCooldowns?.[ultimateId] || 0;
+                }
+
                 return resetCooldowns;
             });
+
+            setActiveEffects([]);
+            setActionUsed(false);
+            setMovementUsed(0);
+            setExtraWeaponAttacksRemaining(0);
+            setSelectedAbility(null);
+            setSelectedTargets([]);
+            setPendingRelocateTarget(null);
+            setWeaponSelected(false);
+            setTurnStartPosition(null);
+            setIsTurnActionLocked(false);
+            setTurnStartLockRemainingMs(0);
+            setTurnTimeLeft(null);
 
             const preCombatPositions = preCombatPlayerPositionsRef.current || {};
             const restoredPlayerPositions = {};
@@ -1128,7 +1221,7 @@ function Main() {
             socket.off('ai_thinking', handleAiThinking);
             socket.off('combat_ended', handleCombatEnded);
         };
-    }, [socket, isAdmin, room, playerName, players, playerCharacters]);
+    }, [socket, isAdmin, room, playerName, players, playerCharacters, pendingFactionChoice, pendingPostEncounterChoice, pendingNextEncounterChoice]);
 
     useEffect(() => {
         return () => {
@@ -1324,6 +1417,23 @@ function Main() {
         return matchingPlayerId || unitId;
     };
 
+    const hasControlLockEffect = (unitId, lockKey) => {
+        const canonicalUnitId = getCanonicalUnitId(unitId);
+        if (!canonicalUnitId) return false;
+
+        return activeEffects.some(effect => {
+            if (!effect || effect.turnsRemaining <= 0 || !effect[lockKey]) {
+                return false;
+            }
+
+            const canonicalEffectTarget = getCanonicalUnitId(effect.target);
+            return canonicalEffectTarget === canonicalUnitId;
+        });
+    };
+
+    const isMovementLockedForPlayer = () => hasControlLockEffect(playerName, 'preventMovement');
+    const isActionLockedForPlayer = () => hasControlLockEffect(playerName, 'preventActions');
+
     const getCurrentPlayerPosition = () => {
         const byPlayerId = characterPositions[playerName];
         if (byPlayerId) return byPlayerId;
@@ -1483,7 +1593,7 @@ function Main() {
 
         // Assign abilities based on enemy level and behavior
         enemyInstance.abilities = assignEnemyAbilities(enemyInstance);
-        
+
         // Initialize cooldowns for enemy abilities
         enemyInstance.cooldowns = {};
         if (enemyInstance.abilities && Array.isArray(enemyInstance.abilities)) {
@@ -1491,7 +1601,7 @@ function Main() {
                 enemyInstance.cooldowns[ability.id] = 0;
             });
         }
-        
+
         console.log(`[ENEMY CREATION] ${enemyInstance.name} created with abilities:`, enemyInstance.abilities);
         console.log(`[ENEMY CREATION] Initialized cooldowns:`, enemyInstance.cooldowns);
 
@@ -1713,7 +1823,7 @@ function Main() {
         if (enemies && enemies.length > 0) {
             // Check if server provided positions
             const storedPositions = sessionStorage.getItem(`enemyPositions_${room}`);
-            
+
             if (storedPositions) {
                 // Use server-provided positions
                 try {
@@ -1761,18 +1871,18 @@ function Main() {
     const calculatePath = (start, end) => {
         const path = [];
         let current = { ...start };
-        
+
         // Move row-wise first, then column-wise
         while (current.row !== end.row) {
             current = { ...current, row: current.row + (end.row > current.row ? 1 : -1) };
             path.push({ ...current });
         }
-        
+
         while (current.col !== end.col) {
             current = { ...current, col: current.col + (end.col > current.col ? 1 : -1) };
             path.push({ ...current });
         }
-        
+
         return path;
     };
 
@@ -1863,13 +1973,13 @@ function Main() {
             });
             logVerbose('[ENEMY TURN][VERBOSE] allies list:', allies);
             logVerbose('[ENEMY TURN][VERBOSE] alliedEnemies list:', alliedEnemies);
-            
+
             // Only the first player in the allies list handles enemy turns
             if (allies[0] !== playerName) {
                 logVerbose('[ENEMY TURN] Not the designated handler, skipping');
                 return;
             }
-            
+
             const enemy = latestEnemies.find(e => e.id === enemyId && !isEnemyDeadBody(e));
             if (!enemy) {
                 console.error('Enemy not found:', enemyId);
@@ -1927,7 +2037,7 @@ function Main() {
                 if (enemyAbilityDef?.targetType === 'multi-enemy' && turnAction.target) {
                     enemyAbilityParams.targets = [turnAction.target];
                 }
-                
+
                 let abilityResult;
                 if (enemyAbilityDef?.targetType === 'ground-target' && !enemyTargetPosition) {
                     console.warn(`[ENEMY ABILITY] ${enemy.name} cannot use ${turnAction.abilityToUse.name}: missing targetPosition for target ${turnAction.target}`);
@@ -1935,13 +2045,13 @@ function Main() {
                 } else {
                     abilityResult = executeAbility(turnAction.abilityToUse.id, enemyAbilityParams);
                 }
-                
+
                 if (abilityResult.success) {
                     abilityUsedSuccessfully = true;
                     console.log(`[ENEMY ABILITY] ${enemy.name} successfully used ${turnAction.abilityToUse.name}! Effects:`, abilityResult.effects);
                     console.log(`[ENEMY ABILITY] New cooldown for ${turnAction.abilityToUse.name}: ${abilityResult.newCooldown}`);
                     console.log(`[ENEMY ABILITY] Message from ability result: ${abilityResult.message || '(no message returned)'}`);
-                    
+
                     // Apply ability effects
                     const updates = applyAbilityEffects(abilityResult, {
                         enemies: latestEnemies,
@@ -1949,7 +2059,7 @@ function Main() {
                         activeEffects: latestActiveEffects,
                         effectOwnerTurnId: enemy.id
                     });
-                    
+
                     // Handle special effects for enemy abilities (cooldown_increase, etc)
                     let finalUpdatedEnemies = updates.enemies;
                     if (abilityResult.effects) {
@@ -1973,7 +2083,7 @@ function Main() {
                             }
                         });
                     }
-                    
+
                     // Set cooldown for the ability using the value returned from executeAbility
                     const updatedEnemies2 = finalUpdatedEnemies.map(e => {
                         if (e.id === enemy.id) {
@@ -1988,12 +2098,12 @@ function Main() {
                         }
                         return e;
                     });
-                    
+
                     // Update state
                     setActiveEffects(updates.activeEffects);
                     setPlayerCharacters(updates.playerCharacters);
                     setEnemies(normalizeEnemiesState(updatedEnemies2));
-                    
+
                     // Emit ability usage to server
                     socket.emit('ability_used', {
                         room,
@@ -2002,7 +2112,7 @@ function Main() {
                         target: turnAction.target,
                         effects: abilityResult.effects
                     });
-                    
+
                     queueEnemyNarration(
                         abilityResult.message || `${enemy.name} uses ${turnAction.abilityToUse.name}!`,
                         {
@@ -2033,7 +2143,7 @@ function Main() {
                         { actor: enemy.name, actionType: 'enemy_move', to: endPos }
                     );
                 }
-                
+
                 // Emit the path for animation
                 socket.emit('enemy_moved', {
                     room,
@@ -2080,132 +2190,132 @@ function Main() {
 
                 setTimeout(() => {
                     const target = playerCharacters[turnAction.target];
-                if (target) {
-                    const hasImmunity = hasDamageImmunity(activeEffects, turnAction.target);
-                    const hasReflection = hasDamageReflection(activeEffects, turnAction.target);
-                    let damageAmount = Math.max(1, (enemy.stats.strength / 10) * enemy.weapon.damage - (target.stats.resistance / 10));
-                    damageAmount = applyDamageKeywords(damageAmount, activeEffects, turnAction.target, { minimumDamage: 0 });
-                    console.log(`[WEAPON ATTACK] ${enemy.name} attacks ${turnAction.target} for ${damageAmount.toFixed(1)} damage!`);
-                    if (hasImmunity) {
-                        console.log('[DAMAGE KEYWORD] damage_immunity negated incoming damage for', turnAction.target);
-                    }
-
-                    // Handle damage reflection
-                    if (hasReflection && damageAmount > 0) {
-                        console.log(`[DAMAGE REFLECTION] ${turnAction.target} reflects ${damageAmount.toFixed(1)} damage back to ${enemy.name}!`);
-
-                        // Apply reflected damage to the attacking enemy
-                        const enemyIndex = enemies.findIndex(e => e.id === enemy.id);
-                        if (enemyIndex !== -1) {
-                            const newEnemyHealth = enemies[enemyIndex].stats.health - damageAmount;
-                            const updatedEnemies = normalizeEnemiesState(
-                                enemies.map((e, idx) => 
-                                    idx === enemyIndex ? { ...e, stats: { ...e.stats, health: Math.max(0, newEnemyHealth) } } : e
-                                )
-                            );
-                            setEnemies(updatedEnemies);
-
-                            // Remove dead enemy from turn order
-                            if (newEnemyHealth <= 0) {
-                                setTurnOrder(prevOrder => prevOrder.filter(turn => turn.id !== enemy.id));
-                            }
-
-                            socket.emit('enemy_damaged', { room, enemyId: enemy.id, damage: damageAmount, newHealth: Math.max(0, newEnemyHealth) });
+                    if (target) {
+                        const hasImmunity = hasDamageImmunity(activeEffects, turnAction.target);
+                        const hasReflection = hasDamageReflection(activeEffects, turnAction.target);
+                        let damageAmount = Math.max(1, (enemy.stats.strength / 10) * enemy.weapon.damage - (target.stats.resistance / 10));
+                        damageAmount = applyDamageKeywords(damageAmount, activeEffects, turnAction.target, { minimumDamage: 0 });
+                        console.log(`[WEAPON ATTACK] ${enemy.name} attacks ${turnAction.target} for ${damageAmount.toFixed(1)} damage!`);
+                        if (hasImmunity) {
+                            console.log('[DAMAGE KEYWORD] damage_immunity negated incoming damage for', turnAction.target);
                         }
-                    } else {
-                        // Normal damage application to player
-                        // Check for health buffs (bonus health) - consume them first
-                        const healthBuffs = activeEffects.filter(e => 
-                            e.target === turnAction.target && 
-                            e.stat === 'health' && 
-                            e.type === 'stat_buff' && 
-                            e.turnsRemaining > 0
-                        );
-                        
-                        let remainingDamage = damageAmount;
-                        const updatedEffects = [...activeEffects];
-                        
-                        // Consume health buffs first
-                        healthBuffs.forEach(buff => {
-                            if (remainingDamage > 0) {
-                                const buffIndex = updatedEffects.findIndex(e => 
-                                    e.target === buff.target && 
-                                    e.stat === buff.stat && 
-                                    e.type === buff.type &&
-                                    e.turnsRemaining === buff.turnsRemaining
+
+                        // Handle damage reflection
+                        if (hasReflection && damageAmount > 0) {
+                            console.log(`[DAMAGE REFLECTION] ${turnAction.target} reflects ${damageAmount.toFixed(1)} damage back to ${enemy.name}!`);
+
+                            // Apply reflected damage to the attacking enemy
+                            const enemyIndex = enemies.findIndex(e => e.id === enemy.id);
+                            if (enemyIndex !== -1) {
+                                const newEnemyHealth = enemies[enemyIndex].stats.health - damageAmount;
+                                const updatedEnemies = normalizeEnemiesState(
+                                    enemies.map((e, idx) =>
+                                        idx === enemyIndex ? { ...e, stats: { ...e.stats, health: Math.max(0, newEnemyHealth) } } : e
+                                    )
                                 );
-                                if (buffIndex !== -1) {
-                                    if (buff.value <= remainingDamage) {
-                                        // Buff completely consumed
-                                        remainingDamage -= buff.value;
-                                        updatedEffects.splice(buffIndex, 1);
-                                    } else {
-                                        // Buff partially consumed
-                                        updatedEffects[buffIndex] = { ...buff, value: buff.value - remainingDamage };
-                                        remainingDamage = 0;
+                                setEnemies(updatedEnemies);
+
+                                // Remove dead enemy from turn order
+                                if (newEnemyHealth <= 0) {
+                                    setTurnOrder(prevOrder => prevOrder.filter(turn => turn.id !== enemy.id));
+                                }
+
+                                socket.emit('enemy_damaged', { room, enemyId: enemy.id, damage: damageAmount, newHealth: Math.max(0, newEnemyHealth) });
+                            }
+                        } else {
+                            // Normal damage application to player
+                            // Check for health buffs (bonus health) - consume them first
+                            const healthBuffs = activeEffects.filter(e =>
+                                e.target === turnAction.target &&
+                                e.stat === 'health' &&
+                                e.type === 'stat_buff' &&
+                                e.turnsRemaining > 0
+                            );
+
+                            let remainingDamage = damageAmount;
+                            const updatedEffects = [...activeEffects];
+
+                            // Consume health buffs first
+                            healthBuffs.forEach(buff => {
+                                if (remainingDamage > 0) {
+                                    const buffIndex = updatedEffects.findIndex(e =>
+                                        e.target === buff.target &&
+                                        e.stat === buff.stat &&
+                                        e.type === buff.type &&
+                                        e.turnsRemaining === buff.turnsRemaining
+                                    );
+                                    if (buffIndex !== -1) {
+                                        if (buff.value <= remainingDamage) {
+                                            // Buff completely consumed
+                                            remainingDamage -= buff.value;
+                                            updatedEffects.splice(buffIndex, 1);
+                                        } else {
+                                            // Buff partially consumed
+                                            updatedEffects[buffIndex] = { ...buff, value: buff.value - remainingDamage };
+                                            remainingDamage = 0;
+                                        }
+                                    }
+                                }
+                            });
+
+                            // Remove health buffs that have been completely consumed (value <= 0)
+                            const filteredEffects = updatedEffects.filter(effect => {
+                                if (effect.stat === 'health' && effect.type === 'stat_buff') {
+                                    return effect.value > 0;
+                                }
+                                return true;
+                            });
+
+                            setActiveEffects(filteredEffects);
+
+                            // Apply remaining damage to base health
+                            const newHealth = target.stats.health - remainingDamage;
+                            const updatedPlayerCharacters = {
+                                ...playerCharacters,
+                                [turnAction.target]: {
+                                    ...target,
+                                    stats: { ...target.stats, health: Math.max(0, newHealth) }
+                                }
+                            };
+                            setPlayerCharacters(updatedPlayerCharacters);
+
+                            // Remove dead player from turn order and handle death
+                            if (newHealth <= 0) {
+                                console.log(`Player ${turnAction.target} has died! Removing from turn order.`);
+                                setTurnOrder(prevOrder => prevOrder.filter(turn => turn.id !== turnAction.target));
+
+                                // Check if all players are dead
+                                const remainingPlayers = players.filter(p => p !== turnAction.target);
+                                const allPlayersDeadCheck = remainingPlayers.every(p =>
+                                    updatedPlayerCharacters[p]?.stats.health <= 0
+                                );
+
+                                if (allPlayersDeadCheck) {
+                                    console.log('All players defeated! Game Over.');
+                                    setGameOver(true);
+                                } else {
+                                    // Only show "You Died" screen if this is the current player and not all players are dead
+                                    if (turnAction.target === playerName) {
+                                        setShowYouDiedScreen(true);
+                                        setTimeout(() => {
+                                            setShowYouDiedScreen(false);
+                                        }, 2500); // Show for 2.5 seconds
                                     }
                                 }
                             }
-                        });
-                        
-                        // Remove health buffs that have been completely consumed (value <= 0)
-                        const filteredEffects = updatedEffects.filter(effect => {
-                            if (effect.stat === 'health' && effect.type === 'stat_buff') {
-                                return effect.value > 0;
-                            }
-                            return true;
-                        });
-                        
-                        setActiveEffects(filteredEffects);
-                        
-                        // Apply remaining damage to base health
-                        const newHealth = target.stats.health - remainingDamage;
-                        const updatedPlayerCharacters = {
-                            ...playerCharacters,
-                            [turnAction.target]: {
-                                ...target,
-                                stats: { ...target.stats, health: Math.max(0, newHealth) }
-                            }
-                        };
-                        setPlayerCharacters(updatedPlayerCharacters);
-                        
-                        // Remove dead player from turn order and handle death
-                        if (newHealth <= 0) {
-                            console.log(`Player ${turnAction.target} has died! Removing from turn order.`);
-                            setTurnOrder(prevOrder => prevOrder.filter(turn => turn.id !== turnAction.target));
-                            
-                            // Check if all players are dead
-                            const remainingPlayers = players.filter(p => p !== turnAction.target);
-                            const allPlayersDeadCheck = remainingPlayers.every(p => 
-                                updatedPlayerCharacters[p]?.stats.health <= 0
-                            );
-                            
-                            if (allPlayersDeadCheck) {
-                            console.log('All players defeated! Game Over.');
-                            setGameOver(true);
-                        } else {
-                            // Only show "You Died" screen if this is the current player and not all players are dead
-                            if (turnAction.target === playerName) {
-                                setShowYouDiedScreen(true);
-                                setTimeout(() => {
-                                    setShowYouDiedScreen(false);
-                                }, 2500); // Show for 2.5 seconds
-                            }
+
+                            // Emit to server to sync player health and active effects
+                            socket.emit('player_damaged', {
+                                room,
+                                playerName: turnAction.target,
+                                damage: damageAmount,
+                                newHealth: Math.max(0, newHealth),
+                                bonusHealthConsumed: damageAmount - remainingDamage,
+                                updatedActiveEffects: filteredEffects
+                            });
+
+                            console.log(`${turnAction.target} health: ${target.stats.health} → ${Math.max(0, newHealth)} (${damageAmount - remainingDamage} absorbed by bonus health)`);
                         }
-                    }
-                    
-                    // Emit to server to sync player health and active effects
-                    socket.emit('player_damaged', { 
-                        room, 
-                        playerName: turnAction.target, 
-                        damage: damageAmount, 
-                        newHealth: Math.max(0, newHealth),
-                        bonusHealthConsumed: damageAmount - remainingDamage,
-                        updatedActiveEffects: filteredEffects
-                    });
-                    
-                    console.log(`${turnAction.target} health: ${target.stats.health} → ${Math.max(0, newHealth)} (${damageAmount - remainingDamage} absorbed by bonus health)`);
-                    }
 
                     }
                 }, movementDelay); // Apply attack after movement completes
@@ -2248,7 +2358,7 @@ function Main() {
                 completedEnemyTurnCyclesRef.current.add(completionKey);
 
                 console.log('[ENEMY TURN] Completing turn for', enemyId);
-                
+
                 // Tick down cooldowns for ALL enemies
                 console.log('[ENEMY COOLDOWNS] Ticking down cooldowns for all enemies');
                 const latestEnemies = enemiesRef.current;
@@ -2273,7 +2383,7 @@ function Main() {
                     updatedEnemies,
                     enemyId
                 );
-                
+
                 setActiveEffects(tickResult.updatedEffects);
                 setPlayerCharacters(tickResult.updatedCharacters);
                 setEnemies(normalizeEnemiesState(tickResult.updatedEnemies));
@@ -2384,7 +2494,7 @@ function Main() {
                 path,
                 to: finalPosition
             });
-            
+
             // Animate through each step in the path
             path.forEach((position, index) => {
                 setTimeout(() => {
@@ -2401,7 +2511,7 @@ function Main() {
                 parsedEnemyPositions[enemyId] = finalPosition;
                 sessionStorage.setItem(`enemyPositions_${room}`, JSON.stringify(parsedEnemyPositions));
             }
-            
+
             // After movement animation completes, apply hazard field effects
             setTimeout(() => {
                 const latestPositions = {
@@ -2483,7 +2593,7 @@ function Main() {
                 setCooldowns(prev => {
                     const updated = { ...prev };
                     const myCharacter = playerCharacters[playerName];
-                    
+
                     if (myCharacter) {
                         // Reduce cooldown for each ability
                         myCharacter.abilities.forEach(ability => {
@@ -2493,7 +2603,7 @@ function Main() {
                                 console.log(`  - ${ability.name}: ${oldValue} → ${updated[ability.id]}`);
                             }
                         });
-                        
+
                         // Also check ultimate
                         if (myCharacter.ultimate && updated[myCharacter.ultimate.id] > 0) {
                             const oldValue = updated[myCharacter.ultimate.id];
@@ -2501,7 +2611,7 @@ function Main() {
                             console.log(`  - ${myCharacter.ultimate.name} (Ultimate): ${oldValue} → ${updated[myCharacter.ultimate.id]}`);
                         }
                     }
-                    
+
                     return updated;
                 });
             }
@@ -2516,7 +2626,7 @@ function Main() {
                     const updated = { ...prev };
                     const myCharacter = playerCharacters[playerName];
                     const excludedAbilities = new Set(excludeAbilityIds || []);
-                    
+
                     if (myCharacter) {
                         // Reset cooldown for each ability
                         myCharacter.abilities.forEach(ability => {
@@ -2528,14 +2638,14 @@ function Main() {
                                 updated[ability.id] = 0;
                             }
                         });
-                        
+
                         // Also reset ultimate (but it stays at 0 since ultimates don't have cooldowns)
                         if (myCharacter.ultimate && !excludedAbilities.has(myCharacter.ultimate.id) && updated[myCharacter.ultimate.id] > 0) {
                             console.log(`  - ${myCharacter.ultimate.name} (Ultimate): ${updated[myCharacter.ultimate.id]} → 0`);
                             updated[myCharacter.ultimate.id] = 0;
                         }
                     }
-                    
+
                     return updated;
                 });
             }
@@ -2569,12 +2679,12 @@ function Main() {
             console.log('[GRID CLICK] Blocked - turn action lock active');
             return;
         }
-        
+
         if (!isMyTurn || !isPlayerAlive) {
             console.log('[GRID CLICK] Blocked - not my turn or player is dead');
             return;
         }
-        
+
         const characterOnCell = Object.entries(characterPositions).find(
             ([, pos]) => pos.row === row && pos.col === col
         );
@@ -2641,45 +2751,45 @@ function Main() {
                 executeRelocateAbility(selectedAbility, pendingRelocateTarget, { row, col });
                 return;
             }
-            
+
             if (abilityData?.targetType === 'ground-target') {
                 console.log('[GROUND TARGET] Executing ground-target ability at:', { row, col });
-                
+
                 // Check range from caster position
                 const currentPos = characterPositions[playerName];
                 if (currentPos && abilityData.range) {
                     const distance = Math.abs(currentPos.row - row) + Math.abs(currentPos.col - col);
-                    
+
                     if (distance > abilityData.range) {
                         console.log(`[GROUND TARGET] Target out of range! Distance: ${distance}, Max Range: ${abilityData.range}`);
                         setSelectedAbility(null);
                         return;
                     }
                 }
-                
+
                 // Execute ground-target ability
                 executeAbilityOnGroundTarget(selectedAbility, { row, col });
                 return;
             }
         }
-        
+
         // Check if clicking on an enemy with weapon selected
         // Handle ability targeting
         if (selectedAbility && characterOnCell) {
             const targetId = characterOnCell[0];
             const abilityData = getAbility(selectedAbility);
-            
+
             console.log('[ABILITY TARGET] Checking target:', {
                 targetId,
                 abilityId: selectedAbility,
                 targetType: abilityData?.targetType,
                 characterOnCell
             });
-            
+
             // Check if targeting an ally
             const isAlly = playerCharacters[targetId];
             const enemy = enemies.find(e => e.id === targetId && !isEnemyDeadBody(e));
-            
+
             console.log('[ABILITY TARGET] Target validation:', {
                 isAlly: !!isAlly,
                 isEnemy: !!enemy,
@@ -2687,7 +2797,7 @@ function Main() {
                 enemyName: enemy?.name,
                 playerCharacterKeys: Object.keys(playerCharacters)
             });
-            
+
             // Handle ally-targeted abilities
             if (abilityData.targetType === 'ally') {
                 if (isAlly) {
@@ -2699,17 +2809,17 @@ function Main() {
                 }
                 return;
             }
-            
+
             // Handle enemy-targeted abilities
             if (enemy) {
                 // Check range for abilities with range requirement
                 if (abilityData.range) {
                     const currentPos = getCurrentPlayerPosition();
                     const targetPos = characterPositions[getCanonicalUnitId(targetId)];
-                    
+
                     if (currentPos && targetPos) {
                         const distance = Math.abs(currentPos.row - targetPos.row) + Math.abs(currentPos.col - targetPos.col);
-                        
+
                         if (distance > abilityData.range) {
                             console.log(`[ABILITY RANGE] Target out of range! Distance: ${distance}, Max Range: ${abilityData.range}`);
                             setSelectedAbility(null);
@@ -2717,16 +2827,16 @@ function Main() {
                         }
                     }
                 }
-                
+
                 // Check if it's a multi-target ability
                 if (abilityData.targetType === 'multi-enemy') {
                     // Add to selected targets
                     if (!selectedTargets.includes(targetId)) {
                         const newTargets = [...selectedTargets, targetId];
                         setSelectedTargets(newTargets);
-                        
+
                         console.log(`Selected target ${enemy.name}. Total: ${newTargets.length}/${abilityData.maxTargets || 2}`);
-                        
+
                         // If we have enough targets, execute
                         if (newTargets.length >= (abilityData.maxTargets || 2)) {
                             executeAbilityMultiTarget(selectedAbility, newTargets);
@@ -2739,22 +2849,22 @@ function Main() {
                 return;
             }
         }
-        
+
         if (weaponSelected && characterOnCell) {
             const enemyId = characterOnCell[0];
             const enemy = enemies.find(e => e.id === enemyId && !isEnemyDeadBody(e));
-            
+
             if (enemy && currentPlayerCharacter) {
                 // Check weapon range
                 const currentPos = getCurrentPlayerPosition();
                 const enemyPos = characterPositions[enemyId];
-                
+
                 if (!currentPos || !enemyPos) return;
-                
+
                 // Calculate distance (Manhattan distance for grid-based movement)
                 const distance = Math.abs(currentPos.row - enemyPos.row) + Math.abs(currentPos.col - enemyPos.col);
                 const weaponRange = currentPlayerCharacter.weapon.range || 1;
-                
+
                 if (distance > weaponRange) {
                     console.log('Target out of range:', {
                         weapon: currentPlayerCharacter.weapon.name,
@@ -2765,12 +2875,12 @@ function Main() {
                     setWeaponSelected(false);
                     return;
                 }
-                
+
                 const baseDamage = Math.max(1, (currentPlayerCharacter.stats.strength / 10) * currentPlayerCharacter.weapon.damage - (enemy.stats.resistance / 10));
                 const totalMultiplier = getDamageTakenMultiplier(activeEffects, enemyId);
                 const damage = applyDamageKeywords(baseDamage, activeEffects, enemyId, { minimumDamage: 1 });
                 const newHealth = enemy.stats.health - damage;
-                
+
                 console.log('Weapon Attack:', {
                     attacker: currentPlayerCharacter.name,
                     target: enemy.name,
@@ -2794,10 +2904,10 @@ function Main() {
                         actionType: 'weapon_attack'
                     }
                 );
-                
+
                 // Update enemy health
                 const updatedEnemies = normalizeEnemiesState(
-                    enemies.map(e => 
+                    enemies.map(e =>
                         e.id === enemyId ? { ...e, stats: { ...e.stats, health: Math.max(0, newHealth) } } : e
                     )
                 );
@@ -2808,15 +2918,15 @@ function Main() {
                         setPlayerCharacters(reflectionResult.updatedCharacters);
                     }
                 }
-                
+
                 setEnemies(updatedEnemies);
-                
+
                 // Update turn order to remove dead enemy
                 if (newHealth <= 0) {
                     const updatedTurnOrder = turnOrder.filter(turn => turn.id !== enemyId);
                     setTurnOrder(updatedTurnOrder);
                 }
-                
+
                 socket.emit('enemy_damaged', { room, enemyId, damage, newHealth: Math.max(0, newHealth) });
                 setWeaponSelected(false);
 
@@ -2827,7 +2937,7 @@ function Main() {
                 } else {
                     setActionUsed(true);
                 }
-                
+
                 // Auto-end only if movement is exhausted
                 setTimeout(() => {
                     if (isMyTurn && shouldAutoEndTurn()) {
@@ -2837,22 +2947,27 @@ function Main() {
                 return;
             }
         }
-        
+
         const currentPos = characterPositions[playerName];
         if (!currentPos) return;
+
+        if (isMovementLockedForPlayer()) {
+            console.log('[GRID CLICK] Blocked - movement prevented by status effect');
+            return;
+        }
 
         // Calculate max movement based on speed (including buffs from activeEffects)
         const totalSpeed = calculateTotalStat(currentPlayerCharacter, playerName, 'speed', activeEffects);
         const effectiveSpeed = getSewerAdjustedSpeed(currentSceneKey, totalSpeed, currentPos);
         const maxMovement = Math.floor(effectiveSpeed / 10);
-        
+
         console.log('[MOVEMENT CALC]', {
             baseSpeed: currentPlayerCharacter.stats.speed,
             totalSpeed,
             effectiveSpeed,
             maxMovement
         });
-        
+
         const pathToTarget = findShortestWalkablePath(
             currentPos,
             { row, col },
@@ -2862,7 +2977,7 @@ function Main() {
 
         // Movement cost is based on actual walkable path length (blocked if null)
         const movementThisStep = pathToTarget ? pathToTarget.length : Infinity;
-        
+
         // Check if we have enough movement remaining
         const movementRemaining = maxMovement - movementUsed;
 
@@ -2891,14 +3006,14 @@ function Main() {
                 from: currentPos,
                 to: { row, col }
             });
-            
+
             const newPosition = { row, col };
             setCharacterPositions(prev => ({
                 ...prev,
                 [playerName]: newPosition
             }));
             setMovementUsed(movementUsed + movementThisStep);
-            
+
             // Broadcast player movement to all players
             socket.emit('player_moved', {
                 room,
@@ -2968,13 +3083,13 @@ function Main() {
             effect.turnsRemaining > 0 &&
             effect.cell
         );
-        
+
         for (let row = 0; row < ROWS; row++) {
             for (let col = 0; col < COLS; col++) {
                 const characterOnCell = Object.entries(characterPositions).find(
                     ([, pos]) => pos.row === row && pos.col === col
                 );
-                
+
                 const enemyOnCell = characterOnCell ? enemies.find(e => e.id === characterOnCell[0]) : null;
                 const isEnemy = !!enemyOnCell;
                 const isCorpse = isEnemyDeadBody(enemyOnCell);
@@ -3045,9 +3160,8 @@ function Main() {
                 grid.push(
                     <div
                         key={`${row}-${col}`}
-                        className={`grid-cell ${
-                            characterOnCell ? 'occupied' : ''
-                        } ${isPlayerCharacter ? 'player-controlled' : ''} ${isEnemy ? (isCorpse ? 'enemy-corpse-cell' : 'enemy-cell') : ''} ${isHealingFieldCell ? 'healing-field-cell' : ''} ${isFireballZoneCell ? 'fireball-zone-cell' : ''} ${isBlackHoleZoneCell ? 'black-hole-zone-cell' : ''} ${isBlizzardFieldCell ? 'blizzard-field-cell' : ''} ${isToxicMistCell ? 'toxic-mist-cell' : ''} ${isBlueBarrierCell ? 'blue-barrier-cell' : ''} ${isGtgOriginCell ? 'gtg-origin-cell' : ''} ${isWhitePhospherusEnemy ? 'white-phospherus-glow' : ''} ${isGuardedBreathAlly ? 'guarded-breath-glow' : ''} ${isGtgTeleportedTarget ? 'gtg-target-glow' : ''}`}
+                        className={`grid-cell ${characterOnCell ? 'occupied' : ''
+                            } ${isPlayerCharacter ? 'player-controlled' : ''} ${isEnemy ? (isCorpse ? 'enemy-corpse-cell' : 'enemy-cell') : ''} ${isHealingFieldCell ? 'healing-field-cell' : ''} ${isFireballZoneCell ? 'fireball-zone-cell' : ''} ${isBlackHoleZoneCell ? 'black-hole-zone-cell' : ''} ${isBlizzardFieldCell ? 'blizzard-field-cell' : ''} ${isToxicMistCell ? 'toxic-mist-cell' : ''} ${isBlueBarrierCell ? 'blue-barrier-cell' : ''} ${isGtgOriginCell ? 'gtg-origin-cell' : ''} ${isWhitePhospherusEnemy ? 'white-phospherus-glow' : ''} ${isGuardedBreathAlly ? 'guarded-breath-glow' : ''} ${isGtgTeleportedTarget ? 'gtg-target-glow' : ''}`}
                         onClick={() => handleGridClick(row, col)}
                     >
                         {/* <h3>{row} - {col}</h3> */}
@@ -3084,20 +3198,20 @@ function Main() {
                                             <GiDeathSkull />
                                         </div>
                                     ) : (
-                                    playerCharacters[characterOnCell[0]] ? (
-                                        <>
-                                            {unitStatusIcon && (
-                                                <div className="status-effect-indicator status-effect-indicator-grid">
-                                                    {unitStatusIcon}
-                                                </div>
-                                            )}
-                                            <img
-                                                className="grid-character-image"
-                                                src={getCharacterImage(playerCharacters[characterOnCell[0]])}
-                                                alt={playerCharacters[characterOnCell[0]].name}
-                                            />
-                                        </>
-                                    ) : '?'
+                                        playerCharacters[characterOnCell[0]] ? (
+                                            <>
+                                                {unitStatusIcon && (
+                                                    <div className="status-effect-indicator status-effect-indicator-grid">
+                                                        {unitStatusIcon}
+                                                    </div>
+                                                )}
+                                                <img
+                                                    className="grid-character-image"
+                                                    src={getCharacterImage(playerCharacters[characterOnCell[0]])}
+                                                    alt={playerCharacters[characterOnCell[0]].name}
+                                                />
+                                            </>
+                                        ) : '?'
                                     )
                                 )}
                             </div>
@@ -3117,16 +3231,55 @@ function Main() {
 
         combatLifecycleActiveRef.current = true;
 
-        const encounterConfig = STORY_COMBAT_FLOW[combatFlowIndexRef.current] || STORY_COMBAT_FLOW[STORY_COMBAT_FLOW.length - 1];
+        setActiveEffects([]);
+        setActionUsed(false);
+        setMovementUsed(0);
+        setExtraWeaponAttacksRemaining(0);
+        setSelectedAbility(null);
+        setSelectedTargets([]);
+        setPendingRelocateTarget(null);
+        setWeaponSelected(false);
+        setTurnStartPosition(null);
+        setIsTurnActionLocked(false);
+        setTurnStartLockRemainingMs(0);
+        setTurnTimeLeft(null);
+        setCooldowns(prevCooldowns => {
+            const resetCooldowns = {};
+            Object.keys(prevCooldowns || {}).forEach((abilityId) => {
+                const abilityData = getAbility(abilityId);
+                resetCooldowns[abilityId] = abilityData?.isUltimate
+                    ? (prevCooldowns?.[abilityId] || 0)
+                    : 0;
+            });
+            return resetCooldowns;
+        });
+
+        const currentFlowIndex = combatFlowIndexRef.current;
+        logImportant(`[COMBAT FLOW] Starting encounter ${currentFlowIndex}/${STORY_COMBAT_FLOW.length - 1}`);
+        
+        const encounterConfig = STORY_COMBAT_FLOW[currentFlowIndex] || STORY_COMBAT_FLOW[STORY_COMBAT_FLOW.length - 1];
+        logImportant('[COMBAT FLOW] Encounter config:', { 
+            index: currentFlowIndex,
+            combatType: encounterConfig?.combatType,
+            postCombat: encounterConfig?.postCombat,
+            numOfGeneric: encounterConfig?.numOfGeneric,
+            numOfMid: encounterConfig?.numOfMid,
+            numOfMini: encounterConfig?.numOfMini,
+            Boss: encounterConfig?.Boss
+        });
+        
         const generatedEnemies = generateEnemiesFromCombatConfig(encounterConfig);
+        logImportant('[COMBAT FLOW] Generated enemies:', generatedEnemies.map(e => ({ id: e.id, name: e.name })));
+        
         const normalizedSpawnType = encounterConfig?.combatType || 'low';
         const proposedPlayerPositions = {};
         const latestCharacterPositions = characterPositionsRef.current || {};
 
         lastCombatConfigRef.current = encounterConfig;
-        const nextIndex = Math.min(combatFlowIndexRef.current + 1, STORY_COMBAT_FLOW.length);
+        const nextIndex = Math.min(currentFlowIndex + 1, STORY_COMBAT_FLOW.length);
         combatFlowIndexRef.current = nextIndex;
         setCombatFlowIndex(nextIndex);
+        logImportant(`[COMBAT FLOW] Incremented flow index from ${currentFlowIndex} to ${nextIndex}`);
 
         players.forEach((playerId) => {
             const isAlive = (playerCharacters[playerId]?.stats?.health || 0) > 0;
@@ -3142,20 +3295,6 @@ function Main() {
 
         preCombatPlayerPositionsRef.current = { ...proposedPlayerPositions };
 
-        console.group('[COMBAT DEBUG] BEFORE START_COMBAT emit');
-        console.log('room:', room);
-        console.log('sceneKey:', currentSceneKey);
-        console.log('spawnType:', normalizedSpawnType);
-        console.log('combatFlowIndex:', combatFlowIndexRef.current);
-        console.log('encounterConfig:', encounterConfig);
-        console.log('players:', players);
-        console.log('local characterPositions (pre-start):', latestCharacterPositions);
-        console.log('proposedPlayerPositions (pre-start):', proposedPlayerPositions);
-        console.log('cached playerPositions (pre-start):', sessionStorage.getItem(`playerPositions_${room}`));
-        console.log('cached enemyPositions (pre-start):', sessionStorage.getItem(`enemyPositions_${room}`));
-        console.log('generatedEnemies ids:', generatedEnemies.map(enemy => enemy.id));
-        console.groupEnd();
-
         sessionStorage.removeItem(`enemyPositions_${room}`);
         sessionStorage.removeItem(`playerPositions_${room}`);
         setGamePhase('combat');
@@ -3169,36 +3308,37 @@ function Main() {
     }
 
     function handleCombatComplete(rewards) {
-        socket.emit('combat_complete', { room, rewards });    
+        socket.emit('combat_complete', { room, rewards });
     }
 
     const handleAbilityClick = (ability) => {
-        console.log('[ABILITY CLICK] Ability clicked:', ability.name, 'ID:', ability.id);
-
         if (isTurnActionLocked) {
-            console.log('[ABILITY CLICK] Blocked - turn action lock active');
             return;
         }
-        
+
         if (!isMyTurn || actionUsed || !isPlayerAlive || aiBusy) {
-            console.log('[ABILITY CLICK] Blocked - isMyTurn:', isMyTurn, 'actionUsed:', actionUsed, 'isPlayerAlive:', isPlayerAlive, 'aiBusy:', aiBusy);
             return;
         }
-        
+
+        if (isActionLockedForPlayer()) {
+            console.log('[ABILITY CLICK] Blocked - actions prevented by status effect');
+            return;
+        }
+
         const abilityData = getAbility(ability.id);
         console.log('[ABILITY CLICK] Ability data:', abilityData);
-        
+
         if (!abilityData) {
             console.log('[ABILITY CLICK] No ability data found!');
             return;
         }
-        
+
         // Check cooldown
         if (cooldowns[ability.id] > 0) {
             console.log(`Ability ${ability.name} on cooldown: ${cooldowns[ability.id]} turns remaining`);
             return;
         }
-        
+
         // Handle abilities that don't need target selection
         console.log('[ABILITY CLICK] Target type:', abilityData.targetType);
         if (abilityData.targetType === 'self' || abilityData.targetType === 'all-allies' || abilityData.targetType === 'all-enemies') {
@@ -3342,7 +3482,7 @@ function Main() {
 
     const executeAbilityOnTarget = (abilityId, target) => {
         const abilityData = getAbility(abilityId);
-        
+
         console.log('[EXECUTE ABILITY] Starting execution:', {
             abilityId,
             target,
@@ -3350,7 +3490,7 @@ function Main() {
             caster: currentPlayerCharacter?.name,
             playerCharacters: Object.keys(playerCharacters)
         });
-        
+
         const result = executeAbility(abilityId, {
             caster: currentPlayerCharacter,
             playerName: playerName,
@@ -3361,14 +3501,14 @@ function Main() {
             characterPositions: characterPositions,
             cooldowns: cooldowns
         });
-        
+
         console.log('[EXECUTE ABILITY] Result:', result);
-        
+
         if (!result.success) {
             console.log('Ability failed:', result.message);
             return;
         }
-        
+
         console.log('✨ Ability executed:', result.message);
 
         emitAiEvent(
@@ -3381,7 +3521,7 @@ function Main() {
                 actionType: 'ability'
             }
         );
-        
+
         // Apply effects to game state
         const updates = applyAbilityEffects(result, {
             enemies,
@@ -3435,13 +3575,13 @@ function Main() {
 
         console.log('[ABILITY COMPLETE] Updated enemies:', updates.enemies);
         console.log('[ABILITY COMPLETE] Updated playerCharacters:', updates.playerCharacters);
-        
+
         // Check if target was an enemy
         const targetEnemy = updates.enemies.find(e => e.id === target);
         if (targetEnemy) {
             console.log(`[ABILITY COMPLETE] Enemy ${targetEnemy.name} stats:`, targetEnemy.stats);
         }
-        
+
         // Handle cooldown modification effects (cooldown_reduction, cooldown_increase, cooldown_reset)
         if (result.effects) {
             result.effects.forEach(effect => {
@@ -3489,7 +3629,7 @@ function Main() {
         setEnemies(postEffectEnemies);
         setPlayerCharacters(postEffectPlayerCharacters);
         setActiveEffects(updates.activeEffects);
-        
+
         // Update cooldowns
         if (result.newCooldown) {
             console.log(`Setting cooldown for ${abilityId}: ${result.newCooldown} turns`);
@@ -3502,7 +3642,7 @@ function Main() {
                 return updated;
             });
         }
-        
+
         // Emit to server for sync
         socket.emit('ability_used', {
             room,
@@ -3513,9 +3653,9 @@ function Main() {
             updatedEnemies: postEffectEnemies,
             updatedActiveEffects: updates.activeEffects
         });
-        
+
         console.log('[ABILITY SYNC] Emitting updated playerCharacters and enemies to server');
-        
+
         setSelectedAbility(null);
         setSelectedTargets([]);
 
@@ -3530,7 +3670,7 @@ function Main() {
         } else {
             setActionUsed(true);
         }
-        
+
         // Auto-end only if movement is exhausted
         setTimeout(() => {
             if (isMyTurn && shouldAutoEndTurn()) {
@@ -3551,13 +3691,13 @@ function Main() {
             playerCharacters: playerCharacters,
             cooldowns: cooldowns
         });
-        
+
         if (!result.success) {
             console.log('Ability failed:', result.message);
             setSelectedTargets([]);
             return;
         }
-        
+
         console.log('Ability executed:', result.message);
 
         emitAiEvent(
@@ -3570,7 +3710,7 @@ function Main() {
                 actionType: 'ability_multi'
             }
         );
-        
+
         // Apply effects to game state
         const updates = applyAbilityEffects(result, {
             enemies,
@@ -3589,7 +3729,7 @@ function Main() {
             );
             reflectedMultiTargetCharacters = reflectionResult.updatedCharacters;
         }
-        
+
         setEnemies(normalizeEnemiesState(updates.enemies));
         setPlayerCharacters(reflectedMultiTargetCharacters);
         setActiveEffects(updates.activeEffects);
@@ -3613,7 +3753,7 @@ function Main() {
                 });
             });
         }
-        
+
         // Update cooldowns
         if (result.newCooldown) {
             console.log(`Setting cooldown for ${abilityId}: ${result.newCooldown} turns`);
@@ -3626,7 +3766,7 @@ function Main() {
                 return updated;
             });
         }
-        
+
         // Emit to server for sync
         socket.emit('ability_used', {
             room,
@@ -3635,13 +3775,13 @@ function Main() {
             result,
             updatedPlayerCharacters: reflectedMultiTargetCharacters
         });
-        
+
         console.log('[ABILITY SYNC] Emitting updated playerCharacters to server (multi-target)');
-        
+
         setSelectedAbility(null);
         setSelectedTargets([]);
         setActionUsed(true);
-        
+
         // Auto-end only if movement is exhausted
         setTimeout(() => {
             if (isMyTurn && shouldAutoEndTurn()) {
@@ -3655,13 +3795,13 @@ function Main() {
 
     const executeAbilityOnGroundTarget = (abilityId, targetPosition) => {
         const abilityData = getAbility(abilityId);
-        
+
         console.log('[EXECUTE GROUND TARGET] Starting execution:', {
             abilityId,
             targetPosition,
             caster: currentPlayerCharacter?.name
         });
-        
+
         const result = executeAbility(abilityId, {
             caster: currentPlayerCharacter,
             playerName: playerName,
@@ -3671,15 +3811,15 @@ function Main() {
             playerCharacters: playerCharacters,
             cooldowns: cooldowns
         });
-        
+
         console.log('[EXECUTE GROUND TARGET] Result:', result);
-        
+
         if (!result.success) {
             console.log('Ground-target ability failed:', result.message);
             setSelectedAbility(null);
             return;
         }
-        
+
         console.log('✨ Ground-target ability executed:', result.message);
 
         emitAiEvent(
@@ -3692,7 +3832,7 @@ function Main() {
                 actionType: 'ability_ground'
             }
         );
-        
+
         // Apply effects to game state
         const updates = applyAbilityEffects(result, {
             enemies,
@@ -3711,7 +3851,7 @@ function Main() {
             );
             reflectedGroundTargetCharacters = reflectionResult.updatedCharacters;
         }
-        
+
         setEnemies(normalizeEnemiesState(updates.enemies));
         setPlayerCharacters(reflectedGroundTargetCharacters);
         setActiveEffects(updates.activeEffects);
@@ -3735,11 +3875,11 @@ function Main() {
                 });
             });
         }
-        
+
         console.log('[GROUND TARGET COMPLETE] Updated enemies:', updates.enemies);
         console.log('[GROUND TARGET COMPLETE] Updated playerCharacters:', updates.playerCharacters);
         console.log('[GROUND TARGET COMPLETE] Updated activeEffects:', updates.activeEffects);
-        
+
         // Update cooldowns
         if (result.newCooldown) {
             console.log(`Setting cooldown for ${abilityId}: ${result.newCooldown} turns`);
@@ -3752,7 +3892,7 @@ function Main() {
                 return updated;
             });
         }
-        
+
         // Emit to server for sync
         socket.emit('ability_used', {
             room,
@@ -3763,12 +3903,12 @@ function Main() {
             updatedEnemies: updates.enemies,
             updatedActiveEffects: updates.activeEffects
         });
-        
+
         console.log('[GROUND TARGET SYNC] Emitting updated game state to server');
-        
+
         setSelectedAbility(null);
         setActionUsed(true);
-        
+
         // Auto-end only if movement is exhausted
         setTimeout(() => {
             if (isMyTurn && shouldAutoEndTurn()) {
@@ -3801,7 +3941,13 @@ function Main() {
             return;
         }
 
-        if (completedAllyTurnCyclesRef.current.has(turnCycle)) {
+        const now = Date.now();
+        const lastAttempt = lastEndTurnAttemptRef.current;
+        const canRetrySameCycle =
+            lastAttempt.cycle === turnCycle &&
+            now - (lastAttempt.timestamp || 0) >= 6000;
+
+        if (completedAllyTurnCyclesRef.current.has(turnCycle) && !canRetrySameCycle) {
             console.log('[END TURN] Duplicate end-turn ignored for turn cycle:', {
                 playerName,
                 turnCycle
@@ -3809,32 +3955,41 @@ function Main() {
             return;
         }
 
+        if (canRetrySameCycle) {
+            console.log('[END TURN] Retrying same turn cycle after timeout:', {
+                playerName,
+                turnCycle,
+                timeSinceLastAttempt: now - lastAttempt.timestamp
+            });
+        }
+
         completedAllyTurnCyclesRef.current.add(turnCycle);
+        lastEndTurnAttemptRef.current = { cycle: turnCycle, timestamp: now };
 
         console.log('END TURN clicked');
         console.log('Player Name:', playerName);
         console.log('Room:', room);
-        
+
         // Tick down cooldowns
         setCooldowns(prevCooldowns => tickCooldowns(prevCooldowns));
-        
+
         // Use refs to get latest state values (avoids closure issues)
         const { updatedEffects, updatedCharacters, updatedEnemies } = tickActiveEffects(
-            activeEffectsRef.current, 
-            playerCharactersRef.current, 
+            activeEffectsRef.current,
+            playerCharactersRef.current,
             enemiesRef.current,
             playerName
         );
-        
+
         console.log('Effects ticked:', {
             remainingEffects: updatedEffects.length,
             expiredEffects: activeEffectsRef.current.length - updatedEffects.length
         });
-        
+
         setActiveEffects(updatedEffects);
         setPlayerCharacters(updatedCharacters);
         setEnemies(normalizeEnemiesState(updatedEnemies));
-        
+
         // Emit updated game state to server to maintain sync across all clients
         socket.emit('end_turn', {
             room,
@@ -3861,466 +4016,478 @@ function Main() {
             }
         }
     };
-  
+
     return (
         <div className="main-game-container">
-        {showYouDiedScreen && (
-            <div className="you-died-screen">
-                <div className="you-died-content">
-                    <h1>YOU HAVE FALLEN</h1>
-                </div>
-            </div>
-        )}
-
-        {showEnemiesDefeatedScreen && (
-            <div className="you-died-screen">
-                <div className="enemies-defeated-content">
-                    <h1>ALL ENEMIES DEFEATED</h1>
-                </div>
-            </div>
-        )}
-        
-        {gameOver && (
-            <div className="game-over-overlay">
-                <div className="game-over-screen">
-                    <h1>GAME OVER</h1>
-                    <p>All team members have fallen. The mission is lost</p>
-                    <div className="game-over-buttons">
-                        <button 
-                            className="game-over-button"
-                            onClick={() => {
-                                console.log('[NEW GAME] Resetting game...');
-                                // Reset local state
-                                setGameOver(false);
-                                setShowYouDiedScreen(false);
-                                setShowEnemiesDefeatedScreen(false);
-                                setEnemies([]);
-                                setTurnOrder([]);
-                                setActiveEffects([]);
-                                setCooldowns({});
-                                if (cooldownStorageKey) {
-                                    sessionStorage.removeItem(cooldownStorageKey);
-                                }
-                                setActionUsed(false);
-                                setMovementUsed(0);
-                                setSelectedAbility(null);
-                                setSelectedTargets([]);
-                                setWeaponSelected(false);
-                                setCharacterPositions({});
-                                setSelectedFaction(null);
-                                
-                                // Request server to reset game state for all players
-                                socket.emit('reset_game', { room });
-                            }}
-                        >
-                            New Game
-                        </button>
-                        <button 
-                            className="game-over-button"
-                            onClick={() => {
-                                // Reset game state
-                                setGameOver(false);
-                                setShowYouDiedScreen(false);
-                                setShowEnemiesDefeatedScreen(false);
-                                setEnemies([]);
-                                setTurnOrder([]);
-                                setActiveEffects([]);
-                                setCooldowns({});
-                                if (cooldownStorageKey) {
-                                    sessionStorage.removeItem(cooldownStorageKey);
-                                }
-                                
-                                // Leave the room
-                                socket.emit('leave_room', { room, playerName });
-                                localStorage.removeItem("name");
-                                localStorage.removeItem("room");
-                                localStorage.removeItem("isAdmin");
-                                window.location.reload();
-                            }}
-                        >
-                            Quit
-                        </button>
+            {showYouDiedScreen && (
+                <div className="you-died-screen">
+                    <div className="you-died-content">
+                        <h1>YOU HAVE FALLEN</h1>
                     </div>
-                </div>
-            </div>
-        )}
-        
-        <div className="scene-name">
-            <h2>{SCENE_LABELS[currentSceneKey] || SCENE_LABELS.city_square}</h2>
-            <h2>
-                {isMyTurn ? (
-                    <div className="turn">
-                        YOUR TURN
-                        {isTurnActionLocked && (
-                            <span className="turn-timer">{Math.ceil(turnStartLockRemainingMs / 1000)}s</span>
-                        )}
-                        {turnTimeLeft !== null && turnTimeLeft < 16 && (
-                            <span className="turn-timer">{turnTimeLeft}s</span>
-                        )}
-                    </div>
-                ) : (
-                    <div className="turn">
-                    {currentTurn?.type === 'ally' 
-                        ? `${currentTurn.id}'s Turn` 
-                        : "Enemy's Turn"}
-                    </div>
-                )}
-            </h2>
-        </div>
-        <div className="party">
-            <h3>Party</h3>
-            {players
-                .sort((a, b) => {
-                    const speedA = playerCharacters[a]?.stats.speed || 0;
-                    const speedB = playerCharacters[b]?.stats.speed || 0;
-                    return speedB - speedA;
-                })
-                .map((player, index) => {
-                    const character = playerCharacters[player];
-                    const isPlayerChar = player === playerName;
-                    const partyStatusIcon = getHighestPriorityStatusIcon(player);
-                    return (
-                        <div 
-                            key={index} 
-                            className={`party-member ${isPlayerChar ? 'party-selected player-char' : ''}`}
-                        >
-                            {character ? (
-                                <>
-                                    <div className="character-icon">
-                                        {partyStatusIcon && (
-                                            <div className="status-effect-indicator status-effect-indicator-party">
-                                                {partyStatusIcon}
-                                            </div>
-                                        )}
-                                        <img
-                                            src={getCharacterImage(character)}
-                                            alt={character.name}
-                                        />
-                                    </div>
-                                    <div className="character-info">
-                                        <div className="character-name">{character.name}</div>
-                                        <div className="character-stats">
-                                            <span className="stat-speed">SPD: {character.stats.speed}</span>
-                                            <span className="stat-hp">HP: {character.stats.health}/{character.stats.maxHealth}</span>
-                                        </div>
-                                        <div className="party-member-health-bar-container">
-                                            <div 
-                                                className="party-member-health-bar-fill"
-                                                style={{ width: `${Math.max(0, Math.min(100, (character.stats.health / character.stats.maxHealth) * 100))}%` }}
-                                            ></div>
-                                        </div>
-                                    </div>
-                                </>
-                            ) : (
-                                <div className="character-name">No Character</div>
-                            )}
-                        </div>
-                    );
-                })}
-        </div>
-
-        <div className="main-game">
-            <div
-                className="game-area"
-                style={{ backgroundImage: `url('${SCENE_BACKGROUNDS[currentSceneKey] || SCENE_BACKGROUNDS.city_square}')` }}
-            >
-                <div className="battle-grid">
-                    {renderGrid()}
-                </div>
-            </div>
-        </div>
-
-        <div className="AI-script">
-            <div className='Response'>
-            {aiBusy && (
-                <div className="ai-thinking-overlay">
-                    <div className="ai-thinking-spinner"></div>
-                    <span>The DM is crafting the story...</span>
                 </div>
             )}
-            {/* AI-driven dynamic options */}
-            {aiOptions && aiOptions.length > 0 && !aiBusy && (
-                <div className="ai-choices">
-                    {aiAttribute && (
-                        <div className="ai-choice-owner">
-                            Decision owner: {getDecisionOwner(aiAttribute) || 'Admin'}
+
+            {showEnemiesDefeatedScreen && (
+                <div className="you-died-screen">
+                    <div className="enemies-defeated-content">
+                        <h1>ALL ENEMIES DEFEATED</h1>
+                    </div>
+                </div>
+            )}
+
+            {gameOver && (
+                <div className="game-over-overlay">
+                    <div className="game-over-screen">
+                        <h1>GAME OVER</h1>
+                        <p>All team members have fallen. The mission is lost</p>
+                        <div className="game-over-buttons">
+                            <button
+                                className="game-over-button"
+                                onClick={() => {
+                                    console.log('[NEW GAME] Resetting game...');
+                                    // Reset local state
+                                    setGameOver(false);
+                                    setShowYouDiedScreen(false);
+                                    setShowEnemiesDefeatedScreen(false);
+                                    setEnemies([]);
+                                    setTurnOrder([]);
+                                    setActiveEffects([]);
+                                    setCooldowns({});
+                                    if (cooldownStorageKey) {
+                                        sessionStorage.removeItem(cooldownStorageKey);
+                                    }
+                                    setActionUsed(false);
+                                    setMovementUsed(0);
+                                    setSelectedAbility(null);
+                                    setSelectedTargets([]);
+                                    setWeaponSelected(false);
+                                    setCharacterPositions({});
+                                    setSelectedFaction(null);
+
+                                    // Request server to reset game state for all players
+                                    socket.emit('reset_game', { room });
+                                }}
+                            >
+                                New Game
+                            </button>
+                            <button
+                                className="game-over-button"
+                                onClick={() => {
+                                    // Reset game state
+                                    setGameOver(false);
+                                    setShowYouDiedScreen(false);
+                                    setShowEnemiesDefeatedScreen(false);
+                                    setEnemies([]);
+                                    setTurnOrder([]);
+                                    setActiveEffects([]);
+                                    setCooldowns({});
+                                    if (cooldownStorageKey) {
+                                        sessionStorage.removeItem(cooldownStorageKey);
+                                    }
+
+                                    // Leave the room
+                                    socket.emit('leave_room', { room, playerName });
+                                    localStorage.removeItem("name");
+                                    localStorage.removeItem("room");
+                                    localStorage.removeItem("isAdmin");
+                                    window.location.reload();
+                                }}
+                            >
+                                Quit
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <div className="scene-name">
+                <button
+                    className="leave-main"
+                    onClick={() => {
+                        if (window.confirm("Are you sure you want to leave the game? This will disconnect you from the current room.")) {
+                            localStorage.removeItem("name");
+                            localStorage.removeItem("room");
+                            localStorage.removeItem("isAdmin");
+                            localStorage.removeItem("screen");
+                            socket.emit('leave_room', { room, playerName });
+                            window.location.reload();
+                            socket.emit("disconnect");
+                        }
+                    }}
+                >
+                    LEAVE GAME
+                </button>
+                <h2>{SCENE_LABELS[currentSceneKey] || SCENE_LABELS.city_square}</h2>
+                <h2>
+                    {isMyTurn ? (
+                        <div className="turn">
+                            YOUR TURN
+                            {isTurnActionLocked && (
+                                <span className="turn-timer">{Math.ceil(turnStartLockRemainingMs / 1000)}s</span>
+                            )}
+                            {turnTimeLeft !== null && turnTimeLeft < 16 && (
+                                <span className="turn-timer">{turnTimeLeft}s</span>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="turn">
+                            {currentTurn?.type === 'ally'
+                                ? `${currentTurn.id}'s Turn`
+                                : "Enemy's Turn"}
                         </div>
                     )}
-                    {aiOptions.map((option, idx) => (
-                        <button
-                            key={idx}
-                            onClick={() => handleAiOptionClick(option)}
-                            disabled={aiBusy || (aiAttribute && !canPlayerDecide(aiAttribute))}
-                        >
-                            {option}
-                        </button>
-                    ))}
-                </div>
-            )}
-            {/* Legacy faction choice fallback */}
-            {pendingFactionChoice && !aiOptions && (
-                <div className="ai-choices">
-                    <div className="ai-choice-owner">
-                        Decision owner: {getDecisionOwner('politician') || 'Admin'}
-                    </div>
-                    <button onClick={() => handleFactionChoice('the Enforcers')} disabled={aiBusy || !canPlayerDecide('politician')}>Fight with Enforcers</button>
-                    <button onClick={() => handleFactionChoice('the People of the City')} disabled={aiBusy || !canPlayerDecide('politician')}>Fight with the People of the City</button>
-                </div>
-            )}
-            {pendingPostEncounterChoice && !aiOptions && (
-                <div className="ai-choices">
-                    <div className="ai-choice-owner">
-                        Shop decision: {getDecisionOwner('banker') || 'Admin'} | Travel decision: {getDecisionOwner('navigator') || 'Admin'}
-                    </div>
-                    <button onClick={() => handlePostEncounterChoice('shop')} disabled={aiBusy || !canPlayerDecide('banker')}>Go to Shop</button>
-                    <button onClick={() => handlePostEncounterChoice('next_encounter')} disabled={aiBusy || !canPlayerDecide('navigator')}>Next Encounter</button>
-                </div>
-            )}
-            {pendingNextEncounterChoice && !aiOptions && (
-                <div className="ai-choices">
-                    <div className="ai-choice-owner">
-                        Travel decision: {getDecisionOwner('navigator') || 'Admin'}
-                    </div>
-                    <button onClick={handleNextEncounter} disabled={aiBusy || !canPlayerDecide('navigator')}>Next Encounter</button>
-                </div>
-            )}
-        {/* <button style={{ width: '150px' }} onClick={handleLevelUp}>Level Up</button> */}
-        {/* <button style={{ width: '150px' }} onClick={() => handleStoryComplete()}>Combat</button> */}
+                </h2>
             </div>
-            <span className="ai-text">
-                {displayText}
-            </span>
-            <div className="ai-header">
-                <span className={`ai-status ${aiBusy ? '' : ''}`}>
-                    {aiBusy ? '' : 'Ready'}
-                </span>
-            </div>
-       </div>
-        <div className="inventory">
-            {currentPlayerCharacter ? (
-                <>
-                    <div className="character-sheet-header">
-                        <div className="character-portrait">
-                            <div className="portrait-icon">
-                                <img
-                                    src={getCharacterImage(currentPlayerCharacter)}
-                                    alt={currentPlayerCharacter.name}
-                                />
-                            </div>
-                            <div className="character-title">
-                                <div className="char-name">{currentPlayerCharacter.name}</div>
-                                <div className="char-role">{currentPlayerCharacter.role}</div>
-                                
-                        <div className='attributes'>
-                            {attributeAllocations[playerName] && attributeAllocations[playerName].length > 0 ? (
-                                <>
-                                    <div className="attribute-line">
-                                        <span className="primary-ability small">
-                                            {attributeAllocations[playerName][0]?.charAt(0).toUpperCase() + attributeAllocations[playerName][0]?.slice(1)}
-                                        </span>
-                                    </div>
-                                    /
-                                    <div className="attribute-line">
-                                        <span className="secondary-ability small">
-                                            {attributeAllocations[playerName][1]?.charAt(0).toUpperCase() + attributeAllocations[playerName][1]?.slice(1)}
-                                        </span>
-                                    </div>
-                                </>
-                            ) : (
-                                <div className="no-allocation">No attributes allocated</div>
-                            )}
-                        </div>
-                            </div>
-                        </div>
-                            <div className="stats-section">
-                            <h4>Stats</h4>
-                            <div className="stats-grid">
-                                {(() => {
-                                    const statBonuses = getStatBonuses(playerName, activeEffects);
-                                    const currentPosition = characterPositions[playerName];
-                                    const sewerSpeedPenalty = isSewerSlowTile(currentSceneKey, currentPosition)
-                                        ? Math.floor((currentPlayerCharacter?.stats?.speed || 0) / 2)
-                                        : 0;
-                                    return (
-                                        <>
-                                            <div className="stat-item">
-                                                <span className="stat-label">Health</span>
-                                                <span className="stat-value">
-                                                    {currentPlayerCharacter.stats.health}
-                                                    {statBonuses.health && (
-                                                        <span className={statBonuses.health > 0 ? 'stat-buff' : 'stat-debuff'}>
-                                                            {statBonuses.health > 0 ? ' +' : ' '}{statBonuses.health}
-                                                        </span>
-                                                    )}
-                                                </span>
-                                            </div>
-                                            <div className="stat-item">
-                                                <span className="stat-label">Speed</span>
-                                                <span className="stat-value">
-                                                    {currentPlayerCharacter.stats.speed}
-                                                    {statBonuses.speed && (
-                                                        <span className={statBonuses.speed > 0 ? 'stat-buff' : 'stat-debuff'}>
-                                                            {statBonuses.speed > 0 ? ' +' : ' '}{statBonuses.speed}
-                                                        </span>
-                                                    )}
-                                                    {sewerSpeedPenalty > 0 && (
-                                                        <span className="stat-debuff"> -{sewerSpeedPenalty}</span>
-                                                    )}
-                                                </span>
-                                            </div>
-                                            <div className="stat-item">
-                                                <span className="stat-label">Resistance</span>
-                                                <span className="stat-value">
-                                                    {currentPlayerCharacter.stats.resistance}
-                                                    {statBonuses.resistance && (
-                                                        <span className={statBonuses.resistance > 0 ? 'stat-buff' : 'stat-debuff'}>
-                                                            {statBonuses.resistance > 0 ? ' +' : ' '}{statBonuses.resistance}
-                                                        </span>
-                                                    )}
-                                                </span>
-                                            </div>
-                                            <div className="stat-item">
-                                                <span className="stat-label">Strength</span>
-                                                <span className="stat-value">
-                                                    {currentPlayerCharacter.stats.strength}
-                                                    {statBonuses.strength && (
-                                                        <span className={statBonuses.strength > 0 ? 'stat-buff' : 'stat-debuff'}>
-                                                            {statBonuses.strength > 0 ? ' +' : ' '}{statBonuses.strength}
-                                                        </span>
-                                                    )}
-                                                </span>
-                                            </div>
-                                            <div className="stat-item">
-                                                <span className="stat-label">Technical Ability</span>
-                                                <span className="stat-value">
-                                                    {currentPlayerCharacter.stats.ta}
-                                                    {statBonuses.ta && (
-                                                        <span className={statBonuses.ta > 0 ? 'stat-buff' : 'stat-debuff'}>
-                                                            {statBonuses.ta > 0 ? ' +' : ' '}{statBonuses.ta}
-                                                        </span>
-                                                    )}
-                                                </span>
-                                            </div>
-                                        </>
-                                    );
-                                })()}
-                            </div>
-                            </div>
-                    </div>
-
-                    <div className="weapon-section">
-                        <h4>Weapon</h4>
-                        <div 
-                            className={`weapon-card ${weaponSelected ? 'weapon-selected' : ''} ${((actionUsed && extraWeaponAttacksRemaining <= 0) || !isPlayerAlive || isTurnActionLocked) ? 'weapon-disabled' : ''}`}
-                            onClick={() => isMyTurn && !isTurnActionLocked && (!actionUsed || extraWeaponAttacksRemaining > 0) && isPlayerAlive && setWeaponSelected(!weaponSelected)}
-                            style={{ cursor: (isMyTurn && !isTurnActionLocked && (!actionUsed || extraWeaponAttacksRemaining > 0) && isPlayerAlive) ? 'pointer' : 'not-allowed' }}
-                        >
-                            <div className="weapon-info">
-                                <i><div className="weapon-name">{currentPlayerCharacter.weapon.name}</div></i>
-                                <div className="weapon-range">{currentPlayerCharacter.weapon.range == 1 ? "Melee" : "Range: " + currentPlayerCharacter.weapon.range}</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="abilities-section">
-                        <h4>Abilities</h4>
-                        <div className="abilities-grid">
-                            {(Array.isArray(currentPlayerCharacter.abilities) ? currentPlayerCharacter.abilities : []).map((ability, index) => {
-                                const resolvedAbility = typeof ability === 'string' ? getAbility(ability) : ability;
-                                if (!resolvedAbility?.id) {
-                                    console.warn('[ABILITY DEBUG] Dropping ability during render - invalid shape:', {
-                                        index,
-                                        rawAbility: ability,
-                                        rawType: typeof ability,
-                                        resolvedAbility
-                                    });
-                                    return null;
-                                }
-
-                                const currentCooldown = cooldowns[resolvedAbility.id] || 0;
-                                const isOnCooldown = currentCooldown > 0;
-                                const isSelected = selectedAbility === resolvedAbility.id;
-                                const range = resolvedAbility.range === 1 ? "Melee" : resolvedAbility.range === undefined ? "" : "Range: " + resolvedAbility.range;
-                                const canonicalAbility = getAbility(resolvedAbility.id) || resolvedAbility;
-                                const scalerIcon = getAbilityScaler(canonicalAbility);
-
-                                // console.log('[ABILITY SCALER]', {
-                                //     abilityId: resolvedAbility.id,
-                                //     abilityName: resolvedAbility.name,
-                                //     damageScaling: canonicalAbility.damageScaling,
-                                //     hasScalerIcon: !!scalerIcon
-                                // });
-                                
-                                return (
-                                    <button 
-                                        onClick={() => handleAbilityClick(resolvedAbility)} 
-                                        key={index} 
-                                        className={`ability-card ${
-                                            isOnCooldown ? 'ability-on-cooldown' : ''
-                                        } ${
-                                            isSelected ? 'ability-selected' : ''
-                                        }`}
-                                        disabled={!isMyTurn || isTurnActionLocked || isOnCooldown || actionUsed || !isPlayerAlive}
-                                    >
-                                        <div className='damage-scaling'>{scalerIcon}</div>
-                                        <div className="ability-header">
-                                            <div className="ability-name">{resolvedAbility.name}</div>
-                                            <div className="ability-cd">
-                                                {isOnCooldown ? currentCooldown : `CD: ${resolvedAbility.cooldown}`}
-                                                <div className="ability-range">
-                                                    {range}
+            <div className="party">
+                <h3>Party</h3>
+                {players
+                    .sort((a, b) => {
+                        const speedA = playerCharacters[a]?.stats.speed || 0;
+                        const speedB = playerCharacters[b]?.stats.speed || 0;
+                        return speedB - speedA;
+                    })
+                    .map((player, index) => {
+                        const character = playerCharacters[player];
+                        const isPlayerChar = player === playerName;
+                        const partyStatusIcon = getHighestPriorityStatusIcon(player);
+                        return (
+                            <div
+                                key={index}
+                                className={`party-member ${isPlayerChar ? 'party-selected player-char' : ''}`}
+                            >
+                                {character ? (
+                                    <>
+                                        <div className="character-icon">
+                                            {partyStatusIcon && (
+                                                <div className="status-effect-indicator status-effect-indicator-party">
+                                                    {partyStatusIcon}
                                                 </div>
+                                            )}
+                                            <img
+                                                src={getCharacterImage(character)}
+                                                alt={character.name}
+                                            />
+                                        </div>
+                                        <div className="character-info">
+                                            <div className="character-name">{character.name}</div>
+                                            <div className="character-stats">
+                                                <span className="stat-speed">SPD: {character.stats.speed}</span>
+                                                <span className="stat-hp">HP: {character.stats.health}/{character.stats.maxHealth}</span>
+                                            </div>
+                                            <div className="party-member-health-bar-container">
+                                                <div
+                                                    className="party-member-health-bar-fill"
+                                                    style={{ width: `${Math.max(0, Math.min(100, (character.stats.health / character.stats.maxHealth) * 100))}%` }}
+                                                ></div>
                                             </div>
                                         </div>
-                                        <div className="ability-desc">{resolvedAbility.description}</div>
+                                    </>
+                                ) : (
+                                    <div className="character-name">No Character</div>
+                                )}
+                            </div>
+                        );
+                    })}
+            </div>
+
+            <div className="main-game">
+                <div
+                    className="game-area"
+                    style={{ backgroundImage: `url('${SCENE_BACKGROUNDS[currentSceneKey] || SCENE_BACKGROUNDS.city_square}')` }}
+                >
+                    <div className="battle-grid">
+                        {renderGrid()}
+                    </div>
+                </div>
+            </div>
+
+            <div className="AI-script">
+                <div className='Response'>
+                    {aiBusy && (
+                        <div className="ai-thinking-overlay">
+                            <div className="ai-thinking-spinner"></div>
+                            <span>The DM is crafting the story...</span>
+                        </div>
+                    )}
+                    {/* AI-driven dynamic options */}
+                    {aiOptions && aiOptions.length > 0 && !aiBusy && (
+                        <div className="ai-choices">
+                            {aiAttribute && (
+                                <div className="ai-choice-owner">
+                                    Decision owner: {getDecisionOwner(aiAttribute) || 'Admin'}
+                                </div>
+                            )}
+                            {aiOptions.map((option, idx) => (
+                                <button
+                                    key={idx}
+                                    onClick={() => handleAiOptionClick(option)}
+                                    disabled={aiBusy || (aiAttribute && !canPlayerDecide(aiAttribute))}
+                                >
+                                    {option}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                    {/* Legacy faction choice fallback */}
+                    {pendingFactionChoice && !aiOptions && (
+                        <div className="ai-choices">
+                            <div className="ai-choice-owner">
+                                Decision owner: {getDecisionOwner('politician') || 'Admin'}
+                            </div>
+                            <button onClick={() => handleFactionChoice('the Enforcers')} disabled={aiBusy || !canPlayerDecide('politician')}>Fight with Enforcers</button>
+                            <button onClick={() => handleFactionChoice('the People of the City')} disabled={aiBusy || !canPlayerDecide('politician')}>Fight with the People of the City</button>
+                        </div>
+                    )}
+                    {pendingPostEncounterChoice && !aiOptions && (
+                        <div className="ai-choices">
+                            <div className="ai-choice-owner">
+                                Shop decision: {getDecisionOwner('banker') || 'Admin'} | Travel decision: {getDecisionOwner('navigator') || 'Admin'}
+                            </div>
+                            <button onClick={() => handlePostEncounterChoice('shop')} disabled={aiBusy || !canPlayerDecide('banker')}>Go to Shop</button>
+                            <button onClick={() => handlePostEncounterChoice('next_encounter')} disabled={aiBusy || !canPlayerDecide('navigator')}>Next Encounter</button>
+                        </div>
+                    )}
+                    {pendingNextEncounterChoice && !aiOptions && (
+                        <div className="ai-choices">
+                            <div className="ai-choice-owner">
+                                Travel decision: {getDecisionOwner('navigator') || 'Admin'}
+                            </div>
+                            <button onClick={handleNextEncounter} disabled={aiBusy || !canPlayerDecide('navigator')}>Next Encounter</button>
+                        </div>
+                    )}
+                    {/* <button style={{ width: '150px' }} onClick={handleLevelUp}>Level Up</button> */}
+                    {/* <button style={{ width: '150px' }} onClick={() => handleStoryComplete()}>Combat</button> */}
+                </div>
+                <span className="ai-text">
+                    {displayText}
+                </span>
+                <div className="ai-header">
+                    <span className={`ai-status ${aiBusy ? '' : ''}`}>
+                        {aiBusy ? '' : 'Ready'}
+                    </span>
+                </div>
+            </div>
+            <div className="inventory">
+                {currentPlayerCharacter ? (
+                    <>
+                        <div className="character-sheet-header">
+                            <div className="character-portrait">
+                                <div className="portrait-icon">
+                                    <img
+                                        src={getCharacterImage(currentPlayerCharacter)}
+                                        alt={currentPlayerCharacter.name}
+                                    />
+                                </div>
+                                <div className="character-title">
+                                    <div className="char-name">{currentPlayerCharacter.name}</div>
+                                    <div className="char-role">{currentPlayerCharacter.role}</div>
+
+                                    <div className='attributes'>
+                                        {attributeAllocations[playerName] && attributeAllocations[playerName].length > 0 ? (
+                                            <>
+                                                <div className="attribute-line">
+                                                    <span className="primary-ability small">
+                                                        {attributeAllocations[playerName][0]?.charAt(0).toUpperCase() + attributeAllocations[playerName][0]?.slice(1)}
+                                                    </span>
+                                                </div>
+                                                /
+                                                <div className="attribute-line">
+                                                    <span className="secondary-ability small">
+                                                        {attributeAllocations[playerName][1]?.charAt(0).toUpperCase() + attributeAllocations[playerName][1]?.slice(1)}
+                                                    </span>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <div className="no-allocation">No attributes allocated</div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="stats-section">
+                                <h4>Stats</h4>
+                                <div className="stats-grid">
+                                    {(() => {
+                                        const statBonuses = getStatBonuses(playerName, activeEffects);
+                                        const currentPosition = characterPositions[playerName];
+                                        const sewerSpeedPenalty = isSewerSlowTile(currentSceneKey, currentPosition)
+                                            ? Math.floor((currentPlayerCharacter?.stats?.speed || 0) / 2)
+                                            : 0;
+                                        return (
+                                            <>
+                                                <div className="stat-item">
+                                                    <span className="stat-label">Health</span>
+                                                    <span className="stat-value">
+                                                        {currentPlayerCharacter.stats.health}
+                                                        {statBonuses.health && (
+                                                            <span className={statBonuses.health > 0 ? 'stat-buff' : 'stat-debuff'}>
+                                                                {statBonuses.health > 0 ? ' +' : ' '}{statBonuses.health}
+                                                            </span>
+                                                        )}
+                                                    </span>
+                                                </div>
+                                                <div className="stat-item">
+                                                    <span className="stat-label">Speed</span>
+                                                    <span className="stat-value">
+                                                        {currentPlayerCharacter.stats.speed}
+                                                        {statBonuses.speed && (
+                                                            <span className={statBonuses.speed > 0 ? 'stat-buff' : 'stat-debuff'}>
+                                                                {statBonuses.speed > 0 ? ' +' : ' '}{statBonuses.speed}
+                                                            </span>
+                                                        )}
+                                                        {sewerSpeedPenalty > 0 && (
+                                                            <span className="stat-debuff"> -{sewerSpeedPenalty}</span>
+                                                        )}
+                                                    </span>
+                                                </div>
+                                                <div className="stat-item">
+                                                    <span className="stat-label">Resistance</span>
+                                                    <span className="stat-value">
+                                                        {currentPlayerCharacter.stats.resistance}
+                                                        {statBonuses.resistance && (
+                                                            <span className={statBonuses.resistance > 0 ? 'stat-buff' : 'stat-debuff'}>
+                                                                {statBonuses.resistance > 0 ? ' +' : ' '}{statBonuses.resistance}
+                                                            </span>
+                                                        )}
+                                                    </span>
+                                                </div>
+                                                <div className="stat-item">
+                                                    <span className="stat-label">Strength</span>
+                                                    <span className="stat-value">
+                                                        {currentPlayerCharacter.stats.strength}
+                                                        {statBonuses.strength && (
+                                                            <span className={statBonuses.strength > 0 ? 'stat-buff' : 'stat-debuff'}>
+                                                                {statBonuses.strength > 0 ? ' +' : ' '}{statBonuses.strength}
+                                                            </span>
+                                                        )}
+                                                    </span>
+                                                </div>
+                                                <div className="stat-item">
+                                                    <span className="stat-label">Tech Ability</span>
+                                                    <span className="stat-value">
+                                                        {currentPlayerCharacter.stats.ta}
+                                                        {statBonuses.ta && (
+                                                            <span className={statBonuses.ta > 0 ? 'stat-buff' : 'stat-debuff'}>
+                                                                {statBonuses.ta > 0 ? ' +' : ' '}{statBonuses.ta}
+                                                            </span>
+                                                        )}
+                                                    </span>
+                                                </div>
+                                            </>
+                                        );
+                                    })()}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="weapon-section">
+                            <h4>Weapon</h4>
+                            <div
+                                className={`weapon-card ${weaponSelected ? 'weapon-selected' : ''} ${((actionUsed && extraWeaponAttacksRemaining <= 0) || !isPlayerAlive || isTurnActionLocked) ? 'weapon-disabled' : ''}`}
+                                onClick={() => isMyTurn && !isTurnActionLocked && (!actionUsed || extraWeaponAttacksRemaining > 0) && isPlayerAlive && setWeaponSelected(!weaponSelected)}
+                                style={{ cursor: (isMyTurn && !isTurnActionLocked && (!actionUsed || extraWeaponAttacksRemaining > 0) && isPlayerAlive) ? 'pointer' : 'not-allowed' }}
+                            >
+                                <div className="weapon-info">
+                                    <i><div className="weapon-name">{currentPlayerCharacter.weapon.name}</div></i>
+                                    <div className="weapon-range">{currentPlayerCharacter.weapon.range == 1 ? "Melee" : "Range: " + currentPlayerCharacter.weapon.range}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="abilities-section">
+                            <h4>Abilities</h4>
+                            <div className="abilities-grid">
+                                {(Array.isArray(currentPlayerCharacter.abilities) ? currentPlayerCharacter.abilities : []).map((ability, index) => {
+                                    const resolvedAbility = typeof ability === 'string' ? getAbility(ability) : ability;
+                                    if (!resolvedAbility?.id) {
+                                        console.warn('[ABILITY DEBUG] Dropping ability during render - invalid shape:', {
+                                            index,
+                                            rawAbility: ability,
+                                            rawType: typeof ability,
+                                            resolvedAbility
+                                        });
+                                        return null;
+                                    }
+
+                                    const currentCooldown = cooldowns[resolvedAbility.id] || 0;
+                                    const isOnCooldown = currentCooldown > 0;
+                                    const isSelected = selectedAbility === resolvedAbility.id;
+                                    const range = resolvedAbility.range === 1 ? "Melee" : resolvedAbility.range === undefined ? "" : "Range: " + resolvedAbility.range;
+                                    const canonicalAbility = getAbility(resolvedAbility.id) || resolvedAbility;
+                                    const scalerIcon = getAbilityScaler(canonicalAbility);
+
+                                    // console.log('[ABILITY SCALER]', {
+                                    //     abilityId: resolvedAbility.id,
+                                    //     abilityName: resolvedAbility.name,
+                                    //     damageScaling: canonicalAbility.damageScaling,
+                                    //     hasScalerIcon: !!scalerIcon
+                                    // });
+
+                                    return (
+                                        <button
+                                            onClick={() => handleAbilityClick(resolvedAbility)}
+                                            key={index}
+                                            className={`ability-card ${isOnCooldown ? 'ability-on-cooldown' : ''
+                                                } ${isSelected ? 'ability-selected' : ''
+                                                }`}
+                                            disabled={!isMyTurn || isTurnActionLocked || isOnCooldown || actionUsed || !isPlayerAlive}
+                                        >
+                                            <div className='damage-scaling'>{scalerIcon}</div>
+                                            <div className="ability-header">
+                                                <div className="ability-name">{resolvedAbility.name}</div>
+                                                <div className="ability-cd">
+                                                    {isOnCooldown ? currentCooldown : `CD: ${resolvedAbility.cooldown}`}
+                                                    <div className="ability-range">
+                                                        {range}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="ability-desc">{resolvedAbility.description}</div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        <div className="ultimate-section">
+                            <h4>Ultimate</h4>
+                            {(() => {
+                                const rawUltimate = currentPlayerCharacter?.ultimate;
+                                const resolvedUltimate = typeof rawUltimate === 'string'
+                                    ? getAbility(rawUltimate)
+                                    : rawUltimate;
+                                const hasUltimate = !!resolvedUltimate?.id;
+
+                                return (
+                                    <button
+                                        className="ultimate-card"
+                                        disabled={!isMyTurn || isTurnActionLocked || actionUsed || !isPlayerAlive || !hasUltimate}
+                                        onClick={() => {
+                                            if (!hasUltimate) {
+                                                console.warn('[ABILITY DEBUG] Ultimate click blocked - invalid or missing ultimate:', rawUltimate);
+                                                return;
+                                            }
+                                            console.log('[ULTIMATE CLICK] Ultimate clicked:', resolvedUltimate);
+                                            handleAbilityClick(resolvedUltimate);
+                                        }}
+                                    >
+                                        <div className="ultimate-header">
+                                            <div className="ultimate-name">{hasUltimate ? resolvedUltimate.name : 'No Ultimate Available'}</div>
+                                        </div>
+                                        <div className="ultimate-desc">{hasUltimate ? resolvedUltimate.description : 'Reach level 5 to unlock your ultimate.'}</div>
                                     </button>
                                 );
-                            })}
+                            })()}
                         </div>
-                    </div>
+                    </>
+                ) : (
+                    <div className="no-character">No character selected</div>
+                )}
+            </div>
 
-                    <div className="ultimate-section">
-                        <h4>Ultimate</h4>
-                        {(() => {
-                            const rawUltimate = currentPlayerCharacter?.ultimate;
-                            const resolvedUltimate = typeof rawUltimate === 'string'
-                                ? getAbility(rawUltimate)
-                                : rawUltimate;
-                            const hasUltimate = !!resolvedUltimate?.id;
-
-                            return (
-                        <button 
-                            className="ultimate-card" 
-                            disabled={!isMyTurn || isTurnActionLocked || actionUsed || !isPlayerAlive || !hasUltimate}
-                            onClick={() => {
-                                if (!hasUltimate) {
-                                    console.warn('[ABILITY DEBUG] Ultimate click blocked - invalid or missing ultimate:', rawUltimate);
-                                    return;
-                                }
-                                console.log('[ULTIMATE CLICK] Ultimate clicked:', resolvedUltimate);
-                                handleAbilityClick(resolvedUltimate);
-                            }}
-                        >
-                            <div className="ultimate-header">
-                                <div className="ultimate-name">{hasUltimate ? resolvedUltimate.name : 'No Ultimate Available'}</div>
-                            </div>
-                            <div className="ultimate-desc">{hasUltimate ? resolvedUltimate.description : 'Reach level 5 to unlock your ultimate.'}</div>
-                        </button>
-                            );
-                        })()}
-                    </div>
-                </>
-            ) : (
-                <div className="no-character">No character selected</div>
-            )}
-        </div>
-
-        {isMyTurn && <button className="end-turn" onClick={handleEndTurn} disabled={!isMyTurn || isTurnActionLocked}>End Turn</button>}
+            {isMyTurn && <button className="end-turn" onClick={handleEndTurn} disabled={!isMyTurn || isTurnActionLocked}>End Turn</button>}
         </div>
 
     );
 };
 
 export default Main;
-
-

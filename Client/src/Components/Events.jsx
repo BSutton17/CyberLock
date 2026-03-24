@@ -171,6 +171,7 @@ function Events(){
 
         socket.on("turn_changed", ({ currentTurn }) => {
           const nextIsMyTurn = currentTurn.id === playerName && currentTurn.type === 'ally';
+          console.log(`[TURN_CHANGED] Received - ${currentTurn.id} (${currentTurn.type}), isMyTurn: ${nextIsMyTurn}`);
           logImportant('[TURN] changed', {
             id: currentTurn.id,
             type: currentTurn.type,

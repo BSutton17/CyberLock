@@ -50,7 +50,9 @@ export const enrichCharacterAbilities = (character) => {
                 cooldown: ultimateData.cooldown,
                 range: ultimateData.range,
                 targetType: ultimateData.targetType,
-                damageScaling: ultimateData.damageScaling
+                damageScaling: ultimateData.damageScaling,
+                cd: 0,
+                disabled: false
             };
         }
     }

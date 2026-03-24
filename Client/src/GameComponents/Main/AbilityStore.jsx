@@ -2,7 +2,7 @@ export const ABILITIES = {
     ability_boost: {
         id: 'ability_boost',
         name: 'Ability Boost',
-        description: 'Grants yourself +5 Speed and +5 Bonus Health for 2 turns',
+        description: 'Grants yourself +5 in all stats for 2 turns',
         role: "Tank",
         level: 1,
         cooldown: 3,
@@ -30,13 +30,37 @@ export const ABILITIES = {
                     {
                         type: 'stat_buff',
                         target: playerName,
+                        stat: 'resistance',
+                        value: 5,
+                        duration: 2,
+                        stackable: false
+                    },
+                    {
+                        type: 'stat_buff',
+                        target: playerName,
+                        stat: 'ta',
+                        value: 5,
+                        duration: 2,
+                        stackable: false
+                    },
+                    {
+                        type: 'stat_buff',
+                        target: playerName,
+                        stat: 'strength',
+                        value: 5,
+                        duration: 2,
+                        stackable: false
+                    },
+                    {
+                        type: 'stat_buff',
+                        target: playerName,
                         stat: 'health',
                         value: 5,
                         duration: 2,
                         stackable: false
                     }
                 ],
-                message: `${caster.name} gains +5 Speed and +5 Health for 2 turns!`
+                message: `${caster.name} gains +5 in all stats for 2 turns!`
             };
             return result;
         }
@@ -271,7 +295,7 @@ export const ABILITIES = {
         name: 'Black Hole',
         description: 'Click on a square to instantly teleport enemies in a 5x5 area into the center spiral and immobilize them for 2 turns',
         role: "DPS",
-        cooldown: 0,
+        cooldown: 16,
         isUltimate: true,
         targetType: 'ground-target',
         type: 'debuff',
@@ -654,7 +678,7 @@ export const ABILITIES = {
         description: 'Gain +50 Strength but your Speed becomes 0 for 1 turn',
         role: "DPS",
         isUltimate: true,
-        cooldown: 0,
+        cooldown: 15,
         targetType: 'self',
         type: 'buff',
 
@@ -733,7 +757,7 @@ export const ABILITIES = {
         name: 'Dedicating Everything to You',
         description: 'One ally gains +15 bonus in all stats for one turn',
         role: "Support",
-        cooldown: 0,
+        cooldown: 17,
         isUltimate: true,
         targetType: 'ally',
         type: 'buff',
@@ -850,7 +874,7 @@ export const ABILITIES = {
         name: "Executioner's Judgment",
         description: 'Enemies with lower Max Health lose half their HP, enemies with higher Max Health than you lose 20% of their current health',
         role: "Tank",
-        cooldown: 0, 
+        cooldown: 18, 
         isUltimate: true,
         targetType: 'all-enemies',
         type: 'damage',
@@ -898,7 +922,7 @@ export const ABILITIES = {
         description: 'Remove all abilities from enemies for two turn',
         role: "Support",
         isUltimate: true,
-        cooldown: 4,
+        cooldown: 16,
         targetType: 'all-enemies',
         type: 'debuff',
         
@@ -931,7 +955,7 @@ export const ABILITIES = {
     feels_like_home: {
         id: 'feels_like_home',
         name: 'Feels Like Home',
-        description: 'Place a healing field that heals allies +5 for two turns',
+        description: 'Place a healing field that heals allies for two turns',
         role: "Support",
         level: 1,
         cooldown: 3,
@@ -960,6 +984,10 @@ export const ABILITIES = {
                 duration: 2,
                 tickOnCastTurn: true
             });
+
+             const finalHealing = Math.max(1, Math.round(
+                (caster.stats.ta / 8)
+            ));
             
             // Find all allies in 3x3 area
             Object.keys(playerCharacters).forEach(playerName => {
@@ -978,7 +1006,7 @@ export const ABILITIES = {
                     effects.push({
                         type: 'healing_over_time',
                         target: playerName,
-                        amount: 5,
+                        amount: finalHealing,
                         duration: 2,
                         tickOnCastTurn: true
                     });
@@ -986,7 +1014,7 @@ export const ABILITIES = {
             });
             
             const healingMessage = allyNames.length > 0
-                ? `${allyNames.join(', ')} will heal +5 HP for 2 turns!`
+                ? `${allyNames.join(', ')} will heal +${finalHealing} HP for 2 turns!`
                 : 'No allies are currently in the field.';
 
             return {
@@ -1533,7 +1561,7 @@ export const ABILITIES = {
     love: {
         id: 'love',
         name: 'Love',
-        description: 'Heal all allies for 10 HP',
+        description: 'Heal all allies for a moderate amount based on your TA',
         role: "Support",
         level: 3,
         cooldown: 2,
@@ -1546,9 +1574,13 @@ export const ABILITIES = {
          * @param {Object} params.playerCharacters - All player characters
          * @returns {Object} Effect data
          */
+        
         execute: ({ caster, playerCharacters }) => {
             const healing = [];
             const allyNames = [];
+            const finalHealing = Math.max(1, Math.round(
+                (caster.stats.ta / 5)
+            ));
 
             Object.keys(playerCharacters).forEach(playerName => {
                 const character = playerCharacters[playerName];
@@ -1556,14 +1588,14 @@ export const ABILITIES = {
                 
                 healing.push({
                     target: playerName,
-                    amount: 10
+                    amount: finalHealing
                 });
             });
 
             return {
                 success: true,
                 healing: healing,
-                message: `${caster.name} casts Love! ${allyNames.join(', ')} are healed for 10 HP!`
+                message: `${caster.name} casts Love! ${allyNames.join(', ')} are healed for ${finalHealing} HP!`
             };
         }
     },
@@ -1572,7 +1604,7 @@ export const ABILITIES = {
         name: "Love Galore",
         description: 'All party members restore 50% hp',
         role: "Support",
-        cooldown: 0, 
+        cooldown: 17, 
         isUltimate: true,
         targetType: 'all-allies',
         type: 'heal',
@@ -1608,9 +1640,9 @@ export const ABILITIES = {
     murus_fictilis: {
         id: 'murus_fictilis',
         name: "Murus Fictilis",
-        description: 'Grants all members of the party +25 Bonus Health and +30 Res for 2 turns',
+        description: 'Grants all members of the party +35 Bonus Health and +30 Res for 2 turns',
         role: "Tank",
-        cooldown: 0, 
+        cooldown: 18, 
         isUltimate: true,
         targetType: 'all-allies',
         type: 'buff',
@@ -1632,7 +1664,7 @@ export const ABILITIES = {
                     type: 'stat_buff',
                     target: playerName,
                     stat: 'health',
-                    value: 25,
+                    value: 35,
                     duration: 2,
                     stackable: false
                 });
@@ -1659,7 +1691,7 @@ export const ABILITIES = {
         name: 'No Limits',
         description: 'Allows you to use your weapon 3 times in one turn',
         role: "DPS",
-        cooldown: 0,
+        cooldown: 15,
         isUltimate: true,
         targetType: 'self',
         type: 'buff',
@@ -2123,7 +2155,7 @@ export const ABILITIES = {
     the_show_must_go_on: {
         id: 'the_show_must_go_on',
         name: 'The Show Must Go On',
-        description: 'Heal one ally for 10 HP',
+        description: 'Heal one ally',
         role: "Support",
         level: 1,
         cooldown: 2,
@@ -2144,11 +2176,15 @@ export const ABILITIES = {
                 return { success: false, message: 'Target not found' };
             }
 
+            const finalHealing = Math.max(1, Math.round(
+                (caster.stats.ta / 5)
+            ));
+
             return {
                 success: true,
                 healing: [{
                     target: target,
-                    amount: 10
+                    amount: finalHealing
                 }],
                 message: `${caster.name} casts The Show Must Go On! ${ally.name} is healed for 10 HP!`
             };
@@ -2226,7 +2262,7 @@ export const ABILITIES = {
         name: 'White Phospherus',
         description: 'Burns all enemies for 15 damage per turn over 5 turns',
         role: "Tank",
-        cooldown: 0,
+        cooldown: 16,
         isUltimate: true,
         targetType: 'all-enemies',
         type: 'damage',

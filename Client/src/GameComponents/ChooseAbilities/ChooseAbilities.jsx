@@ -36,7 +36,7 @@ function ChooseAbilities(){
             : 0;
 
         const requiredAbilityCount = playerLevel < 3 ? 1 : (playerLevel < 5 ? 2 : 3);
-        const hasUltimate = playerLevel < 5 || (character.ultimate && typeof character.ultimate === 'object' && !!character.ultimate.id);
+        const hasUltimate = playerLevel < 3 || (character.ultimate && typeof character.ultimate === 'object' && !!character.ultimate.id);
 
         setIsReady(selectedAbilities >= requiredAbilityCount && hasUltimate);
     }
@@ -170,7 +170,7 @@ function ChooseAbilities(){
                                         <button 
                                             className="dropdown-toggle ultimate-btn"
                                             onClick={() => setExpandedCategory(expandedCategory === 'ultimate' ? null : 'ultimate')}
-                                            disabled={playerLevel < 5}
+                                            disabled={playerLevel < 3}
                                         >
                                             <span className="dropdown-title">Ultimate Ability</span>
                                             <span className="dropdown-selected">

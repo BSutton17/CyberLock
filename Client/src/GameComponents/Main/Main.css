@@ -416,7 +416,7 @@ p {
 }
 
 .grid-cell.enemy-corpse-cell .grid-character {
-    background: linear-gradient(135deg, #3a3a45 0%, #23232c 100%);
+    background: transparent;
     border-color: #7d7d8f;
     box-shadow: 0 0 0.5rem rgba(140, 140, 160, 0.35);
     display: flex;

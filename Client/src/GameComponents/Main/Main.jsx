@@ -126,8 +126,8 @@ const estimateTypewriterDurationMs = (message = '') => {
 
 // number of generic enemies for low is always party size + 2 I just put 0 here as a placeholder
 const STORY_COMBAT_FLOW = [
-    { combatType: 'low', numOfGeneric: 0, numOfMid: 0, numOfMini: 0, Boss: false, postCombat: 'none' },
     { combatType: 'low', numOfGeneric: 0, numOfMid: 0, numOfMini: 0, Boss: false, postCombat: 'levelUp' },
+    { combatType: 'low', numOfGeneric: 0, numOfMid: 0, numOfMini: 0, Boss: false, postCombat: 'none' },
     { combatType: 'medium', numOfGeneric: 2, numOfMid: 2, numOfMini: 0, Boss: false, postCombat: 'none' },
     { combatType: 'boss', numOfGeneric: 2, numOfMid: 1, numOfMini: 0, Boss: true, postCombat: 'levelUp' },
 
@@ -272,6 +272,8 @@ function Main() {
     const currentTurnCycleRef = useRef(0);
     const completedEnemyTurnCyclesRef = useRef(new Set());
     const completedAllyTurnCyclesRef = useRef(new Set());
+    const wasCombatTurnOrderActiveRef = useRef(false);
+    const lastEndTurnAttemptRef = useRef({ cycle: -1, timestamp: 0 });
     const turnTimerIntervalRef = useRef(null);
     const turnStartLockTimeoutRef = useRef(null);
     const turnStartLockIntervalRef = useRef(null);
@@ -358,6 +360,23 @@ function Main() {
     useEffect(() => {
         currentTurnCycleRef.current += 1;
     }, [currentTurn?.type, currentTurn?.id]);
+
+    useEffect(() => {
+        const hasTurnOrder = Array.isArray(turnOrder) && turnOrder.length > 0;
+
+        if (hasTurnOrder && !wasCombatTurnOrderActiveRef.current) {
+            currentTurnCycleRef.current += 1;
+            completedAllyTurnCyclesRef.current.clear();
+            completedEnemyTurnCyclesRef.current.clear();
+        }
+
+        if (!hasTurnOrder && wasCombatTurnOrderActiveRef.current) {
+            completedAllyTurnCyclesRef.current.clear();
+            completedEnemyTurnCyclesRef.current.clear();
+        }
+
+        wasCombatTurnOrderActiveRef.current = hasTurnOrder;
+    }, [turnOrder]);
 
     useEffect(() => {
         selectedFactionRef.current = selectedFaction;
@@ -691,6 +710,8 @@ function Main() {
             if (faction === 'enforcers' || faction === 'rebels') {
                 setSelectedFaction(faction);
                 selectedFactionRef.current = faction;
+                setPendingFactionChoice(false);
+                setAiOptions(null);
 
                 if (pendingStartCombatRef.current && isAdmin) {
                     pendingStartCombatRef.current = false;
@@ -707,19 +728,42 @@ function Main() {
 
     const handlePostEncounterChoice = (choice) => {
         const requiredAttribute = choice === 'shop' ? 'banker' : 'navigator';
-        if (!canPlayerDecide(requiredAttribute)) return;
+        const owner = getDecisionOwner(requiredAttribute);
+        
+        // Allow if: has required attribute, or is admin, or in single-player mode with one player
+        const canProceed = owner === playerName || isAdmin || players.length === 1;
+        
+        if (!canProceed) {
+            logImportant('[POST-ENCOUNTER CHOICE] Blocked - player lacks required attribute:', requiredAttribute);
+            return;
+        }
+        
+        logImportant('[POST-ENCOUNTER CHOICE] Choice made:', choice, 'by player:', playerName);
+        
         setPendingPostEncounterChoice(false);
+        setAiOptions(null);
+        
         if (choice === 'shop') {
             emitAiEvent('shop_intro', 'The party heads to the shop after the encounter.', { choice });
         } else {
             pendingStartCombatRef.current = true;
+            logImportant('[POST-ENCOUNTER CHOICE] Set pendingStartCombatRef to true, emitting next_encounter');
             emitAiEvent('next_encounter', 'The party pushes onward to the next encounter.', { choice });
         }
     };
 
     const handleNextEncounter = () => {
-        if (!canPlayerDecide('navigator')) return;
+        const owner = getDecisionOwner('navigator');
+        const canProceed = owner === playerName || isAdmin || players.length === 1;
+        
+        if (!canProceed) {
+            logImportant('[NEXT ENCOUNTER] Blocked - player lacks navigator attribute');
+            return;
+        }
+        
+        logImportant('[NEXT ENCOUNTER] Proceeding from shop');
         setPendingNextEncounterChoice(false);
+        setAiOptions(null);
         pendingStartCombatRef.current = true;
         emitAiEvent('next_encounter', 'Leaving the shop, the party moves toward the next encounter.', { choice: 'next_encounter' });
     };
@@ -734,28 +778,29 @@ function Main() {
         const lowerOption = option.toLowerCase();
 
         const parsedFaction = resolveFactionAlignment(lowerOption);
-        if (parsedFaction && (pendingFactionChoice || aiAttribute === 'politician')) {
+        if (parsedFaction && (pendingFactionChoice || (!selectedFactionRef.current && aiAttribute === 'politician'))) {
             handleFactionChoice(option, parsedFaction);
             return;
         }
 
-        if (lowerOption.includes('enforcer')) {
+        if (!selectedFactionRef.current && pendingFactionChoice && lowerOption.includes('enforcer')) {
             handleFactionChoice(option);
             return;
         }
-        if (lowerOption.includes('people') || lowerOption.includes('rebel')) {
+        if (!selectedFactionRef.current && pendingFactionChoice && (lowerOption.includes('people') || lowerOption.includes('rebel'))) {
             handleFactionChoice(option);
             return;
         }
-        if (lowerOption.includes('shop')) {
+        if (pendingPostEncounterChoice && lowerOption.includes('shop')) {
             handlePostEncounterChoice('shop');
             return;
         }
-        if (lowerOption.includes('next encounter') || lowerOption.includes('next_encounter')) {
-            setPendingPostEncounterChoice(false);
-            setPendingNextEncounterChoice(false);
-            pendingStartCombatRef.current = true;
-            emitAiEvent('next_encounter', `The party chose: ${option}`, { choice: option });
+        if (pendingPostEncounterChoice && (lowerOption.includes('next encounter') || lowerOption.includes('next_encounter') || lowerOption.includes('continue'))) {
+            handlePostEncounterChoice('next_encounter');
+            return;
+        }
+        if (pendingNextEncounterChoice && (lowerOption.includes('next encounter') || lowerOption.includes('next_encounter') || lowerOption.includes('continue'))) {
+            handleNextEncounter();
             return;
         }
 
@@ -859,6 +904,7 @@ function Main() {
 
     useEffect(() => {
         if (!isAdmin || !room || hasRequestedIntroRef.current) return;
+        if (selectedFactionRef.current) return;
         if (players.length === 0) return;
 
         hasRequestedIntroRef.current = true;
@@ -877,19 +923,27 @@ function Main() {
 
     useEffect(() => {
         const proceedPostCombatAction = (postCombatAction) => {
+            logImportant('[POST-COMBAT] Proceeding with postCombatAction:', postCombatAction);
+            
             if (postCombatAction === 'levelUp') {
                 socket.emit('level_up', { room });
+                // After level up, set pending choice so next encounter button appears
+                setPendingPostEncounterChoice(true);
+                logImportant('[POST-COMBAT] Level up sent; pending choice set for next phase');
                 return;
             }
 
             if (postCombatAction === 'shop') {
                 setSceneFromKeyword('shop');
-                setPendingNextEncounterChoice(true);
+                setPendingPostEncounterChoice(true);  // Changed from pendingNextEncounterChoice to pendingPostEncounterChoice
+                logImportant('[POST-COMBAT] Shop scene set; pending choice set');
                 return;
             }
 
+            // For 'none', proceed directly to next encounter
             pendingStartCombatRef.current = false;
-            setPendingNextEncounterChoice(true);
+            setPendingPostEncounterChoice(true);
+            logImportant('[POST-COMBAT] No post-combat action; pending choice set for next encounter');
         };
 
         const handleAiMessage = ({ requestId, eventType, response, location, attribute, startCombat, options }) => {
@@ -914,11 +968,24 @@ function Main() {
             // Store attribute for decision-making
             setAiAttribute(attribute || null);
 
-            // Display options from AI if provided
-            if (options && Array.isArray(options) && options.length > 0) {
-                setAiOptions(options);
-            } else {
-                setAiOptions(null);
+            // Handle post-combat narration FIRST, before options display logic
+            if (
+                isAdmin &&
+                requestId &&
+                requestId === pendingPostCombatNarrationRequestIdRef.current
+            ) {
+                const postCombatAction = pendingPostCombatActionRef.current || 'none';
+                pendingPostCombatNarrationRequestIdRef.current = null;
+                pendingPostCombatActionRef.current = null;
+                
+                // Generate default options if AI didn't provide them (fallback mode)
+                if (!options) {
+                    setAiOptions(['Continue to next encounter']);
+                    logImportant('[POST-COMBAT] Generated fallback option "Continue to next encounter" for postCombatAction:', postCombatAction);
+                }
+                
+                proceedPostCombatAction(postCombatAction);
+                return;
             }
 
             // Handle start_combat flag from AI
@@ -935,20 +1002,22 @@ function Main() {
                 return;
             }
 
-            if (
-                isAdmin &&
-                requestId &&
-                requestId === pendingPostCombatNarrationRequestIdRef.current
-            ) {
-                const postCombatAction = pendingPostCombatActionRef.current || 'none';
-                pendingPostCombatNarrationRequestIdRef.current = null;
-                pendingPostCombatActionRef.current = null;
-                proceedPostCombatAction(postCombatAction);
-                return;
+            // Display options from AI only when a decision state is active
+            const hasIncomingOptions = Array.isArray(options) && options.length > 0;
+            const shouldAcceptAiOptions =
+                pendingFactionChoice ||
+                pendingPostEncounterChoice ||
+                pendingNextEncounterChoice ||
+                (!selectedFactionRef.current && (eventType === 'game_start' || attribute === 'politician'));
+
+            if (hasIncomingOptions && shouldAcceptAiOptions) {
+                setAiOptions(options);
+            } else {
+                setAiOptions(null);
             }
 
             // Fallback event-type logic for cases where AI doesn't set structured fields
-            if (eventType === 'game_start' && !options) {
+            if (eventType === 'game_start' && !options && !selectedFactionRef.current) {
                 setPendingFactionChoice(true);
             }
 
@@ -964,7 +1033,10 @@ function Main() {
             }
 
             if (eventType === 'encounter_end' && !options) {
+                logImportant('[ENCOUNTER_END] No AI options provided in fallback/normal response');
                 setPendingPostEncounterChoice(false);
+            } else if (eventType === 'encounter_end') {
+                logImportant('[ENCOUNTER_END] AI provided options:', options);
             }
 
             if (eventType === 'shop_intro' && !options) {
@@ -1042,7 +1114,8 @@ function Main() {
                 socket.emit('ability_used', {
                     room,
                     playerName,
-                    updatedPlayerCharacters: restoredPlayerCharacters
+                    updatedPlayerCharacters: restoredPlayerCharacters,
+                    updatedActiveEffects: []
                 });
             }
 
@@ -1050,21 +1123,41 @@ function Main() {
                 const resetCooldowns = {};
 
                 Object.keys(prevCooldowns || {}).forEach((abilityId) => {
-                    resetCooldowns[abilityId] = 0;
+                    const abilityData = getAbility(abilityId);
+                    resetCooldowns[abilityId] = abilityData?.isUltimate
+                        ? (prevCooldowns?.[abilityId] || 0)
+                        : 0;
                 });
 
                 const myCharacter = playerCharactersRef.current?.[playerName];
-                const abilityIds = [
+                const nonUltimateAbilityIds = [
                     ...(Array.isArray(myCharacter?.abilities) ? myCharacter.abilities.map(ability => ability?.id).filter(Boolean) : []),
-                    myCharacter?.ultimate?.id
                 ].filter(Boolean);
 
-                abilityIds.forEach((abilityId) => {
+                nonUltimateAbilityIds.forEach((abilityId) => {
                     resetCooldowns[abilityId] = 0;
                 });
 
+                const ultimateId = myCharacter?.ultimate?.id;
+                if (ultimateId) {
+                    resetCooldowns[ultimateId] = prevCooldowns?.[ultimateId] || 0;
+                }
+
                 return resetCooldowns;
             });
+
+            setActiveEffects([]);
+            setActionUsed(false);
+            setMovementUsed(0);
+            setExtraWeaponAttacksRemaining(0);
+            setSelectedAbility(null);
+            setSelectedTargets([]);
+            setPendingRelocateTarget(null);
+            setWeaponSelected(false);
+            setTurnStartPosition(null);
+            setIsTurnActionLocked(false);
+            setTurnStartLockRemainingMs(0);
+            setTurnTimeLeft(null);
 
             const preCombatPositions = preCombatPlayerPositionsRef.current || {};
             const restoredPlayerPositions = {};
@@ -1128,7 +1221,7 @@ function Main() {
             socket.off('ai_thinking', handleAiThinking);
             socket.off('combat_ended', handleCombatEnded);
         };
-    }, [socket, isAdmin, room, playerName, players, playerCharacters]);
+    }, [socket, isAdmin, room, playerName, players, playerCharacters, pendingFactionChoice, pendingPostEncounterChoice, pendingNextEncounterChoice]);
 
     useEffect(() => {
         return () => {
@@ -1323,6 +1416,23 @@ function Main() {
         const matchingPlayerId = getPlayerIdByCharacterName(unitId);
         return matchingPlayerId || unitId;
     };
+
+    const hasControlLockEffect = (unitId, lockKey) => {
+        const canonicalUnitId = getCanonicalUnitId(unitId);
+        if (!canonicalUnitId) return false;
+
+        return activeEffects.some(effect => {
+            if (!effect || effect.turnsRemaining <= 0 || !effect[lockKey]) {
+                return false;
+            }
+
+            const canonicalEffectTarget = getCanonicalUnitId(effect.target);
+            return canonicalEffectTarget === canonicalUnitId;
+        });
+    };
+
+    const isMovementLockedForPlayer = () => hasControlLockEffect(playerName, 'preventMovement');
+    const isActionLockedForPlayer = () => hasControlLockEffect(playerName, 'preventActions');
 
     const getCurrentPlayerPosition = () => {
         const byPlayerId = characterPositions[playerName];
@@ -2516,6 +2626,7 @@ function Main() {
                     const updated = { ...prev };
                     const myCharacter = playerCharacters[playerName];
                     const excludedAbilities = new Set(excludeAbilityIds || []);
+                    const ultimateId = myCharacter?.ultimate?.id;
                     
                     if (myCharacter) {
                         // Reset cooldown for each ability
@@ -2528,11 +2639,12 @@ function Main() {
                                 updated[ability.id] = 0;
                             }
                         });
-                        
-                        // Also reset ultimate (but it stays at 0 since ultimates don't have cooldowns)
-                        if (myCharacter.ultimate && !excludedAbilities.has(myCharacter.ultimate.id) && updated[myCharacter.ultimate.id] > 0) {
-                            console.log(`  - ${myCharacter.ultimate.name} (Ultimate): ${updated[myCharacter.ultimate.id]} → 0`);
-                            updated[myCharacter.ultimate.id] = 0;
+
+                        if (ultimateId && updated[ultimateId] == null) {
+                            updated[ultimateId] = 0;
+                        }
+                        if (ultimateId && updated[ultimateId] > 0) {
+                            console.log(`  - Preserving ultimate cooldown ${ultimateId}: ${updated[ultimateId]}`);
                         }
                     }
                     
@@ -2572,6 +2684,15 @@ function Main() {
         
         if (!isMyTurn || !isPlayerAlive) {
             console.log('[GRID CLICK] Blocked - not my turn or player is dead');
+            return;
+        }
+
+        if ((selectedAbility || weaponSelected) && isActionLockedForPlayer()) {
+            console.log('[GRID CLICK] Blocked - actions prevented by status effect');
+            setSelectedAbility(null);
+            setSelectedTargets([]);
+            setPendingRelocateTarget(null);
+            setWeaponSelected(false);
             return;
         }
         
@@ -2840,6 +2961,11 @@ function Main() {
         
         const currentPos = characterPositions[playerName];
         if (!currentPos) return;
+
+        if (isMovementLockedForPlayer()) {
+            console.log('[GRID CLICK] Blocked - movement prevented by status effect');
+            return;
+        }
 
         // Calculate max movement based on speed (including buffs from activeEffects)
         const totalSpeed = calculateTotalStat(currentPlayerCharacter, playerName, 'speed', activeEffects);
@@ -3117,16 +3243,55 @@ function Main() {
 
         combatLifecycleActiveRef.current = true;
 
-        const encounterConfig = STORY_COMBAT_FLOW[combatFlowIndexRef.current] || STORY_COMBAT_FLOW[STORY_COMBAT_FLOW.length - 1];
+        setActiveEffects([]);
+        setActionUsed(false);
+        setMovementUsed(0);
+        setExtraWeaponAttacksRemaining(0);
+        setSelectedAbility(null);
+        setSelectedTargets([]);
+        setPendingRelocateTarget(null);
+        setWeaponSelected(false);
+        setTurnStartPosition(null);
+        setIsTurnActionLocked(false);
+        setTurnStartLockRemainingMs(0);
+        setTurnTimeLeft(null);
+        setCooldowns(prevCooldowns => {
+            const resetCooldowns = {};
+            Object.keys(prevCooldowns || {}).forEach((abilityId) => {
+                const abilityData = getAbility(abilityId);
+                resetCooldowns[abilityId] = abilityData?.isUltimate
+                    ? (prevCooldowns?.[abilityId] || 0)
+                    : 0;
+            });
+            return resetCooldowns;
+        });
+
+        const currentFlowIndex = combatFlowIndexRef.current;
+        logImportant(`[COMBAT FLOW] Starting encounter ${currentFlowIndex}/${STORY_COMBAT_FLOW.length - 1}`);
+        
+        const encounterConfig = STORY_COMBAT_FLOW[currentFlowIndex] || STORY_COMBAT_FLOW[STORY_COMBAT_FLOW.length - 1];
+        logImportant('[COMBAT FLOW] Encounter config:', { 
+            index: currentFlowIndex,
+            combatType: encounterConfig?.combatType,
+            postCombat: encounterConfig?.postCombat,
+            numOfGeneric: encounterConfig?.numOfGeneric,
+            numOfMid: encounterConfig?.numOfMid,
+            numOfMini: encounterConfig?.numOfMini,
+            Boss: encounterConfig?.Boss
+        });
+        
         const generatedEnemies = generateEnemiesFromCombatConfig(encounterConfig);
+        logImportant('[COMBAT FLOW] Generated enemies:', generatedEnemies.map(e => ({ id: e.id, name: e.name })));
+        
         const normalizedSpawnType = encounterConfig?.combatType || 'low';
         const proposedPlayerPositions = {};
         const latestCharacterPositions = characterPositionsRef.current || {};
 
         lastCombatConfigRef.current = encounterConfig;
-        const nextIndex = Math.min(combatFlowIndexRef.current + 1, STORY_COMBAT_FLOW.length);
+        const nextIndex = Math.min(currentFlowIndex + 1, STORY_COMBAT_FLOW.length);
         combatFlowIndexRef.current = nextIndex;
         setCombatFlowIndex(nextIndex);
+        logImportant(`[COMBAT FLOW] Incremented flow index from ${currentFlowIndex} to ${nextIndex}`);
 
         players.forEach((playerId) => {
             const isAlive = (playerCharacters[playerId]?.stats?.health || 0) > 0;
@@ -3141,20 +3306,6 @@ function Main() {
         });
 
         preCombatPlayerPositionsRef.current = { ...proposedPlayerPositions };
-
-        console.group('[COMBAT DEBUG] BEFORE START_COMBAT emit');
-        console.log('room:', room);
-        console.log('sceneKey:', currentSceneKey);
-        console.log('spawnType:', normalizedSpawnType);
-        console.log('combatFlowIndex:', combatFlowIndexRef.current);
-        console.log('encounterConfig:', encounterConfig);
-        console.log('players:', players);
-        console.log('local characterPositions (pre-start):', latestCharacterPositions);
-        console.log('proposedPlayerPositions (pre-start):', proposedPlayerPositions);
-        console.log('cached playerPositions (pre-start):', sessionStorage.getItem(`playerPositions_${room}`));
-        console.log('cached enemyPositions (pre-start):', sessionStorage.getItem(`enemyPositions_${room}`));
-        console.log('generatedEnemies ids:', generatedEnemies.map(enemy => enemy.id));
-        console.groupEnd();
 
         sessionStorage.removeItem(`enemyPositions_${room}`);
         sessionStorage.removeItem(`playerPositions_${room}`);
@@ -3173,15 +3324,16 @@ function Main() {
     }
 
     const handleAbilityClick = (ability) => {
-        console.log('[ABILITY CLICK] Ability clicked:', ability.name, 'ID:', ability.id);
-
         if (isTurnActionLocked) {
-            console.log('[ABILITY CLICK] Blocked - turn action lock active');
             return;
         }
         
         if (!isMyTurn || actionUsed || !isPlayerAlive || aiBusy) {
-            console.log('[ABILITY CLICK] Blocked - isMyTurn:', isMyTurn, 'actionUsed:', actionUsed, 'isPlayerAlive:', isPlayerAlive, 'aiBusy:', aiBusy);
+            return;
+        }
+
+        if (isActionLockedForPlayer()) {
+            console.log('[ABILITY CLICK] Blocked - actions prevented by status effect');
             return;
         }
         
@@ -3801,7 +3953,13 @@ function Main() {
             return;
         }
 
-        if (completedAllyTurnCyclesRef.current.has(turnCycle)) {
+        const now = Date.now();
+        const lastAttempt = lastEndTurnAttemptRef.current;
+        const canRetrySameCycle =
+            lastAttempt.cycle === turnCycle &&
+            now - (lastAttempt.timestamp || 0) >= 6000;
+
+        if (completedAllyTurnCyclesRef.current.has(turnCycle) && !canRetrySameCycle) {
             console.log('[END TURN] Duplicate end-turn ignored for turn cycle:', {
                 playerName,
                 turnCycle
@@ -3809,11 +3967,18 @@ function Main() {
             return;
         }
 
-        completedAllyTurnCyclesRef.current.add(turnCycle);
+        if (canRetrySameCycle) {
+            console.log('[END TURN] Retrying same turn cycle after timeout:', {
+                playerName,
+                turnCycle,
+                timeSinceLastAttempt: now - lastAttempt.timestamp
+            });
+        }
 
-        console.log('END TURN clicked');
-        console.log('Player Name:', playerName);
-        console.log('Room:', room);
+        completedAllyTurnCyclesRef.current.add(turnCycle);
+        lastEndTurnAttemptRef.current = { cycle: turnCycle, timestamp: now };
+
+        console.log(`[TURN_ORDER] END_TURN - cycle: ${turnCycle}, player: ${playerName}, room: ${room}`);
         
         // Tick down cooldowns
         setCooldowns(prevCooldowns => tickCooldowns(prevCooldowns));
@@ -3825,11 +3990,6 @@ function Main() {
             enemiesRef.current,
             playerName
         );
-        
-        console.log('Effects ticked:', {
-            remainingEffects: updatedEffects.length,
-            expiredEffects: activeEffectsRef.current.length - updatedEffects.length
-        });
         
         setActiveEffects(updatedEffects);
         setPlayerCharacters(updatedCharacters);
@@ -4290,8 +4450,10 @@ function Main() {
 
                             return (
                         <button 
-                            className="ultimate-card" 
-                            disabled={!isMyTurn || isTurnActionLocked || actionUsed || !isPlayerAlive || !hasUltimate}
+                            className={`ultimate-card ${
+                                hasUltimate && (cooldowns[resolvedUltimate.id] || 0) > 0 ? 'ultimate-on-cooldown' : ''
+                            }`}
+                            disabled={!isMyTurn || isTurnActionLocked || actionUsed || !isPlayerAlive || !hasUltimate || (hasUltimate && (cooldowns[resolvedUltimate.id] || 0) > 0)}
                             onClick={() => {
                                 if (!hasUltimate) {
                                     console.warn('[ABILITY DEBUG] Ultimate click blocked - invalid or missing ultimate:', rawUltimate);
@@ -4303,8 +4465,13 @@ function Main() {
                         >
                             <div className="ultimate-header">
                                 <div className="ultimate-name">{hasUltimate ? resolvedUltimate.name : 'No Ultimate Available'}</div>
+                                {hasUltimate && (
+                                    <div className="ultimate-cd">
+                                        {(cooldowns[resolvedUltimate.id] || 0) > 0 ? cooldowns[resolvedUltimate.id] : `CD: ${resolvedUltimate.cooldown}`}
+                                    </div>
+                                )}
                             </div>
-                            <div className="ultimate-desc">{hasUltimate ? resolvedUltimate.description : 'Reach level 5 to unlock your ultimate.'}</div>
+                            <div className="ultimate-desc">{hasUltimate ? resolvedUltimate.description : 'Reach level 3 to unlock your ultimate.'}</div>
                         </button>
                             );
                         })()}

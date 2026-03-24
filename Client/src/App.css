@@ -6,6 +6,12 @@
     z-index: 10;
 }
 
+.leave{
+    top: 0;
+    left: 0;
+    border: 1px solid white;
+}
+
 .leave-main {
     top: 2.75rem; /* Centered in the 4rem top bar, offset by 0.75rem container padding */
     left: 1.5rem;

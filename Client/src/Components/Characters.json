@@ -8,7 +8,11 @@
       "stats": {
         "health": 90,
         "maxHealth": 90,
+        "health": 90,
+        "maxHealth": 90,
         "speed": 30,
+        "resistance": 40,
+        "strength": 25,
         "resistance": 40,
         "strength": 25,
         "ta": 15
@@ -31,8 +35,8 @@
       "stats": {
         "health": 105,
         "maxHealth": 105,
-        "speed": 10,
-        "resistance": 50,
+        "speed": 20,
+        "resistance": 40,
         "strength": 30,
         "ta": 5
       },
@@ -62,7 +66,7 @@
       "weapon": {
         "range": 3,
         "name": "Ray Gun",
-        "damage": 10
+        "damage": 9
       },
       "abilities": [
       ],

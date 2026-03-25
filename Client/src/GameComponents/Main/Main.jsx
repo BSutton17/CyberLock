@@ -9,6 +9,7 @@ import { GiDeathSkull, GiPoisonBottle, GiRunningShoe, GiCrossedChains } from 're
 import { FaRegSnowflake, FaSkullCrossbones, FaFireAlt, FaShieldAlt } from 'react-icons/fa';
 import { assignEnemyAbilities } from '../../Utils/enemyAbilityUtils';
 import './Main.css';
+import ChatBot from '../ChatBot/ChatBot';
 
 const SCENE_BACKGROUNDS = {
     city_square: '/Background-City Square.png',
@@ -142,7 +143,7 @@ const STORY_COMBAT_FLOW = [
 ];
 
 function Main() {
-    const { players, playerCharacters, setPlayerCharacters, playerName, room, socket, getAbilityScaler, attributeAllocations, setGamePhase, isMyTurn, currentTurn, enemies, setEnemies, turnOrder, setTurnOrder, isAdmin, setScreen, getCharacterImage, getEnemyImage, debugLogLevel } = useGameContext();
+    const { players, playerCharacters, setPlayerCharacters, playerName, room, socket, getAbilityScaler, attributeAllocations, setGamePhase, isMyTurn, currentTurn, enemies, setEnemies, turnOrder, setTurnOrder, isAdmin, setScreen, getCharacterImage, getEnemyImage, debugLogLevel, chat, setChat } = useGameContext();
     const [currentPlayerCharacter, setCurrentPlayerCharacter] = useState(null);
     const [ultimateReady, setUltimateReady] = useState(false);
     const [characterPositions, setCharacterPositions] = useState({});
@@ -4019,6 +4020,7 @@ function Main() {
 
     return (
         <div className="main-game-container">
+            {chat && <ChatBot />}
             {showYouDiedScreen && (
                 <div className="you-died-screen">
                     <div className="you-died-content">
@@ -4117,7 +4119,8 @@ function Main() {
                 >
                     LEAVE GAME
                 </button>
-                <h2>{SCENE_LABELS[currentSceneKey] || SCENE_LABELS.city_square}</h2>
+                <button className='leave-main-help' onClick={() => setChat(true)}>Help</button>
+                <h2 className='title'>{SCENE_LABELS[currentSceneKey] || SCENE_LABELS.city_square}</h2>
                 <h2>
                     {isMyTurn ? (
                         <div className="turn">

@@ -38,6 +38,7 @@ export const GameProvider = ({ children }) => {
     const [storyText, setStoryText] = useState('The adventure begins...');
     const [combatRewards, setCombatRewards] = useState(null);
     const [attributeAllocations, setAttributeAllocations] = useState({});
+    const [chat, setChat] = useState(false);
 
     const characterImageMap = {
       offensive_tank_1: '/Offensive_Tank_1.png',
@@ -102,6 +103,7 @@ export const GameProvider = ({ children }) => {
         currentTurn, setCurrentTurn,
         turnOrder, setTurnOrder,
         isMyTurn, setIsMyTurn,
+        chat, setChat,
         enemies, setEnemies,
         attributeAllocations, setAttributeAllocations,
         debugLogLevel,

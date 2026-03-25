@@ -11,6 +11,7 @@ import { useGameContext } from "../Components/Context";
 import CharacterBuilder from "./CharacterBuilder/CharacterBuilder";
 import LevelUp from "./LevelUp/LevelUp.jsx"
 import ChooseAbilities from "./ChooseAbilities/ChooseAbilities.jsx"
+import ChatBot from "./ChatBot/ChatBot.jsx";
 
 function HomeScreen() {
   const [joinError, setJoinError] = useState('');

@@ -4456,11 +4456,22 @@ function Main() {
                                     ? getAbility(rawUltimate)
                                     : rawUltimate;
                                 const hasUltimate = !!resolvedUltimate?.id;
+                                const ultimateId = resolvedUltimate?.id;
+                                const currentCooldown = ultimateId ? (cooldowns[ultimateId] || 0) : 0;
+                                const isOnCooldown = currentCooldown > 0;
+                                const isSelected = ultimateId ? selectedAbility === ultimateId : false;
+                                const range = hasUltimate
+                                    ? (resolvedUltimate.range === 1 ? "Melee" : resolvedUltimate.range === undefined ? "" : "Range: " + resolvedUltimate.range)
+                                    : "";
+                                const canonicalAbility = hasUltimate ? (getAbility(ultimateId) || resolvedUltimate) : null;
+                                const scalerIcon = canonicalAbility ? getAbilityScaler(canonicalAbility) : null;
 
                                 return (
                                     <button
-                                        className="ultimate-card"
-                                        disabled={!isMyTurn || isTurnActionLocked || actionUsed || !isPlayerAlive || !hasUltimate}
+                                        className={`ultimate-card ${isOnCooldown ? 'ultimate-on-cooldown' : ''
+                                            } ${isSelected ? 'ultimate-selected' : ''
+                                            }`}
+                                        disabled={!isMyTurn || isTurnActionLocked || isOnCooldown || actionUsed || !isPlayerAlive || !hasUltimate}
                                         onClick={() => {
                                             if (!hasUltimate) {
                                                 console.warn('[ABILITY DEBUG] Ultimate click blocked - invalid or missing ultimate:', rawUltimate);
@@ -4472,8 +4483,11 @@ function Main() {
                                     >
                                         <div className="ultimate-header">
                                             <div className="ultimate-name">{hasUltimate ? resolvedUltimate.name : 'No Ultimate Available'}</div>
+                                             <div className="ability-cd-ultimate">
+                                             {hasUltimate ? (isOnCooldown ? currentCooldown : `CD: ${resolvedUltimate.cooldown}`) : ''}
+                                             </div>
                                         </div>
-                                        <div className="ultimate-desc">{hasUltimate ? resolvedUltimate.description : 'Reach level 5 to unlock your ultimate.'}</div>
+                                        <div className="ultimate-desc">{hasUltimate ? resolvedUltimate.description : 'Reach level 3 to unlock your ultimate.'}</div>
                                     </button>
                                 );
                             })()}

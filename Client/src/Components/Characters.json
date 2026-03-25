@@ -72,14 +72,14 @@
       "id": "aggressive_dps_2",
       "name": "Leo",
       "role": "DPS",
-      "level": 1,
+      "level": 3,
       "stats": {
         "health": 80,
         "maxHealth": 80,
         "speed": 40,
         "resistance": 25,
-        "strength": 45,
-        "ta": 10
+        "strength": 35,
+        "ta": 20
       },
       "weapon": {
         "range": 1,
@@ -101,8 +101,8 @@
         "maxHealth": 80,
         "speed": 35,
         "resistance": 30,
-        "strength": 50,
-        "ta": 5
+        "strength": 40,
+        "ta": 15
       },
       "weapon": {
         "range": 2,

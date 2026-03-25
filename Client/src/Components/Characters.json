@@ -8,11 +8,7 @@
       "stats": {
         "health": 90,
         "maxHealth": 90,
-        "health": 90,
-        "maxHealth": 90,
         "speed": 30,
-        "resistance": 40,
-        "strength": 25,
         "resistance": 40,
         "strength": 25,
         "ta": 15
@@ -189,7 +185,7 @@
     },
     {
       "id": "hacker_support_4",
-      "name": "Root Null",
+      "name": "Ghost Shell",
       "role": "Support",
       "level": 1,
       "stats": {

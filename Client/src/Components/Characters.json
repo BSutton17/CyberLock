@@ -8,11 +8,7 @@
       "stats": {
         "health": 90,
         "maxHealth": 90,
-        "health": 90,
-        "maxHealth": 90,
         "speed": 30,
-        "resistance": 40,
-        "strength": 25,
         "resistance": 40,
         "strength": 25,
         "ta": 15

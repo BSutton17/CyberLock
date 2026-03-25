@@ -213,8 +213,13 @@ function Events(){
           setScreen("levelup");
         });
 
-        socket.on("level_up_complete", () => {
-          setScreen("chooseAbilities");
+        socket.on("level_up_complete", ({players}) => {
+          console.log(players);
+          if(players[playerName].level == 3 || players[playerName].level == 5){
+            setScreen("chooseAbilities");
+          }else{
+            setScreen("main");
+          }
         });
 
         socket.on("game_reset", () => {

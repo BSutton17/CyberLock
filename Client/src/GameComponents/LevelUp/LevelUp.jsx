@@ -11,6 +11,14 @@ const STATS = [
     { id: 'ta', label: 'Technical Ability' }
 ];
 
+const STAT_CAPS = {
+    maxHealth: 150,
+    speed: 60,
+    resistance: 65,
+    strength: 80,
+    ta: 80
+};
+
 function LevelUp(){
     const {players, playerCharacters, setPlayerCharacters, playerName, room, socket } = useGameContext();
     const [isReady, setIsReady] = useState(false);
@@ -79,13 +87,20 @@ function LevelUp(){
         setHasSubmittedReady(true);
     }
 
-    const canIncrement = () => {
-        if (remainingPoints <= 0) return false;        
-        return true;
+    const canIncrement = (attrId) => {
+        if (remainingPoints <= 0) return false;
+        const currentValue = currentCharacter?.stats?.[attrId] ?? 0;
+        const cap = STAT_CAPS[attrId] ?? Infinity;
+        return currentValue < cap;
     };
 
     const handleIncrement = (attrId) => {
-        if (canIncrement()) {
+        if (canIncrement(attrId)) {
+            const cap = STAT_CAPS[attrId] ?? Infinity;
+            const currentValue = currentCharacter?.stats?.[attrId] ?? 0;
+            const nextValue = Math.min(currentValue + 1, cap);
+            if (nextValue === currentValue) return;
+
             const newPoints = { ...levelPoints, [attrId]: levelPoints[attrId] + 1 };
             setLevelPoints(newPoints);
 
@@ -97,7 +112,7 @@ function LevelUp(){
                     ...playerInfo,
                     stats: {
                         ...stats,
-                        [attrId]: currentCharacter.stats[attrId] + 1,
+                        [attrId]: nextValue,
                     }
                 }
             }
@@ -173,7 +188,7 @@ function LevelUp(){
                                     <button
                                         className="levelup-control-btn"
                                         onClick={() => handleIncrement(stat.id)}
-                                        disabled={hasSubmittedReady || !canIncrement()}
+                                        disabled={hasSubmittedReady || !canIncrement(stat.id)}
                                     >
                                         +
                                     </button>

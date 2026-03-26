@@ -2,7 +2,7 @@
     background-image: url('/AttributesBackground.jpg');
     background-size: cover;
     background-position: center;
-    background-attachment: fixed;
+    background-attachment: scroll;
     color: #ffffff;
     height: 100vh;
     padding: 1.857vmin;
@@ -44,7 +44,7 @@
 
 .builder-header h1 {
     margin: 0;
-    font-size: 3.342vmin;
+    font-size: clamp(18px, 3.342vmin, 26px);
     font-weight: 900;
     text-transform: uppercase;
     letter-spacing: 0.418vmin;
@@ -58,7 +58,7 @@
 .builder-header p {
     margin: 0.928vmin 0 0 0;
     color: #d1d5db;
-    font-size: 1.485vmin;
+    font-size: clamp(12px, 1.485vmin, 20px);
     text-transform: uppercase;
     letter-spacing: 0.279vmin;
     text-shadow: 0 0.279vmin 0.557vmin rgba(0, 0, 0, 0.8);
@@ -75,7 +75,7 @@
 }
 
 .points-remaining {
-    font-size: 2.599vmin;
+    font-size: clamp(14px, 2.599vmin, 26px);
     font-weight: 900;
     color: #c4b5fd;
     text-transform: uppercase;
@@ -105,7 +105,7 @@
 
 .attribute-allocation h3 {
     margin: 0 0 1.393vmin 0;
-    font-size: 1.764vmin;
+    font-size: clamp(12px, 1.764vmin, 20px);
     text-transform: uppercase;
     letter-spacing: 0.279vmin;
     color: #c4b5fd;
@@ -140,13 +140,14 @@
     transition: all 0.3s ease;
     position: relative;
     overflow: hidden;
-    max-height: 0.464vmin;
+    border: 0.15vmin solid rgba(139, 92, 246, 0.3);
     width: 74.25vmin;
     box-shadow: 0 0.279vmin 1.114vmin rgba(0, 0, 0, 0.3);
     margin-left: 4.641vmin;
 }
 
-.attribute-item:hover {
+.attribute-item:hover,
+.attribute-item:active {
     border-color: rgba(139, 92, 246, 0.5);
     box-shadow: 0 0.557vmin 2.228vmin rgba(139, 92, 246, 0.3);
 }
@@ -208,7 +209,7 @@
 
 .attribute-info h4 {
     margin: 0;
-    font-size: 1.949vmin;
+    font-size: clamp(12px, 1.949vmin, 20px);
     text-transform: uppercase;
     letter-spacing: 0.141vmin;
     color: #f3f4f6;
@@ -218,7 +219,7 @@
 
 .attribute-info p {
     margin: 0.372vmin 0 0 0;
-    font-size: 1.393vmin;
+    font-size: clamp(12px, 1.393vmin, 20px);
     color: #d1d5db;
     line-height: 1.3;
     text-shadow: 0 0.141vmin 0.279vmin rgba(0, 0, 0, 0.6);
@@ -239,12 +240,14 @@
 .control-btn {
     width: 3.713vmin;
     height: 3.713vmin;
+    min-width: 44px;
+    min-height: 44px;
     background: linear-gradient(135deg, #a78bfa 0%, #60a5fa 100%);
     color: #fff;
     border: none;
     outline: none;
     border-radius: 0.836vmin;
-    font-size: 1.579vmin;
+    font-size: clamp(12px, 1.579vmin, 20px);
     cursor: pointer;
     transition: all 0.3s ease;
     font-weight: 900;
@@ -275,7 +278,7 @@
 }
 
 .attribute-value {
-    font-size: 2.228vmin;
+    font-size: clamp(14px, 2.228vmin, 26px);
     font-weight: 900;
     color: #c4b5fd;
     min-width: 3.713vmin;
@@ -296,7 +299,7 @@
 
 .player-allocations h3 {
     margin: 0 0 1.393vmin 0;
-    font-size: 1.764vmin;
+    font-size: clamp(12px, 1.764vmin, 20px);
     text-transform: uppercase;
     letter-spacing: 0.279vmin;
     color: #c4b5fd;
@@ -317,7 +320,8 @@
     box-shadow: 0 0.279vmin 1.114vmin rgba(0, 0, 0, 0.3);
 }
 
-.player-stats-card:hover {
+.player-stats-card:hover,
+.player-stats-card:active {
     transform: translateY(-0.279vmin);
     box-shadow: 0 0.557vmin 2.228vmin rgba(0, 0, 0, 0.5);
 }
@@ -330,7 +334,7 @@
 
 .player-stats-card h4 {
     margin: 0 0 1.114vmin 0;
-    font-size: 1.579vmin;
+    font-size: clamp(12px, 1.579vmin, 20px);
     text-transform: uppercase;
     letter-spacing: 0.141vmin;
     color: #f3f4f6;
@@ -345,7 +349,7 @@
 }
 
 .primary-ability {
-    font-size: 1.764vmin;
+    font-size: clamp(12px, 1.764vmin, 20px);
     font-weight: 900;
     color: #c4b5fd;
     text-transform: uppercase;
@@ -354,7 +358,7 @@
 }
 
 .secondary-ability {
-    font-size: 1.393vmin;
+    font-size: clamp(12px, 1.393vmin, 20px);
     font-weight: 600;
     color: #93c5fd;
     text-transform: uppercase;
@@ -363,7 +367,7 @@
 }
 
 .no-allocation {
-    font-size: 1.299vmin;
+    font-size: clamp(12px, 1.299vmin, 20px);
     color: #9ca3af;
     font-style: italic;
 }
@@ -382,7 +386,7 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.141vmin;
-    font-size: 1.393vmin;
+    font-size: clamp(12px, 1.393vmin, 20px);
     z-index: 100;
 }
 
@@ -422,7 +426,7 @@
     border: none;
     padding: 1.393vmin 4.641vmin;
     border-radius: 1.114vmin;
-    font-size: 1.857vmin;
+    font-size: clamp(12px, 1.857vmin, 20px);
     font-weight: 900;
     cursor: pointer;
     transition: all 0.3s ease;
@@ -452,14 +456,32 @@
 .ready-status {
     margin: 0.928vmin 0 0 0;
     color: #aaa;
-    font-size: 1.299vmin;
+    font-size: clamp(12px, 1.299vmin, 20px);
     text-transform: uppercase;
     
 }
 
-@media (max-width: 142.56vmin) {
+@media (max-width: 768px) {
     .builder-content {
         grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .character-builder-container {
+        height: auto;
+        min-height: 100vh;
+        overflow-x: auto;
+        overflow-y: auto;
+        width: 200%;
+        min-height: 200vh;
+        transform: scale(0.5);
+        transform-origin: top left;
+    }
+
+    .builder-content {
+        grid-template-columns: 2fr 1fr;
+        min-width: 1400px;
     }
 }
 

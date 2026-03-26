@@ -3,9 +3,8 @@ import { useGameContext } from '../../Components/Context';
 import { ABILITIES } from '../Main/AbilityStore';
 import './ChooseAbilities.css';
 
-
 function ChooseAbilities(){
-    const {players, playerCharacters, setPlayerCharacters, playerName, room, socket, getAbilityScaler } = useGameContext();
+    const { players, playerCharacters, setPlayerCharacters, playerName, room, socket, getAbilityScaler } = useGameContext();
     const [isReady, setIsReady] = useState(false);
     const [hasSubmittedReady, setHasSubmittedReady] = useState(false);
     const [readyPlayers, setReadyPlayers] = useState([]);
@@ -189,7 +188,7 @@ function ChooseAbilities(){
                                                             setExpandedCategory(null);
                                                         }}
                                                     >
-                                                        {ability.name} - <span className="ability-description">{ability.description} {getAbilityScaler(ability)}</span>
+                                                        <span className='ability-description-drop'><span className='ability-name-drop'>{ability.name}</span> - {ability.description} {getAbilityScaler(ability)}</span>
                                                     </button>
                                                 ))}
                                             </div>
@@ -221,7 +220,7 @@ function ChooseAbilities(){
                                                             setExpandedCategory(null);
                                                         }}
                                                     >
-                                                        {ability.name} - <span className="ability-description">{ability.description} {getAbilityScaler(ability)}</span>
+                                                        <span className="ability-description-drop"><span className='ability-name-drop'>{ability.name}</span> - {ability.description} {getAbilityScaler(ability)}</span>
                                                     </button>
                                                 ))}
                                             </div>
@@ -253,7 +252,7 @@ function ChooseAbilities(){
                                                             setExpandedCategory(null);
                                                         }}
                                                     >
-                                                        {ability.name} - <span className="ability-description">{ability.description} {getAbilityScaler(ability)}</span>
+                                                        <span className="ability-description-drop"><span className='ability-name-drop'>{ability.name}</span> - {ability.description} {getAbilityScaler(ability)}</span>
                                                     </button>
                                                 ))}
                                             </div>
@@ -285,7 +284,7 @@ function ChooseAbilities(){
                                                             setExpandedCategory(null);
                                                         }}
                                                     >
-                                                       {ability.name} - <span className="ability-description">{ability.description} {getAbilityScaler(ability)}</span>
+                                                       <span className="ability-description-drop"><span className='ability-name-drop'>{ability.name}</span> - {ability.description} {getAbilityScaler(ability)}</span>
                                                     </button>
                                                 ))}
                                             </div>

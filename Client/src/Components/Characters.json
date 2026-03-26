@@ -6,11 +6,11 @@
       "role": "Tank",
       "level": 1,
       "stats": {
-        "health": 90,
-        "maxHealth": 90,
+        "health": 85,
+        "maxHealth": 85,
         "speed": 30,
-        "resistance": 40,
-        "strength": 25,
+        "resistance": 35,
+        "strength": 35,
         "ta": 15
       },
       "weapon": {
@@ -18,9 +18,7 @@
         "name": "Hammer",
         "damage": 9
       },
-      "abilities": [
-
-      ],
+      "abilities": [],
       "ultimate": ""
     },
     {
@@ -29,21 +27,19 @@
       "role": "Tank",
       "level": 1,
       "stats": {
-        "health": 105,
-        "maxHealth": 105,
+        "health": 100,
+        "maxHealth": 100,
         "speed": 20,
-        "resistance": 40,
-        "strength": 30,
-        "ta": 5
+        "resistance": 50,
+        "strength": 25,
+        "ta": 10
       },
       "weapon": {
         "range": 1,
         "name": "Taser Shield",
         "damage": 8
       },
-      "abilities": [
-
-      ],
+      "abilities": [],
       "ultimate": ""
     },
     {
@@ -54,41 +50,38 @@
       "stats": {
         "health": 75,
         "maxHealth": 75,
-        "speed": 25,
-        "resistance": 35,
+        "speed": 30,
+        "resistance": 25,
         "strength": 10,
-        "ta": 55
+        "ta": 60
       },
       "weapon": {
         "range": 3,
         "name": "Ray Gun",
         "damage": 9
       },
-      "abilities": [
-      ],
+      "abilities": [],
       "ultimate": ""
     },
     {
       "id": "aggressive_dps_2",
       "name": "Leo",
       "role": "DPS",
-      "level": 3,
+      "level": 1,
       "stats": {
-        "health": 80,
-        "maxHealth": 80,
-        "speed": 40,
-        "resistance": 25,
-        "strength": 35,
-        "ta": 20
+        "health": 75,
+        "maxHealth": 75,
+        "speed": 45,
+        "resistance": 20,
+        "strength": 45,
+        "ta": 15
       },
       "weapon": {
         "range": 1,
         "name": "Energy Sword",
         "damage": 10
       },
-      "abilities": [
-        
-      ],
+      "abilities": [],
       "ultimate": ""
     },
     {
@@ -97,12 +90,12 @@
       "role": "DPS",
       "level": 1,
       "stats": {
-        "health": 80,
-        "maxHealth": 80,
+        "health": 85,
+        "maxHealth": 85,
         "speed": 35,
         "resistance": 30,
-        "strength": 40,
-        "ta": 15
+        "strength": 45,
+        "ta": 5
       },
       "weapon": {
         "range": 2,
@@ -120,21 +113,19 @@
       "role": "Support",
       "level": 1,
       "stats": {
-        "health": 60,
-        "maxHealth": 60,
+        "health": 55,
+        "maxHealth": 55,
         "speed": 20,
-        "resistance": 35,
-        "strength": 10,
-        "ta": 50
+        "resistance": 30,
+        "strength": 5,
+        "ta": 65
       },
       "weapon": {
         "range": 4,
         "name": "Drone",
         "damage": 6
       },
-      "abilities": [
-        
-      ],
+      "abilities": [],
       "ultimate": ""
     },
     {
@@ -143,11 +134,11 @@
       "role": "Support",
       "level": 1,
       "stats": {
-        "health": 70,
-        "maxHealth": 70,
-        "speed": 25,
+        "health": 60,
+        "maxHealth": 60,
+        "speed": 30,
         "resistance": 20,
-        "strength": 20,
+        "strength": 25,
         "ta": 40
       },
       "weapon": {
@@ -155,9 +146,7 @@
         "name": "Electric Guitar",
         "damage": 6
       },
-      "abilities": [
-        
-      ],
+      "abilities": [],
       "ultimate": ""
     },
     {
@@ -170,8 +159,8 @@
         "maxHealth": 65,
         "speed": 25,
         "resistance": 25,
-        "strength": 15,
-        "ta": 45
+        "strength": 20,
+        "ta": 40
       },
       "weapon": {
         "range": 3,
@@ -189,21 +178,19 @@
       "role": "Support",
       "level": 1,
       "stats": {
-        "health": 65,
-        "maxHealth": 65,
-        "speed": 25,
-        "resistance": 25,
-        "strength": 15,
-        "ta": 45
+        "health": 55,
+        "maxHealth": 55,
+        "speed": 30,
+        "resistance": 20,
+        "strength": 10,
+        "ta": 60
       },
       "weapon": {
         "range": 3,
         "name": "Laptop",
         "damage": 6
       },
-      "abilities": [
-        
-      ],
+      "abilities": [],
       "ultimate": ""
     }
   ]

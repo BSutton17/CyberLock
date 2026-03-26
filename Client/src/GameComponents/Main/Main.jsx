@@ -4387,7 +4387,7 @@ function Main() {
                                 style={{ cursor: (isMyTurn && !isTurnActionLocked && (!actionUsed || extraWeaponAttacksRemaining > 0) && isPlayerAlive) ? 'pointer' : 'not-allowed' }}
                             >
                                 <div className="weapon-info">
-                                    <i><div className="weapon-name">{currentPlayerCharacter.weapon.name}</div></i>
+                                    <div className="weapon-name">{currentPlayerCharacter.weapon.name}</div>
                                     <div className="weapon-range">{currentPlayerCharacter.weapon.range == 1 ? "Melee" : "Range: " + currentPlayerCharacter.weapon.range}</div>
                                 </div>
                             </div>

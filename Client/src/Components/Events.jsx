@@ -213,11 +213,14 @@ function Events(){
           setScreen("levelup");
         });
 
-        socket.on("level_up_complete", ({players}) => {
-          console.log(players);
-          if(players[playerName].level == 3 || players[playerName].level == 5){
+        socket.on("level_up_complete", (payload = {}) => {
+          const players = payload.players || playerCharacters || {};
+          const currentPlayer = players[playerName];
+          const currentLevel = Number(currentPlayer?.level || 0);
+
+          if (currentLevel === 3 || currentLevel === 5) {
             setScreen("chooseAbilities");
-          }else{
+          } else {
             setScreen("main");
           }
         });
@@ -249,7 +252,7 @@ function Events(){
           socket.off("level_up_complete");
           socket.off("game_reset");
         };
-    }, [room, playerName]);
+    }, [room, playerName, playerCharacters]);
     
     return (
         <>

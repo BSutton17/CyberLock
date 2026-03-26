@@ -593,7 +593,8 @@ export const ABILITIES = {
                 effects: [{
                     type: 'damage_reflection',
                     target: playerName,
-                    duration: 1
+                    duration: 1,
+                    tickOnCastTurn: true
                 }],
                 message: `${caster.name} activates Counter! All incoming damage will be reflected for 1 turn!`
             };
@@ -716,7 +717,7 @@ export const ABILITIES = {
     defensive_jab: {
         id: 'defensive_jab',
         name: 'Defensive Jab',
-        description: 'A strike that deals light damage and lowers enemy Strength by 10 for 1 turn',
+        description: 'A strike that deals light damage and lowers enemy resistance by 10 for 1 turn',
         role: "Tank",
         level: 1,
         cooldown: 1,
@@ -743,19 +744,19 @@ export const ABILITIES = {
                 effects: [{
                     type: 'stat_debuff',
                     target: enemy.id,
-                    stat: 'strength',
+                    stat: 'resistance',
                     value: -10,
                     duration: 1,
                     stackable: false
                 }],
-                message: `${caster.name} uses Defensive Jab on ${enemy.name} for ${finalDamage} damage and lowers Strength by 3!`
+                message: `${caster.name} uses Defensive Jab on ${enemy.name} for ${finalDamage} damage and lowers Resistance by 10!`
             };
         }
     },
     dedicating: {
         id: 'dedicating',
         name: 'Dedicating Everything to You',
-        description: 'One ally gains +15 bonus in all stats for one turn',
+        description: 'One ally gains +20 bonus in all stats for one turn',
         role: "Support",
         cooldown: 17,
         isUltimate: true,
@@ -797,7 +798,7 @@ export const ABILITIES = {
                     type: 'stat_buff',
                     target: target,
                     stat: 'health',
-                    value: 15,
+                    value: 20,
                     duration: 1,
                     stackable: false
                 },
@@ -805,7 +806,7 @@ export const ABILITIES = {
                     type: 'stat_buff',
                     target: target,
                     stat: 'speed',
-                    value: 15,
+                    value: 20,
                     duration: 1,
                     stackable: false
                 },
@@ -813,7 +814,7 @@ export const ABILITIES = {
                     type: 'stat_buff',
                     target: target,
                     stat: 'strength',
-                    value: 15,
+                    value: 20,
                     duration: 1,
                     stackable: false
                 },
@@ -821,7 +822,7 @@ export const ABILITIES = {
                     type: 'stat_buff',
                     target: target,
                     stat: 'resistance',
-                    value: 15,
+                    value: 20,
                     duration: 1,
                     stackable: false
                 },
@@ -829,12 +830,12 @@ export const ABILITIES = {
                     type: 'stat_buff',
                     target: target,
                     stat: 'ta',
-                    value: 15,
+                    value: 20,
                     duration: 1,
                     stackable: false
                 },
             ],
-                message: `${caster.name} gave ${ally.name} +15 to all stats for 1 turn!`
+                message: `${caster.name} gave ${ally.name} +20 to all stats for 1 turn!`
             };
             
             console.log('[DEDICATING] Returning result with', result.effects.length, 'effects for', ally.name);
@@ -1028,14 +1029,14 @@ export const ABILITIES = {
     flood_of_frost: {
         id: 'flood_of_frost',
         name: 'Flood of Frost',
-        description: 'A spell that freezes an enemy, cutting their speed in half for 2 turns and does light damage',
+        description: 'A spell that freezes an enemy, cutting their speed in half for 2 turns and does frost damage',
         role: "DPS",
         level: 3,
         cooldown: 2,
         targetType: 'single-enemy', 
         damageType: 'technical',
         damageScaling: 'ta', 
-        abilityDamage: 5,
+        abilityDamage: 10,
         range: 3, 
         
         /**
@@ -1458,7 +1459,7 @@ export const ABILITIES = {
     hurry_up: {
         id: 'hurry_up',
         name: 'Hurry Up!',
-        description: 'Add +10 speed to one ally for 1 turns',
+        description: 'Add +10 speed to one ally for 1 turn',
         role: "Support",
         level: 1,
         cooldown: 2,
@@ -1513,10 +1514,10 @@ export const ABILITIES = {
     iron_sharpens_iron: {
         id: 'iron_sharpens_iron',
         name: 'Iron Sharpens Iron',
-        description: 'DPS in your party receive +10 Strength for 1 turn',
+        description: 'DPS in your party receive +10 Strength for 2 turns',
         role: "Support",
         level: 1,
-        cooldown: 1,
+        cooldown: 3,
         targetType: 'all-allies',
         type: 'buff',
         
@@ -1539,7 +1540,7 @@ export const ABILITIES = {
                         target: playerName,
                         stat: 'strength',
                         value: 10,
-                        duration: 1
+                        duration: 2
                     });
                 }
             });
@@ -1554,14 +1555,14 @@ export const ABILITIES = {
             return {
                 success: true,
                 effects: effects,
-                message: `${caster.name} uses Iron Sharpens Iron! ${DPSNames.join(', ')} gain +5 Strength for 1 turn!`
+                message: `${caster.name} uses Iron Sharpens Iron! ${DPSNames.join(', ')} gain +10 Strength for 2 turns!`
             };
         }
     },
     love: {
         id: 'love',
         name: 'Love',
-        description: 'Heal all allies for a moderate amount based on your TA',
+        description: 'Heal all allies for a moderate amount',
         role: "Support",
         level: 3,
         cooldown: 2,
@@ -1718,7 +1719,7 @@ export const ABILITIES = {
     poison_apple: {
         id: 'poison_apple',
         name: 'Poison Apple',
-        description: 'A spell that prevents enemies from receiving healing for 1 turn',
+        description: 'A spell that prevents an enemy from receiving healing and poisons them for 3 turns',
         role: "DPS",
         level: 5,
         cooldown: 2,
@@ -1742,12 +1743,21 @@ export const ABILITIES = {
             
             return {
                 success: true,
-                effects: [{
-                    type: 'healing_prevented',
-                    target: target,
-                    duration: 1
-                }],
-                message: `${caster.name} casts Poison Apple on ${enemy.name}! Healing prevented for 1 turn!`
+                effects: [
+                    {
+                        type: 'healing_prevented',
+                        target: target,
+                        duration: 3
+                    },
+                    {
+                        type: 'poison',
+                        target: target,
+                        duration: 3,
+                        damagePercent: 0.05,
+                        tickOnCastTurn: false
+                    }
+                ],
+                message: `${caster.name} casts Poison Apple on ${enemy.name}! Healing prevented and poisoned for 3 turns!`
             };
         }
     },
@@ -2060,98 +2070,6 @@ export const ABILITIES = {
             };
         }
     },
-    sword_slash: {
-        id: 'sword_slash',
-        name: 'Sword Slash',
-        description: 'Deal AOE damage to enemies in front of you and to the sides',
-        role: "DPS",
-        level: 1,
-        cooldown: 1,
-        targetType: 'ground-target',
-        type: 'damage',
-        damageType: 'physical',
-        damageScaling: 'strength',
-        abilityDamage: 8, 
-        range: 1,
-        
-        /**
-         * @param {Object} params
-         * @param {Object} params.caster - Character using ability
-         * @param {Object} params.targetPosition - {row, col} of clicked square (front square)
-         * @param {Array} params.enemies - All enemies
-         * @param {Object} params.characterPositions - Positions of all characters
-         * @param {string} params.playerName - Player using the ability
-         * @returns {Object} Effect data
-         */
-        execute: ({ caster, targetPosition, enemies, characterPositions, playerName }) => {
-            const { row, col } = targetPosition;
-            const casterPos = characterPositions[playerName];
-            
-            if (!casterPos) {
-                return { success: false, message: 'Caster position not found' };
-            }
-            
-            // Calculate direction from caster to target
-            const rowDiff = Math.abs(row - casterPos.row);
-            const colDiff = Math.abs(col - casterPos.col);
-            
-            // Determine if attack is more horizontal or vertical
-            // If horizontal (left/right attack), slash vertically (up/down)
-            // If vertical (up/down attack), slash horizontally (left/right)
-            const affectedSquares = [];
-            
-            if (colDiff > rowDiff) {
-                // Attacking horizontally (left/right), so slash vertically
-                affectedSquares.push(
-                    { row, col },           // Target square
-                    { row: row - 1, col },  // Above
-                    { row: row + 1, col }   // Below
-                );
-            } else {
-                // Attacking vertically (up/down), so slash horizontally
-                affectedSquares.push(
-                    { row, col },           // Target square
-                    { row, col: col - 1 },  // Left
-                    { row, col: col + 1 }   // Right
-                );
-            }
-            
-            // Find all enemies in affected squares
-            const affectedEnemies = enemies.filter(enemy => {
-                const enemyPos = characterPositions[enemy.id];
-                if (!enemyPos) return false;
-                
-                return affectedSquares.some(square => 
-                    square.row === enemyPos.row && square.col === enemyPos.col
-                );
-            });
-            
-            if (affectedEnemies.length === 0) {
-                return {
-                    success: false,
-                    message: 'No enemies in target area!'
-                };
-            }
-            
-            // Calculate total damage (1.25x) and divide equally
-            const baseDamage = Math.max(1, Math.round(
-                (caster.stats.strength / 10) * 8 - (Math.max(...affectedEnemies.map(e => e.stats.resistance)) / 10)
-            ));
-            const damagePerEnemy = Math.floor(baseDamage / affectedEnemies.length);
-            
-            const damageResults = affectedEnemies.map(enemy => ({
-                target: enemy.id,
-                amount: damagePerEnemy
-            }));
-            
-            return {
-                success: true,
-                damage: damageResults,
-                aoePosition: targetPosition,
-                message: `${caster.name} slashes with their sword! ${affectedEnemies.length} enemies hit for ${damagePerEnemy} damage each!`
-            };
-        }
-    },
     the_show_must_go_on: {
         id: 'the_show_must_go_on',
         name: 'The Show Must Go On',
@@ -2254,6 +2172,98 @@ export const ABILITIES = {
                 effects,
                 aoePosition: targetPosition,
                 message: `${caster.name} releases Toxic Mist! ${damageMessage}`
+            };
+        }
+    },
+    vine_whip: {
+        id: 'vine_whip',
+        name: 'Vine Whip',
+        description: 'Deal AOE damage to enemies in front of you and to the sides',
+        role: "DPS",
+        level: 1,
+        cooldown: 1,
+        targetType: 'ground-target',
+        type: 'damage',
+        damageType: 'physical',
+        damageScaling: 'ta',
+        abilityDamage: 8, 
+        range: 2,
+        
+        /**
+         * @param {Object} params
+         * @param {Object} params.caster - Character using ability
+         * @param {Object} params.targetPosition - {row, col} of clicked square (front square)
+         * @param {Array} params.enemies - All enemies
+         * @param {Object} params.characterPositions - Positions of all characters
+         * @param {string} params.playerName - Player using the ability
+         * @returns {Object} Effect data
+         */
+        execute: ({ caster, targetPosition, enemies, characterPositions, playerName }) => {
+            const { row, col } = targetPosition;
+            const casterPos = characterPositions[playerName];
+            
+            if (!casterPos) {
+                return { success: false, message: 'Caster position not found' };
+            }
+            
+            // Calculate direction from caster to target
+            const rowDiff = Math.abs(row - casterPos.row);
+            const colDiff = Math.abs(col - casterPos.col);
+            
+            // Determine if attack is more horizontal or vertical
+            // If horizontal (left/right attack), slash vertically (up/down)
+            // If vertical (up/down attack), slash horizontally (left/right)
+            const affectedSquares = [];
+            
+            if (colDiff > rowDiff) {
+                // Attacking horizontally (left/right), so slash vertically
+                affectedSquares.push(
+                    { row, col },           // Target square
+                    { row: row - 1, col },  // Above
+                    { row: row + 1, col }   // Below
+                );
+            } else {
+                // Attacking vertically (up/down), so slash horizontally
+                affectedSquares.push(
+                    { row, col },           // Target square
+                    { row, col: col - 1 },  // Left
+                    { row, col: col + 1 }   // Right
+                );
+            }
+            
+            // Find all enemies in affected squares
+            const affectedEnemies = enemies.filter(enemy => {
+                const enemyPos = characterPositions[enemy.id];
+                if (!enemyPos) return false;
+                
+                return affectedSquares.some(square => 
+                    square.row === enemyPos.row && square.col === enemyPos.col
+                );
+            });
+            
+            if (affectedEnemies.length === 0) {
+                return {
+                    success: false,
+                    message: 'No enemies in target area!'
+                };
+            }
+            
+            // Calculate total damage (1.25x) and divide equally
+            const baseDamage = Math.max(1, Math.round(
+                (caster.stats.ta / 10) * 8 - (Math.max(...affectedEnemies.map(e => e.stats.resistance)) / 10)
+            ));
+            const damagePerEnemy = Math.floor(baseDamage / affectedEnemies.length);
+            
+            const damageResults = affectedEnemies.map(enemy => ({
+                target: enemy.id,
+                amount: damagePerEnemy
+            }));
+            
+            return {
+                success: true,
+                damage: damageResults,
+                aoePosition: targetPosition,
+                message: `${caster.name} whips with their vine! ${affectedEnemies.length} enemies hit for ${damagePerEnemy} damage each!`
             };
         }
     },

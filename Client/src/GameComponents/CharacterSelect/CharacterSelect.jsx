@@ -1,21 +1,55 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useGameContext } from '../../Components/Context';
 import charactersData from '../../Components/Characters.json';
 import { enrichAllCharacters } from '../../Utils/characterUtils';
 import './CharacterSelect.css';
 
 function CharacterSelect() {
-    const { players, playerName, playerCharacters, setPlayerCharacters, socket, room, readyPlayers, getCharacterImage } = useGameContext();
+    const {
+        players,
+        playerName,
+        playerCharacters,
+        setPlayerCharacters,
+        socket,
+        room,
+        readyPlayers,
+        getCharacterImage
+    } = useGameContext();
+    const enrichedCharactersData = enrichAllCharacters(charactersData);
     const [selectedCharacter, setSelectedCharacter] = useState(null);
     const [displayClassInfo, setDisplayClassInfo] = useState(false);
+    const lastTappedCharacterRef = useRef({ id: null, timestamp: 0 });
 
-    const enrichedCharactersData = enrichAllCharacters(charactersData);
+    const isCharacterTakenByAnotherPlayer = (characterId) =>
+        Object.entries(playerCharacters).some(
+            ([player, character]) => player !== playerName && character?.id === characterId
+        );
 
     const handleCharacterClick = (character) => {
         setSelectedCharacter(character);
+        setDisplayClassInfo(true);
+
+        const now = Date.now();
+        const isRapidRepeatTap =
+            lastTappedCharacterRef.current.id === character.id &&
+            now - lastTappedCharacterRef.current.timestamp < 400;
+
+        lastTappedCharacterRef.current = {
+            id: character.id,
+            timestamp: now
+        };
+
+        if (isRapidRepeatTap && !isCharacterTakenByAnotherPlayer(character.id)) {
+            handleAddToTeam(character);
+        }
     };
 
     const handleAddToTeam = (character) => {
+        if (isCharacterTakenByAnotherPlayer(character.id)) {
+            alert('That character is already taken by another player.');
+            return;
+        }
+
         socket.emit("character_selected", { room, playerName, character });
     };
 
@@ -33,6 +67,7 @@ function CharacterSelect() {
             alert("Please select a character before readying up!");
             return;
         }
+
         socket.emit("player_ready", { room, playerName });
     };
 
@@ -75,11 +110,7 @@ function CharacterSelect() {
                                 <div 
                                     key={character.id} 
                                     className={`character-card ${selectedCharacter?.id === character.id ? 'selected' : ''} ${playerCharacters[playerName]?.id === character.id ? 'in-team' : ''}`}
-                                    onClick={() => {
-                                        handleCharacterClick(character)
-                                        setDisplayClassInfo(true);
-                                    }}
-                                    onDoubleClick={() => handleAddToTeam(character)}
+                                    onClick={() => handleCharacterClick(character)}
                                 >
                                     <img
                                         className='character-card-image'

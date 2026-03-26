@@ -4,21 +4,23 @@ import axios from 'axios';
 const AuthContext = createContext();
 
 const API_URL = import.meta.env.VITE_API_URL || 
-  (import.meta.env.DEV ? 'http://localhost:5000' : undefined);
+  `http://${window.location.hostname}:5000`;
 
-if (!API_URL) {
-  throw new Error('VITE_API_URL environment variable is required for production builds');
-}
+// Auto-login as guest when on mobile/LAN in dev mode (hostname is not localhost)
+const DEV_MOBILE_BYPASS = import.meta.env.DEV && window.location.hostname !== 'localhost';
+const DEV_GUEST_USER = { id: 'guest', username: 'MobileGuest' };
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(DEV_MOBILE_BYPASS ? DEV_GUEST_USER : null);
+  const [isAuthenticated, setIsAuthenticated] = useState(DEV_MOBILE_BYPASS);
+  const [loading, setLoading] = useState(!DEV_MOBILE_BYPASS);
   const [accessToken, setAccessToken] = useState(null);
   const [refreshToken, setRefreshToken] = useState(null);
 
   // Check if user is already logged in on mount
   useEffect(() => {
+    if (DEV_MOBILE_BYPASS) return; // skip — already auto-authenticated
+
     const checkAuth = async () => {
       const storedAccessToken = localStorage.getItem('accessToken');
       const storedRefreshToken = localStorage.getItem('refreshToken');

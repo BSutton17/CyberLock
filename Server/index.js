@@ -1842,7 +1842,9 @@ io.on('connection', (socket) => {
     if (allLevelReady) {
       rooms[room].abilityReadyPlayers = [];
       io.to(room).emit('ability_ready_status', []);
-      io.to(room).emit('level_up_complete');
+      io.to(room).emit('level_up_complete', {
+        players: rooms[room].characterSelections || {}
+      });
     }
   });
 

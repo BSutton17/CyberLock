@@ -143,7 +143,30 @@ const STORY_COMBAT_FLOW = [
 ];
 
 function Main() {
-    const { players, playerCharacters, setPlayerCharacters, playerName, room, socket, getAbilityScaler, attributeAllocations, setGamePhase, isMyTurn, currentTurn, enemies, setEnemies, turnOrder, setTurnOrder, isAdmin, setScreen, getCharacterImage, getEnemyImage, debugLogLevel, chat, setChat } = useGameContext();
+    const {
+        players,
+        playerCharacters,
+        setPlayerCharacters,
+        playerName,
+        room,
+        socket,
+        getAbilityScaler,
+        attributeAllocations,
+        setGamePhase,
+        isMyTurn,
+        currentTurn,
+        enemies,
+        setEnemies,
+        turnOrder,
+        setTurnOrder,
+        isAdmin,
+        setScreen,
+        getCharacterImage,
+        getEnemyImage,
+        debugLogLevel,
+        chat,
+        setChat
+    } = useGameContext();
     const [currentPlayerCharacter, setCurrentPlayerCharacter] = useState(null);
     const [ultimateReady, setUltimateReady] = useState(false);
     const [characterPositions, setCharacterPositions] = useState({});
@@ -1567,7 +1590,8 @@ function Main() {
     };
 
     const createEnemyInstance = (enemyTemplate, instanceNumber, partySize, partyLevel = 1) => {
-        const resistanceMultiplier = partySize / 3;
+        // +10% resistance per player above 3; baseline 1.0 for parties of 1–3
+        const resistanceMultiplier = 1 + Math.max(0, partySize - 3) * 0.1;
         const normalizedEnemyLevel = Math.max(1, partyLevel || 1);
         const levelBonus = (normalizedEnemyLevel - 1) * 3;
 
@@ -1677,7 +1701,7 @@ function Main() {
         const config = combatConfig || STORY_COMBAT_FLOW[0];
         const isLowEncounter = config?.combatType === 'low';
         const genericCount = isLowEncounter
-            ? Math.max(0, partySize + 2)
+            ? Math.max(1, partySize + 2)
             : Math.max(0, Number(config.numOfGeneric) || 0);
         const midCount = Math.max(0, Number(config.numOfMid) || 0);
         const miniCount = Math.max(0, Number(config.numOfMini) || 0);
@@ -4270,7 +4294,17 @@ function Main() {
                     </span>
                 </div>
             </div>
-            <div className="inventory">
+            <div className={`inventory ${(aiBusy || displayText?.trim()) ? 'mobile-ai-active' : ''}`}>
+                <div className="mobile-ai-overlay" aria-hidden={!(aiBusy || displayText?.trim())}>
+                    <div className="mobile-ai-overlay-content">
+                        {aiBusy && (
+                            <div className="mobile-ai-overlay-status">The DM is crafting the story...</div>
+                        )}
+                        <div className="mobile-ai-overlay-text">
+                            {displayText}
+                        </div>
+                    </div>
+                </div>
                 {currentPlayerCharacter ? (
                     <>
                         <div className="character-sheet-header">

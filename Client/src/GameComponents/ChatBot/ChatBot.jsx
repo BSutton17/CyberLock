@@ -43,13 +43,14 @@ function ChatBot() {
             </div>
             <div className="input-area">
                 <input
+                    className="message-input"
                     type="text"
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
                     placeholder="Type a message..."
                 />
-                <button onClick={handleSendMessage}>Send</button>
+                <button className="send-button" onClick={handleSendMessage}>Send</button>
             </div>
         </div>
         </div>

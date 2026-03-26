@@ -379,6 +379,25 @@ export function tickActiveEffects(activeEffects, playerCharacters, enemies, endi
             }
         }
 
+        // Apply poison damage (% of max HP) before decrementing
+        if (effect.type === 'poison' && enemies) {
+            const enemyIndex = updatedEnemies.findIndex(e => e.id === effect.target);
+            if (enemyIndex !== -1) {
+                const enemy = updatedEnemies[enemyIndex];
+                const poisonDamage = Math.max(1, Math.floor(enemy.stats.maxHealth * effect.damagePercent));
+                const oldHealth = enemy.stats.health;
+                const newHealth = Math.max(0, oldHealth - poisonDamage);
+                updatedEnemies[enemyIndex] = {
+                    ...enemy,
+                    stats: {
+                        ...enemy.stats,
+                        health: newHealth
+                    }
+                };
+                console.log(`[POISON DAMAGE] ${enemy.name} took ${poisonDamage} poison damage (${oldHealth} -> ${newHealth})`);
+            }
+        }
+
         // Apply fixed damage over time before decrementing
         if (effect.type === 'damage_over_time') {
             if (effect.target in updatedCharacters) {

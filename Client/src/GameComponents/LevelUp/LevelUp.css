@@ -2,7 +2,7 @@
 	background-image: url('/AttributesBackground.jpg');
 	background-size: cover;
 	background-position: center;
-	background-attachment: fixed;
+	background-attachment: scroll;
 	color: #ffffff;
 	height: 100vh;
 	padding: 1rem;
@@ -177,6 +177,8 @@
 .levelup-control-btn {
 	width: 2rem;
 	height: 2rem;
+	min-width: 44px;
+	min-height: 44px;
 	background: linear-gradient(135deg, #a78bfa 0%, #60a5fa 100%);
 	color: #fff;
 	border: none;
@@ -306,5 +308,27 @@
 @media (max-width: 1024px) {
 	.levelup-content {
 		grid-template-columns: 1fr;
+	}
+
+	.levelup-stats-list {
+		/* flex-direction: row; */
+		flex-wrap: wrap;
+
+	}
+
+	.level-up-container {
+		height: auto;
+		min-height: 100vh;
+		overflow-x: auto;
+		overflow-y: auto;
+		width: 375vmin;
+		height: 158vmin;
+		transform: scale(0.5);
+		transform-origin: top left;
+	}
+
+	.levelup-content {
+		grid-template-columns: 2fr 1fr;
+		min-width: 1100px;
 	}
 }

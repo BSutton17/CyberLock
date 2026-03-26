@@ -12,9 +12,23 @@ import CharacterBuilder from "./CharacterBuilder/CharacterBuilder";
 import LevelUp from "./LevelUp/LevelUp.jsx"
 import ChooseAbilities from "./ChooseAbilities/ChooseAbilities.jsx"
 import ChatBot from "./ChatBot/ChatBot.jsx";
+import { FaRotate } from "react-icons/fa6";
+
+const getIsMobilePortrait = () => {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  const isCoarsePointer = window.matchMedia?.('(pointer: coarse)').matches ?? false;
+  const isPortrait = window.innerHeight > window.innerWidth;
+  const isMobileWidth = window.innerWidth <= 1080;
+
+  return isCoarsePointer && isPortrait && isMobileWidth;
+};
 
 function HomeScreen() {
   const [joinError, setJoinError] = useState('');
+  const [isMobilePortrait, setIsMobilePortrait] = useState(getIsMobilePortrait);
   const [isJoining, setIsJoining] = useState(() => {
     const savedName = localStorage.getItem('name');
     const savedRoom = localStorage.getItem('room');
@@ -28,6 +42,21 @@ function HomeScreen() {
     const savedRoom = localStorage.getItem('room');
     return (savedName && savedRoom) ? savedName : user?.username;
   });
+
+  useEffect(() => {
+    const updateOrientationState = () => {
+      setIsMobilePortrait(getIsMobilePortrait());
+    };
+
+    updateOrientationState();
+    window.addEventListener('resize', updateOrientationState);
+    window.addEventListener('orientationchange', updateOrientationState);
+
+    return () => {
+      window.removeEventListener('resize', updateOrientationState);
+      window.removeEventListener('orientationchange', updateOrientationState);
+    };
+  }, []);
 
   useEffect(() => {
     const handleRoomFull = () => {
@@ -132,6 +161,14 @@ function HomeScreen() {
   return (
     <div className="home-screen-container">
       <Events />
+      {isMobilePortrait && (
+        <div className="rotate-device-overlay">
+          <div className="rotate-device-card">
+            <FaRotate className="rotate-device-icon" />
+            <p>Please rotate your phone</p>
+          </div>
+        </div>
+      )}
       {screen == "waiting" && <>
         <div className="home-title-card-wrap">
           <img className="home-title-card" src="/TitleCard.png" alt="Cyber Lock" />

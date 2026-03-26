@@ -15,11 +15,16 @@ const normalizeDebugLogLevel = (value) => {
 };
 
 export const useGameContext = () => {
-  return useContext(GameContext);
+  const ctx = useContext(GameContext);
+  if (!ctx) {
+    if (import.meta.env.DEV) console.warn('[useGameContext] Called outside of GameProvider — returning empty context');
+    return {};
+  }
+  return ctx;
 };
 
 export const GameProvider = ({ children }) => {
-  const SOCKET_BASE_URL =  import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  const SOCKET_BASE_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5000`;
     const debugLogLevel = normalizeDebugLogLevel(DEBUG_LOG_LEVEL);
     const [players, setPlayers] = useState([]);
     const [isAdmin, setAdmin] = useState(false);

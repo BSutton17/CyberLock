@@ -414,6 +414,47 @@
 	box-shadow: 0 0.99vmin 2.97vmin rgba(0, 0, 0, 0.35);
 }
 
+.ability-legend {
+	align-self: flex-end;
+	width: 42vmin;
+	padding: 1.25vmin 1.5vmin;
+	border-radius: 1.238vmin;
+	border: 0.248vmin solid rgba(139, 92, 246, 0.28);
+	background: rgba(20, 20, 40, 0.72);
+	backdrop-filter: blur(1.1vmin);
+	box-shadow: 0 0.75vmin 2.2vmin rgba(0, 0, 0, 0.32);
+	display: flex;
+	flex-direction: column;
+	gap: 0.8vmin;
+	position: absolute;
+	bottom: 12vmin;
+}
+
+.ability-legend-list {
+	display: flex;
+	flex-direction: row;
+	gap: 0.7vmin;
+
+}
+
+.ability-legend-item {
+	display: flex;
+	align-items: center;
+	gap: 0.8vmin;
+	font-size: clamp(12px, 1.25vmin, 2vmin);
+	color: #e5e7eb;
+	line-height: 1.25;
+}
+
+.ability-legend-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 2.1vmin;
+	font-size: clamp(14px, 1.9vmin, 2.5vmin);
+	color: #9ca3af;
+}
+
 .ready-button {
 	border: none;
 	border-radius: 0.99vmin;

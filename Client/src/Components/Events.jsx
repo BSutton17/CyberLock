@@ -18,7 +18,7 @@ function Events(){
       setReadyPlayers, setGamePhase, setStoryText, characterPositions,
       setCombatRewards, room, setEnemies, 
       setTurnOrder, setCurrentTurn, 
-      setIsMyTurn, playerName, setAttributeAllocations, playerCharacters, debugLogLevel } = useGameContext();
+      setIsMyTurn, playerName, setAttributeAllocations, setAttributePoints, playerCharacters, debugLogLevel } = useGameContext();
 
     const isQuiet = debugLogLevel === 'quiet';
     const isVerbose = debugLogLevel === 'verbose';
@@ -244,6 +244,10 @@ function Events(){
           setAttributeAllocations(allocations);
         });
 
+        socket.on("attribute_points_updated", (points) => {
+          setAttributePoints(points || {});
+        });
+
         socket.on("player_health_updated", ({ playerName: damagedPlayer, newHealth }) => {
           setPlayerCharacters(prev => ({
             ...prev,
@@ -260,6 +264,21 @@ function Events(){
 
         socket.on("level_up_complete", (payload = {}) => {
           const players = payload.players || playerCharacters || {};
+
+          setPlayerCharacters(prevCharacters => {
+            const mergedPlayers = Object.fromEntries(
+              Object.entries(players).map(([name, character]) => {
+                const previousCharacter = prevCharacters[name] || {};
+                return [name, enrichCharacterAbilities(mergeCharacterPayload(character, previousCharacter))];
+              })
+            );
+
+            return {
+              ...prevCharacters,
+              ...mergedPlayers
+            };
+          });
+
           const currentPlayer = players[playerName];
           const currentLevel = Number(currentPlayer?.level || 0);
 
@@ -276,6 +295,7 @@ function Events(){
           setEnemies([]);
           setTurnOrder([]);
           setAttributeAllocations({});
+          setAttributePoints({});
           setScreen("waiting");
         });
 
@@ -292,6 +312,7 @@ function Events(){
           socket.off("turn_changed");
           socket.off("turn_order_updated");
           socket.off("attribute_allocations_updated");
+          socket.off("attribute_points_updated");
           socket.off("player_health_updated");
           socket.off("level_up");
           socket.off("level_up_complete");

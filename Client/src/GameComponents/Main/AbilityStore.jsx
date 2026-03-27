@@ -279,12 +279,11 @@ export const ABILITIES = {
                     affectedEnemies.push(enemy.name);
                     
                     // Apply speed debuff (half their current speed)
-                    const speedDebuff = -(Math.floor(enemy.stats.speed / 2));
                     effects.push({
                         type: 'stat_debuff',
                         target: enemy.id,
                         stat: 'speed',
-                        value: speedDebuff,
+                        multiplier: 0.5,
                         duration: 3,
                         stackable: false,
                         source: 'blizzard' // Track that this is from blizzard field
@@ -1084,12 +1083,12 @@ export const ABILITIES = {
                         type: 'stat_debuff',
                         target: enemy.id,
                         stat: 'speed',
-                        value: -Math.floor(enemy.stats.speed / 2),
+                        multiplier: 0.5,
                         duration: 2,
                         stackable: false
                     }
                 ],
-                message: `${caster.name} freezes ${enemy.name} for ${finalDamage} damage and reduces speed by ${Math.floor(enemy.stats.speed / 2)}!`
+                message: `${caster.name} freezes ${enemy.name} for ${finalDamage} damage and cuts their speed in half!`
             };
         }
     },
@@ -2098,6 +2097,7 @@ export const ABILITIES = {
         level: 1,
         cooldown: 2,
         targetType: 'ally',
+        consumesAction: false,
         type: 'heal',
         
         /**

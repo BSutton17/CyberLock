@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState } from 'react';
 import { IoLogoElectron } from "react-icons/io5";
 import { FaFistRaised } from "react-icons/fa";
+import { LuCirclePlus } from "react-icons/lu";
 import io from 'socket.io-client';
 
 const GameContext = createContext();
@@ -43,6 +44,7 @@ export const GameProvider = ({ children }) => {
     const [storyText, setStoryText] = useState('The adventure begins...');
     const [combatRewards, setCombatRewards] = useState(null);
     const [attributeAllocations, setAttributeAllocations] = useState({});
+    const [attributePoints, setAttributePoints] = useState({});
     const [chat, setChat] = useState(false);
 
     const characterImageMap = {
@@ -90,6 +92,11 @@ export const GameProvider = ({ children }) => {
       return icon;
     }
 
+    const getIsBonusAction = (ability) => {
+      const icon = ability?.consumesAction == false ? <LuCirclePlus /> : "";
+      return icon;
+    }
+
   return (
     <GameContext.Provider
       value={{
@@ -111,12 +118,14 @@ export const GameProvider = ({ children }) => {
         chat, setChat,
         enemies, setEnemies,
         attributeAllocations, setAttributeAllocations,
+        attributePoints, setAttributePoints,
         debugLogLevel,
         characterImageMap,
         enemyImageMap,
         getCharacterImage,
         getEnemyImage,
-        getAbilityScaler
+        getAbilityScaler,
+        getIsBonusAction
       }}
     >
       {children}

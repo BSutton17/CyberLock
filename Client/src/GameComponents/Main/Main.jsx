@@ -53,6 +53,38 @@ const SCENE_ALIASES = {
 const TURN_START_ACTION_LOCK_MS = 500;
 const MAX_CHARACTER_LEVEL = 5;
 const DEFAULT_SCENE_KEY = 'city';
+const DECISION_ATTRIBUTE_ALIASES = {
+    politics: 'politician',
+    political: 'politician',
+    persuasion: 'politician',
+    diplomat: 'politician',
+    diplomacy: 'politician',
+    intimidation: 'intimidation',
+    scholar: 'scholar',
+    research: 'scholar',
+    spy: 'spy',
+    stealth: 'spy',
+    detective: 'detective',
+    investigation: 'detective',
+    investigate: 'detective',
+    medic: 'medic',
+    medicine: 'medic',
+    medical: 'medic',
+    navigator: 'navigator',
+    navigation: 'navigator',
+    travel: 'navigator',
+    banker: 'banker',
+    finance: 'banker',
+    financial: 'banker',
+    money: 'banker',
+    crook: 'crook',
+    criminal: 'crook',
+    underworld: 'crook',
+    electrician: 'electrician',
+    electric: 'electrician',
+    electrical: 'electrician',
+    tech: 'electrician'
+};
 
 const getAllowedAbilitySlots = (level) => {
     if (level >= 5) return 3;
@@ -118,6 +150,10 @@ const normalizeSceneToken = (value = '') =>
         .trim()
         .replace(/[^a-z0-9]+/g, '_')
         .replace(/^_+|_+$/g, '');
+const normalizeDecisionAttribute = (rawAttribute = '') => {
+    const normalizedAttribute = normalizeSceneToken(rawAttribute);
+    return DECISION_ATTRIBUTE_ALIASES[normalizedAttribute] || normalizedAttribute || null;
+};
 
 const resolveSceneKey = (rawKeyword = '') => {
     const normalizedKeyword = normalizeSceneToken(rawKeyword);
@@ -182,10 +218,13 @@ function Main() {
         room,
         socket,
         getAbilityScaler,
+        attributePoints,
         attributeAllocations,
         setGamePhase,
         isMyTurn,
         currentTurn,
+        setCurrentTurn,
+        setIsMyTurn,
         enemies,
         setEnemies,
         turnOrder,
@@ -196,7 +235,8 @@ function Main() {
         getEnemyImage,
         debugLogLevel,
         chat,
-        setChat
+        setChat,
+        getIsBonusAction
     } = useGameContext();
     const [currentPlayerCharacter, setCurrentPlayerCharacter] = useState(null);
     const [ultimateReady, setUltimateReady] = useState(false);
@@ -239,6 +279,7 @@ function Main() {
     const aiTypingCompletionByRequestIdRef = useRef(new Map());
     const pendingPostCombatActionRef = useRef(null);
     const pendingPostCombatNarrationRequestIdRef = useRef(null);
+    const pendingStartCombatNarrationRequestIdRef = useRef(null);
     const pendingPostCombatFallbackTimeoutRef = useRef(null);
     const postCombatOverlayTimeoutRef = useRef(null);
     const preCombatPlayerPositionsRef = useRef(null);
@@ -300,6 +341,9 @@ function Main() {
     const [choiceAttribute, setChoiceAttribute] = useState(null);
     const [choiceStartCombat, setChoiceStartCombat] = useState(false);
     const [combatFlowIndex, setCombatFlowIndex] = useState(0);
+    const [allowFallbackFactionChoices, setAllowFallbackFactionChoices] = useState(false);
+    const [allowFallbackPostEncounterChoices, setAllowFallbackPostEncounterChoices] = useState(false);
+    const [allowFallbackNextEncounterChoice, setAllowFallbackNextEncounterChoice] = useState(false);
 
     const livingStoryController = players.find(player => (playerCharacters[player]?.stats?.health || 0) > 0) || players[0] || null;
     const isStoryController = livingStoryController === playerName;
@@ -311,8 +355,27 @@ function Main() {
     );
 
     const getDecisionOwner = (requiredAttribute) => {
-        if (!requiredAttribute) return null;
-        const owner = players.find(player => attributeAllocations[player]?.[0] === requiredAttribute);
+        const normalizedAttribute = normalizeDecisionAttribute(requiredAttribute);
+        if (!normalizedAttribute) return null;
+
+        let bestOwner = null;
+        let bestScore = -1;
+
+        players.forEach((player) => {
+            const score = Number(attributePoints?.[player]?.[normalizedAttribute]);
+            if (!Number.isFinite(score)) return;
+
+            if (score > bestScore) {
+                bestScore = score;
+                bestOwner = player;
+            }
+        });
+
+        if (bestOwner) {
+            return bestOwner;
+        }
+
+        const owner = players.find(player => attributeAllocations[player]?.[0] === normalizedAttribute);
         return owner || null;
     };
 
@@ -331,6 +394,20 @@ function Main() {
         if (!owner) return isStoryController;
         return owner === playerName;
     };
+    const hasDynamicAiChoices = !!(aiOptions && aiOptions.length > 0 && isAiNarrationComplete);
+    const hasFallbackFactionChoices = !!(pendingFactionChoice && !aiOptions && allowFallbackFactionChoices && isAiNarrationComplete);
+    const hasFallbackPostEncounterChoices = !!(pendingPostEncounterChoice && !aiOptions && allowFallbackPostEncounterChoices && isAiNarrationComplete);
+    const hasFallbackNextEncounterChoices = !!(pendingNextEncounterChoice && !aiOptions && allowFallbackNextEncounterChoice && isAiNarrationComplete);
+    const hasAnyVisibleAiChoices =
+        hasDynamicAiChoices ||
+        hasFallbackFactionChoices ||
+        hasFallbackPostEncounterChoices ||
+        hasFallbackNextEncounterChoices;
+    const shouldShowMobileAiOverlay = !isMyTurn && (
+        aiBusy ||
+        Boolean(displayText?.trim()) ||
+        hasAnyVisibleAiChoices
+    );
     const [showYouDiedScreen, setShowYouDiedScreen] = useState(false);
     const [showEnemiesDefeatedScreen, setShowEnemiesDefeatedScreen] = useState(false);
     const [gameOver, setGameOver] = useState(false);
@@ -471,7 +548,13 @@ function Main() {
             pendingFactionChoice: false,
             pendingPostEncounterChoice: false,
             pendingNextEncounterChoice: false,
-            hasRequestedIntro: false
+            hasRequestedIntro: false,
+            aiText: '',
+            aiOptions: null,
+            aiAttribute: null,
+            allowFallbackFactionChoices: false,
+            allowFallbackPostEncounterChoices: false,
+            allowFallbackNextEncounterChoice: false
         };
 
         let nextStoryState = defaultStoryState;
@@ -496,6 +579,12 @@ function Main() {
                     pendingFactionChoice: Boolean(parsedStoryState?.pendingFactionChoice) && !normalizedSelectedFaction,
                     pendingPostEncounterChoice: Boolean(parsedStoryState?.pendingPostEncounterChoice),
                     pendingNextEncounterChoice: Boolean(parsedStoryState?.pendingNextEncounterChoice),
+                    aiText: typeof parsedStoryState?.aiText === 'string' ? parsedStoryState.aiText : '',
+                    aiOptions: Array.isArray(parsedStoryState?.aiOptions) ? parsedStoryState.aiOptions.filter(option => typeof option === 'string') : null,
+                    aiAttribute: normalizeDecisionAttribute(parsedStoryState?.aiAttribute || ''),
+                    allowFallbackFactionChoices: Boolean(parsedStoryState?.allowFallbackFactionChoices),
+                    allowFallbackPostEncounterChoices: Boolean(parsedStoryState?.allowFallbackPostEncounterChoices),
+                    allowFallbackNextEncounterChoice: Boolean(parsedStoryState?.allowFallbackNextEncounterChoice),
                     hasRequestedIntro:
                         Boolean(parsedStoryState?.hasRequestedIntro) ||
                         !!normalizedSelectedFaction ||
@@ -514,6 +603,12 @@ function Main() {
         setPendingFactionChoice(nextStoryState.pendingFactionChoice);
         setPendingPostEncounterChoice(nextStoryState.pendingPostEncounterChoice);
         setPendingNextEncounterChoice(nextStoryState.pendingNextEncounterChoice);
+        setAiText(nextStoryState.aiText);
+        setAiOptions(nextStoryState.aiOptions);
+        setAiAttribute(nextStoryState.aiAttribute);
+        setAllowFallbackFactionChoices(nextStoryState.allowFallbackFactionChoices);
+        setAllowFallbackPostEncounterChoices(nextStoryState.allowFallbackPostEncounterChoices);
+        setAllowFallbackNextEncounterChoice(nextStoryState.allowFallbackNextEncounterChoice);
         hasRequestedIntroRef.current = nextStoryState.hasRequestedIntro;
         setIsStoryStateHydrated(true);
     }, [storyProgressStorageKey]);
@@ -528,6 +623,12 @@ function Main() {
             pendingFactionChoice,
             pendingPostEncounterChoice,
             pendingNextEncounterChoice,
+            aiText,
+            aiOptions,
+            aiAttribute,
+            allowFallbackFactionChoices,
+            allowFallbackPostEncounterChoices,
+            allowFallbackNextEncounterChoice,
             hasRequestedIntro: hasRequestedIntroRef.current
         }));
     }, [
@@ -538,7 +639,13 @@ function Main() {
         currentSceneKey,
         pendingFactionChoice,
         pendingPostEncounterChoice,
-        pendingNextEncounterChoice
+        pendingNextEncounterChoice,
+        aiText,
+        aiOptions,
+        aiAttribute,
+        allowFallbackFactionChoices,
+        allowFallbackPostEncounterChoices,
+        allowFallbackNextEncounterChoice
     ]);
 
     useEffect(() => {
@@ -732,6 +839,15 @@ function Main() {
         setAiBusy(true);
         setAiOptions(null);
         setAiAttribute(null);
+        if (eventType === 'game_start') {
+            setAllowFallbackFactionChoices(false);
+        }
+        if (eventType === 'encounter_end') {
+            setAllowFallbackPostEncounterChoices(false);
+        }
+        if (eventType === 'shop_intro' || eventType === 'next_encounter') {
+            setAllowFallbackNextEncounterChoice(false);
+        }
         socket.emit('ai_request', {
             requestId,
             room,
@@ -818,6 +934,17 @@ function Main() {
         });
     };
 
+    const startCombatAfterNarration = async (requestIds = []) => {
+        const uniqueRequestIds = [...new Set((requestIds || []).filter(Boolean))];
+        await waitForNarrationTypingCompletion(uniqueRequestIds, TURN_ADVANCE_AFTER_TYPING_MS);
+
+        if (!isStoryController) return;
+
+        pendingStartCombatNarrationRequestIdRef.current = null;
+        pendingStartCombatRef.current = false;
+        handleStoryComplete();
+    };
+
     const resolveFactionAlignment = (rawChoice = '') => {
         const normalized = String(rawChoice || '').toLowerCase();
 
@@ -861,6 +988,7 @@ function Main() {
         socket.emit('faction_selected', { room, faction: normalizedChoice });
 
         setPendingFactionChoice(false);
+        setAllowFallbackFactionChoices(false);
         setAiOptions(null);
         pendingStartCombatRef.current = true;
         emitAiEvent('choice_made', `The party chooses to fight with ${choice}.`, { choice });
@@ -872,11 +1000,11 @@ function Main() {
                 setSelectedFaction(faction);
                 selectedFactionRef.current = faction;
                 setPendingFactionChoice(false);
+                setAllowFallbackFactionChoices(false);
                 setAiOptions(null);
 
                 if (pendingStartCombatRef.current && isStoryController) {
-                    pendingStartCombatRef.current = false;
-                    handleStoryComplete();
+                    void startCombatAfterNarration([pendingStartCombatNarrationRequestIdRef.current]);
                 }
             }
         };
@@ -902,6 +1030,7 @@ function Main() {
         logImportant('[POST-ENCOUNTER CHOICE] Choice made:', choice, 'by player:', playerName);
         
         setPendingPostEncounterChoice(false);
+        setAllowFallbackPostEncounterChoices(false);
         setAiOptions(null);
         
         if (choice === 'shop') {
@@ -924,6 +1053,7 @@ function Main() {
         
         logImportant('[NEXT ENCOUNTER] Proceeding from shop');
         setPendingNextEncounterChoice(false);
+        setAllowFallbackNextEncounterChoice(false);
         setAiOptions(null);
         pendingStartCombatRef.current = true;
         emitAiEvent('next_encounter', 'Leaving the shop, the party moves toward the next encounter.', { choice: 'next_encounter' });
@@ -1099,6 +1229,7 @@ function Main() {
                 socket.emit('level_up', { room });
                 // After level up, set pending choice so next encounter button appears
                 setPendingPostEncounterChoice(true);
+                setAllowFallbackPostEncounterChoices(false);
                 logImportant('[POST-COMBAT] Level up sent; pending choice set for next phase');
                 return;
             }
@@ -1106,6 +1237,7 @@ function Main() {
             if (postCombatAction === 'shop') {
                 setSceneFromKeyword('shop');
                 setPendingPostEncounterChoice(true);  // Changed from pendingNextEncounterChoice to pendingPostEncounterChoice
+                setAllowFallbackPostEncounterChoices(false);
                 logImportant('[POST-COMBAT] Shop scene set; pending choice set');
                 return;
             }
@@ -1113,10 +1245,11 @@ function Main() {
             // For 'none', proceed directly to next encounter
             pendingStartCombatRef.current = false;
             setPendingPostEncounterChoice(true);
+            setAllowFallbackPostEncounterChoices(false);
             logImportant('[POST-COMBAT] No post-combat action; pending choice set for next encounter');
         };
 
-        const handleAiMessage = ({ requestId, eventType, response, location, attribute, startCombat, options }) => {
+        const handleAiMessage = ({ requestId, eventType, response, location, attribute, startCombat, options, fallback }) => {
             markAiRequestCompleted(requestId);
             markAiTypingExpectedCompletion(requestId, response || '');
             setAiBusy(false);
@@ -1136,7 +1269,7 @@ function Main() {
             }
 
             // Store attribute for decision-making
-            setAiAttribute(attribute || null);
+            setAiAttribute(normalizeDecisionAttribute(attribute || ''));
 
             // Handle post-combat narration FIRST, before options display logic
             if (
@@ -1148,14 +1281,9 @@ function Main() {
                 const postCombatAction = pendingPostCombatActionRef.current || 'none';
                 pendingPostCombatNarrationRequestIdRef.current = null;
                 pendingPostCombatActionRef.current = null;
-                
-                // Generate default options if AI didn't provide them (fallback mode)
-                if (!options) {
-                    setAiOptions(['Continue to next encounter']);
-                    logImportant('[POST-COMBAT] Generated fallback option "Continue to next encounter" for postCombatAction:', postCombatAction);
-                }
-                
+
                 proceedPostCombatAction(postCombatAction);
+                setAllowFallbackPostEncounterChoices(Boolean(fallback));
                 return;
             }
 
@@ -1163,23 +1291,24 @@ function Main() {
             if (startCombat && isStoryController) {
                 if (!selectedFactionRef.current) {
                     pendingStartCombatRef.current = true;
+                    pendingStartCombatNarrationRequestIdRef.current = requestId || null;
                     setPendingFactionChoice(true);
                     logImportant('[FACTION] start_combat received before faction selection; waiting for faction choice.');
                     return;
                 }
 
-                pendingStartCombatRef.current = false;
-                handleStoryComplete();
+                void startCombatAfterNarration([requestId]);
                 return;
             }
 
             // Display options from AI only when a decision state is active
             const hasIncomingOptions = Array.isArray(options) && options.length > 0;
+            const normalizedIncomingAttribute = normalizeDecisionAttribute(attribute || '');
             const shouldAcceptAiOptions =
                 pendingFactionChoice ||
                 pendingPostEncounterChoice ||
                 pendingNextEncounterChoice ||
-                (!selectedFactionRef.current && (eventType === 'game_start' || attribute === 'politician'));
+                (!selectedFactionRef.current && (eventType === 'game_start' || normalizedIncomingAttribute === 'politician'));
 
             if (hasIncomingOptions && shouldAcceptAiOptions) {
                 setAiOptions(options);
@@ -1190,13 +1319,13 @@ function Main() {
             // Fallback event-type logic for cases where AI doesn't set structured fields
             if (eventType === 'game_start' && !options && !selectedFactionRef.current) {
                 setPendingFactionChoice(true);
+                setAllowFallbackFactionChoices(Boolean(fallback));
             }
 
             if (eventType === 'choice_made' && !startCombat) {
                 if (pendingStartCombatRef.current && isStoryController) {
                     if (selectedFactionRef.current) {
-                        pendingStartCombatRef.current = false;
-                        handleStoryComplete();
+                        void startCombatAfterNarration([requestId]);
                     } else {
                         logImportant('[FACTION] Waiting for faction_selected before starting combat');
                     }
@@ -1205,19 +1334,19 @@ function Main() {
 
             if (eventType === 'encounter_end' && !options) {
                 logImportant('[ENCOUNTER_END] No AI options provided in fallback/normal response');
-                setPendingPostEncounterChoice(false);
+                setAllowFallbackPostEncounterChoices(Boolean(fallback));
             } else if (eventType === 'encounter_end') {
                 logImportant('[ENCOUNTER_END] AI provided options:', options);
             }
 
             if (eventType === 'shop_intro' && !options) {
                 setPendingNextEncounterChoice(true);
+                setAllowFallbackNextEncounterChoice(Boolean(fallback));
             }
 
             if (eventType === 'next_encounter' && !startCombat) {
                 if (pendingStartCombatRef.current && isStoryController) {
-                    pendingStartCombatRef.current = false;
-                    handleStoryComplete("low");
+                    void startCombatAfterNarration([requestId]);
                 }
             }
         };
@@ -1227,6 +1356,16 @@ function Main() {
             markAiTypingExpectedCompletion(requestId, '');
             setAiBusy(false);
             appendAiLog({ role: 'system', text: `AI error: ${error}`, eventType: 'error' });
+
+            if (pendingFactionChoice) {
+                setAllowFallbackFactionChoices(true);
+            }
+            if (pendingPostEncounterChoice) {
+                setAllowFallbackPostEncounterChoices(true);
+            }
+            if (pendingNextEncounterChoice) {
+                setAllowFallbackNextEncounterChoice(true);
+            }
 
             if (
                 isStoryController &&
@@ -1238,6 +1377,7 @@ function Main() {
                 pendingPostCombatNarrationRequestIdRef.current = null;
                 pendingPostCombatActionRef.current = null;
                 proceedPostCombatAction(postCombatAction);
+                setAllowFallbackPostEncounterChoices(true);
             }
         };
 
@@ -1358,6 +1498,8 @@ function Main() {
 
             setEnemies([]);
             setTurnOrder([]);
+            setCurrentTurn(null);
+            setIsMyTurn(false);
             setCharacterPositions(restoredPlayerPositions);
             sessionStorage.removeItem(`enemyPositions_${room}`);
             sessionStorage.setItem(`playerPositions_${room}`, JSON.stringify(restoredPlayerPositions));
@@ -1403,6 +1545,7 @@ function Main() {
                     pendingPostCombatNarrationRequestIdRef.current = null;
                     pendingPostCombatActionRef.current = null;
                     proceedPostCombatAction(postCombatAction);
+                    setAllowFallbackPostEncounterChoices(true);
                 }, POST_COMBAT_NARRATION_TIMEOUT_MS);
             }, 2000);
         };
@@ -1681,25 +1824,51 @@ function Main() {
         return 1;
     };
 
-    const generateSpreadColumns = (count, totalCols = 10) => {
-        if (count <= 0) return [];
-        const preferredMiddle = [4, 5, 6].filter(col => col >= 0 && col < totalCols);
+    const chooseWeightedSpawnColumn = (preferredCol, alternateCol) => {
+        if (!Number.isInteger(preferredCol)) return alternateCol;
+        if (!Number.isInteger(alternateCol)) return preferredCol;
+        return Math.random() < 0.6 ? preferredCol : alternateCol;
+    };
+
+    const getEnemySpawnColumnOrder = (preferredRow, totalCols = 10) => {
         const center = (totalCols - 1) / 2;
+        const sortByCenterDistance = (firstCol, secondCol) => {
+            const firstDistance = Math.abs(firstCol - center);
+            const secondDistance = Math.abs(secondCol - center);
+
+            if (firstDistance !== secondDistance) {
+                return firstDistance - secondDistance;
+            }
+
+            return firstCol - secondCol;
+        };
+
+        const scriptedSlots = preferredRow === 0
+            ? [[5], [4, 3], [6, 7], [2, 1], [8, 9]]
+            : preferredRow === 1
+                ? [[4], [3, 2], [5, 6], [1, 0], [7, 8]]
+                : [];
+
+        const orderedColumns = [];
+        const usedColumns = new Set();
+
+        scriptedSlots.forEach((slot) => {
+            const validColumns = slot.filter(col => col >= 0 && col < totalCols && !usedColumns.has(col));
+            if (validColumns.length === 0) return;
+
+            const selectedColumn = validColumns.length === 1
+                ? validColumns[0]
+                : chooseWeightedSpawnColumn(validColumns[0], validColumns[1]);
+
+            orderedColumns.push(selectedColumn);
+            usedColumns.add(selectedColumn);
+        });
 
         const remainingColumns = Array.from({ length: totalCols }, (_, col) => col)
-            .filter(col => !preferredMiddle.includes(col))
-            .sort((firstCol, secondCol) => {
-                const firstDistance = Math.abs(firstCol - center);
-                const secondDistance = Math.abs(secondCol - center);
+            .filter(col => !usedColumns.has(col))
+            .sort(sortByCenterDistance);
 
-                if (firstDistance !== secondDistance) {
-                    return firstDistance - secondDistance;
-                }
-
-                return firstCol - secondCol;
-            });
-
-        return [...preferredMiddle, ...remainingColumns].slice(0, count);
+        return [...orderedColumns, ...remainingColumns];
     };
 
     const generateEnemyFallbackPositions = (enemyList = []) => {
@@ -1707,7 +1876,6 @@ function Main() {
             getEnemySpawnDepth(secondEnemy) - getEnemySpawnDepth(firstEnemy)
         );
 
-        const columns = generateSpreadColumns(sortedEnemies.length, 10);
         const positions = {};
         const usedCells = new Set();
 
@@ -1750,13 +1918,27 @@ function Main() {
             return { row: preferredRow, col: preferredCol };
         };
 
-        sortedEnemies.forEach((enemy, index) => {
+        const enemiesByRow = sortedEnemies.reduce((rowsMap, enemy) => {
             const preferredRow = getEnemySpawnDepth(enemy);
-            const preferredCol = columns[index] ?? 0;
-            const spawnCell = findOpenCell(preferredRow, preferredCol);
+            if (!rowsMap.has(preferredRow)) {
+                rowsMap.set(preferredRow, []);
+            }
 
-            positions[enemy.id] = spawnCell;
-            usedCells.add(`${spawnCell.row},${spawnCell.col}`);
+            rowsMap.get(preferredRow).push(enemy);
+            return rowsMap;
+        }, new Map());
+
+        [...enemiesByRow.keys()].sort((firstRow, secondRow) => firstRow - secondRow).forEach((preferredRow) => {
+            const rowEnemies = enemiesByRow.get(preferredRow) || [];
+            const rowColumns = getEnemySpawnColumnOrder(preferredRow, 10);
+
+            rowEnemies.forEach((enemy, index) => {
+                const preferredCol = rowColumns[index] ?? rowColumns[rowColumns.length - 1] ?? 0;
+                const spawnCell = findOpenCell(preferredRow, preferredCol);
+
+                positions[enemy.id] = spawnCell;
+                usedCells.add(`${spawnCell.row},${spawnCell.col}`);
+            });
         });
 
         return positions;
@@ -4420,7 +4602,7 @@ function Main() {
                         </div>
                     )}
                     {/* AI-driven dynamic options */}
-                    {aiOptions && aiOptions.length > 0 && isAiNarrationComplete && (
+                    {hasDynamicAiChoices && (
                         <div className="ai-choices">
                             {aiAttribute && (
                                 <div className="ai-choice-owner">
@@ -4439,7 +4621,7 @@ function Main() {
                         </div>
                     )}
                     {/* Legacy faction choice fallback */}
-                    {pendingFactionChoice && !aiOptions && isAiNarrationComplete && (
+                    {hasFallbackFactionChoices && (
                         <div className="ai-choices">
                             <div className="ai-choice-owner">
                                 Decision owner: {getDecisionOwner('politician') || storyControllerLabel}
@@ -4448,7 +4630,7 @@ function Main() {
                             <button onClick={() => handleFactionChoice('the People of the City')} disabled={aiBusy || !canPlayerDecide('politician')}>Fight with the People of the City</button>
                         </div>
                     )}
-                    {pendingPostEncounterChoice && !aiOptions && isAiNarrationComplete && (
+                    {hasFallbackPostEncounterChoices && (
                         <div className="ai-choices">
                             <div className="ai-choice-owner">
                                 Shop decision: {getDecisionOwner('banker') || storyControllerLabel} | Travel decision: {getDecisionOwner('navigator') || storyControllerLabel}
@@ -4457,7 +4639,7 @@ function Main() {
                             <button onClick={() => handlePostEncounterChoice('next_encounter')} disabled={aiBusy || !canPlayerDecide('navigator')}>Next Encounter</button>
                         </div>
                     )}
-                    {pendingNextEncounterChoice && !aiOptions && isAiNarrationComplete && (
+                    {hasFallbackNextEncounterChoices && (
                         <div className="ai-choices">
                             <div className="ai-choice-owner">
                                 Travel decision: {getDecisionOwner('navigator') || storyControllerLabel}
@@ -4477,8 +4659,8 @@ function Main() {
                     </span>
                 </div>
             </div>
-            <div className={`inventory ${(aiBusy || displayText?.trim()) ? 'mobile-ai-active' : ''}`}>
-                <div className="mobile-ai-overlay" aria-hidden={!(aiBusy || displayText?.trim())}>
+            <div className={`inventory ${shouldShowMobileAiOverlay ? 'mobile-ai-active' : ''}`}>
+                <div className="mobile-ai-overlay" aria-hidden={!shouldShowMobileAiOverlay}>
                     <div className="mobile-ai-overlay-content">
                         {aiBusy && (
                             <div className="mobile-ai-overlay-status">The DM is crafting the story...</div>
@@ -4486,6 +4668,50 @@ function Main() {
                         <div className="mobile-ai-overlay-text">
                             {displayText}
                         </div>
+                        {hasDynamicAiChoices && (
+                            <div className="mobile-ai-overlay-choices">
+                                {aiAttribute && (
+                                    <div className="mobile-ai-choice-owner">
+                                        Decision owner: {getDecisionOwner(aiAttribute) || storyControllerLabel}
+                                    </div>
+                                )}
+                                {aiOptions.map((option, idx) => (
+                                    <button
+                                        key={`mobile-ai-option-${idx}`}
+                                        onClick={() => handleAiOptionClick(option)}
+                                        disabled={aiBusy || (aiAttribute && !canPlayerDecide(aiAttribute))}
+                                    >
+                                        {option}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                        {hasFallbackFactionChoices && (
+                            <div className="mobile-ai-overlay-choices">
+                                <div className="mobile-ai-choice-owner">
+                                    Decision owner: {getDecisionOwner('politician') || storyControllerLabel}
+                                </div>
+                                <button onClick={() => handleFactionChoice('the Enforcers')} disabled={aiBusy || !canPlayerDecide('politician')}>Fight with Enforcers</button>
+                                <button onClick={() => handleFactionChoice('the People of the City')} disabled={aiBusy || !canPlayerDecide('politician')}>Fight with the People of the City</button>
+                            </div>
+                        )}
+                        {hasFallbackPostEncounterChoices && (
+                            <div className="mobile-ai-overlay-choices">
+                                <div className="mobile-ai-choice-owner">
+                                    Shop decision: {getDecisionOwner('banker') || storyControllerLabel} | Travel decision: {getDecisionOwner('navigator') || storyControllerLabel}
+                                </div>
+                                <button onClick={() => handlePostEncounterChoice('shop')} disabled={aiBusy || !canPlayerDecide('banker')}>Go to Shop</button>
+                                <button onClick={() => handlePostEncounterChoice('next_encounter')} disabled={aiBusy || !canPlayerDecide('navigator')}>Next Encounter</button>
+                            </div>
+                        )}
+                        {hasFallbackNextEncounterChoices && (
+                            <div className="mobile-ai-overlay-choices">
+                                <div className="mobile-ai-choice-owner">
+                                    Travel decision: {getDecisionOwner('navigator') || storyControllerLabel}
+                                </div>
+                                <button onClick={handleNextEncounter} disabled={aiBusy || !canPlayerDecide('navigator')}>Next Encounter</button>
+                            </div>
+                        )}
                     </div>
                 </div>
                 {currentPlayerCharacter ? (
@@ -4527,11 +4753,11 @@ function Main() {
                                 <h4>Stats</h4>
                                 <div className="stats-grid">
                                     {(() => {
-                                        const statBonuses = getStatBonuses(playerName, activeEffects);
+                                        const statBonuses = getStatBonuses(currentPlayerCharacter, playerName, activeEffects);
                                         const currentPosition = characterPositions[playerName];
-                                        const sewerSpeedPenalty = isSewerSlowTile(currentSceneKey, currentPosition)
-                                            ? Math.floor((currentPlayerCharacter?.stats?.speed || 0) / 2)
-                                            : 0;
+                                        const totalSpeedBeforeTerrain = calculateTotalStat(currentPlayerCharacter, playerName, 'speed', activeEffects);
+                                        const sewerAdjustedSpeed = getSewerAdjustedSpeed(currentSceneKey, totalSpeedBeforeTerrain, currentPosition);
+                                        const sewerSpeedPenalty = Math.max(0, totalSpeedBeforeTerrain - sewerAdjustedSpeed);
                                         return (
                                             <>
                                                 <div className="stat-item">
@@ -4634,6 +4860,7 @@ function Main() {
                                     const range = resolvedAbility.range === 1 ? "Melee" : resolvedAbility.range === undefined ? "" : "Range: " + resolvedAbility.range;
                                     const canonicalAbility = getAbility(resolvedAbility.id) || resolvedAbility;
                                     const scalerIcon = getAbilityScaler(canonicalAbility);
+                                    const bonusIcon = getIsBonusAction(canonicalAbility);
 
                                     // console.log('[ABILITY SCALER]', {
                                     //     abilityId: resolvedAbility.id,
@@ -4651,7 +4878,7 @@ function Main() {
                                                 }`}
                                             disabled={!isMyTurn || isTurnActionLocked || isOnCooldown || (actionUsed && abilityConsumesAction(resolvedAbility)) || !isPlayerAlive}
                                         >
-                                            <div className='damage-scaling'>{scalerIcon}</div>
+                                            <div className='damage-scaling'>{scalerIcon}{bonusIcon}</div>
                                             <div className="ability-header">
                                                 <div className="ability-name">{resolvedAbility.name}</div>
                                                 <div className="ability-cd">

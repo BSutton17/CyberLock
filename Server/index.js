@@ -409,38 +409,51 @@ function getEnemySpawnDepth(enemy) {
   return 1;
 }
 
-function generateSpreadColumns(count, totalCols = 10) {
-  if (count <= 0) return [];
-  if (count === 1) return [Math.floor(totalCols / 2)];
+function chooseWeightedSpawnColumn(preferredCol, alternateCol) {
+  if (!Number.isInteger(preferredCol)) return alternateCol;
+  if (!Number.isInteger(alternateCol)) return preferredCol;
+  return Math.random() < 0.6 ? preferredCol : alternateCol;
+}
 
-  const baseColumns = Array.from({ length: count }, (_, index) =>
-    Math.round((index * (totalCols - 1)) / (count - 1))
-  );
+function getEnemySpawnColumnOrder(preferredRow, totalCols = 10) {
+  const center = (totalCols - 1) / 2;
+  const sortByCenterDistance = (firstCol, secondCol) => {
+    const firstDistance = Math.abs(firstCol - center);
+    const secondDistance = Math.abs(secondCol - center);
 
-  const used = new Set();
-  return baseColumns.map((baseCol) => {
-    if (!used.has(baseCol)) {
-      used.add(baseCol);
-      return baseCol;
+    if (firstDistance !== secondDistance) {
+      return firstDistance - secondDistance;
     }
 
-    for (let offset = 1; offset < totalCols; offset++) {
-      const left = baseCol - offset;
-      const right = baseCol + offset;
+    return firstCol - secondCol;
+  };
 
-      if (left >= 0 && !used.has(left)) {
-        used.add(left);
-        return left;
-      }
+  const scriptedSlots = preferredRow === 0
+    ? [[5], [4, 3], [6, 7], [2, 1], [8, 9]]
+    : preferredRow === 1
+      ? [[4], [3, 2], [5, 6], [1, 0], [7, 8]]
+      : [];
 
-      if (right < totalCols && !used.has(right)) {
-        used.add(right);
-        return right;
-      }
-    }
+  const orderedColumns = [];
+  const usedColumns = new Set();
 
-    return baseCol;
+  scriptedSlots.forEach((slot) => {
+    const validColumns = slot.filter(col => col >= 0 && col < totalCols && !usedColumns.has(col));
+    if (validColumns.length === 0) return;
+
+    const selectedColumn = validColumns.length === 1
+      ? validColumns[0]
+      : chooseWeightedSpawnColumn(validColumns[0], validColumns[1]);
+
+    orderedColumns.push(selectedColumn);
+    usedColumns.add(selectedColumn);
   });
+
+  const remainingColumns = Array.from({ length: totalCols }, (_, col) => col)
+    .filter(col => !usedColumns.has(col))
+    .sort(sortByCenterDistance);
+
+  return [...orderedColumns, ...remainingColumns];
 }
 
 function generateEnemySpawnPositions(enemies = [], sceneKey = null) {
@@ -448,7 +461,6 @@ function generateEnemySpawnPositions(enemies = [], sceneKey = null) {
     getEnemySpawnDepth(secondEnemy) - getEnemySpawnDepth(firstEnemy)
   );
 
-  const columns = generateSpreadColumns(sortedEnemies.length, 10);
   const positions = {};
   const usedCells = new Set();
 
@@ -491,12 +503,26 @@ function generateEnemySpawnPositions(enemies = [], sceneKey = null) {
     return { row: preferredRow, col: preferredCol };
   };
 
-  sortedEnemies.forEach((enemy, index) => {
+  const enemiesByRow = sortedEnemies.reduce((rowsMap, enemy) => {
     const preferredRow = getEnemySpawnDepth(enemy);
-    const preferredCol = columns[index] ?? 0;
-    const spawnCell = findOpenCell(preferredRow, preferredCol);
-    positions[enemy.id] = spawnCell;
-    usedCells.add(`${spawnCell.row},${spawnCell.col}`);
+    if (!rowsMap.has(preferredRow)) {
+      rowsMap.set(preferredRow, []);
+    }
+
+    rowsMap.get(preferredRow).push(enemy);
+    return rowsMap;
+  }, new Map());
+
+  [...enemiesByRow.keys()].sort((firstRow, secondRow) => firstRow - secondRow).forEach((preferredRow) => {
+    const rowEnemies = enemiesByRow.get(preferredRow) || [];
+    const rowColumns = getEnemySpawnColumnOrder(preferredRow, 10);
+
+    rowEnemies.forEach((enemy, index) => {
+      const preferredCol = rowColumns[index] ?? rowColumns[rowColumns.length - 1] ?? 0;
+      const spawnCell = findOpenCell(preferredRow, preferredCol);
+      positions[enemy.id] = spawnCell;
+      usedCells.add(`${spawnCell.row},${spawnCell.col}`);
+    });
   });
 
   return positions;
@@ -1659,6 +1685,14 @@ io.on('connection', (socket) => {
     // Send existing character selections to the newly joined player
     if (rooms[room].characterSelections) {
       socket.emit("update_character_selections", rooms[room].characterSelections);
+    }
+
+    if (rooms[room].attributePoints) {
+      socket.emit('attribute_points_updated', rooms[room].attributePoints);
+    }
+
+    if (rooms[room].sortedAttributeAllocations) {
+      socket.emit('attribute_allocations_updated', rooms[room].sortedAttributeAllocations);
     }
 
     socket.emit('restore_screen', { screen: rooms[room].playerScreens[name] || 'waiting' });

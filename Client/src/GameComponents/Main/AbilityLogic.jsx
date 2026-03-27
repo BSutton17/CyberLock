@@ -156,6 +156,10 @@ export function applyAbilityEffects(result, gameState) {
             if (target in updates.playerCharacters) {
                 const character = updates.playerCharacters[target];
                 const currentHealth = character.stats.health;
+                if ((currentHealth || 0) <= 0) {
+                    console.log(`[HEAL] Skipping heal on dead target ${character.name} (${target})`);
+                    return;
+                }
                 const maxHealth = character.stats.maxHealth;
                 const newHealth = Math.min(maxHealth, currentHealth + amount);
                 
@@ -337,6 +341,10 @@ export function tickActiveEffects(activeEffects, playerCharacters, enemies, endi
         // Apply healing_over_time before decrementing
         if (effect.type === 'healing_over_time' && effect.target in updatedCharacters) {
             const character = updatedCharacters[effect.target];
+            if ((character.stats.health || 0) <= 0) {
+                console.log(`[HEALING OVER TIME] Removing effect on dead target ${effect.target}`);
+                updatedEffect.turnsRemaining = 0;
+            } else {
             const oldHealth = character.stats.health;
             const maxHealth = character.stats.maxHealth || character.stats.max_health;
             const newHealth = Math.min(maxHealth, oldHealth + effect.amount);
@@ -348,6 +356,7 @@ export function tickActiveEffects(activeEffects, playerCharacters, enemies, endi
                 }
             };
             console.log(`[HEALING OVER TIME] ${character.name} healed for ${effect.amount} HP (${oldHealth} -> ${newHealth})`);
+            }
         }
         
         // Apply burn damage before decrementing

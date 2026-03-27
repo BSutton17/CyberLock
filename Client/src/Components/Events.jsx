@@ -3,6 +3,14 @@ import { useEffect } from 'react';
 import { useGameContext } from './Context.jsx';
 import { enrichCharacterAbilities } from '../Utils/characterUtils';
 
+const MAX_CHARACTER_LEVEL = 5;
+
+const getAllowedAbilitySlots = (level) => {
+  if (level >= 5) return 3;
+  if (level >= 3) return 2;
+  return 1;
+};
+
 function Events(){
 
     const { socket, setPlayers, setDisplayGame, 
@@ -28,6 +36,7 @@ function Events(){
     const resolveAbilities = (incomingCharacter, previousCharacter) => {
       const incomingAbilities = incomingCharacter?.abilities;
       const previousAbilities = previousCharacter?.abilities;
+      const isSameCharacter = incomingCharacter?.id && previousCharacter?.id && incomingCharacter.id === previousCharacter.id;
 
       if (!Array.isArray(incomingAbilities)) {
         return previousAbilities;
@@ -36,7 +45,7 @@ function Events(){
       const hasPreviousAbilities = Array.isArray(previousAbilities) && previousAbilities.length > 0;
       const incomingIsEmpty = incomingAbilities.length === 0;
 
-      if (incomingIsEmpty && hasPreviousAbilities) {
+      if (incomingIsEmpty && hasPreviousAbilities && isSameCharacter) {
         console.warn('[ABILITY DEBUG] Ignoring empty incoming abilities, preserving previous abilities.');
         return previousAbilities;
       }
@@ -50,16 +59,39 @@ function Events(){
         (typeof incomingUltimate === 'string' && incomingUltimate.trim().length > 0) ||
         (incomingUltimate && typeof incomingUltimate === 'object' && !!incomingUltimate.id);
 
-      return hasValidIncomingUltimate ? incomingUltimate : previousCharacter?.ultimate;
+      const isSameCharacter = incomingCharacter?.id && previousCharacter?.id && incomingCharacter.id === previousCharacter.id;
+
+      return hasValidIncomingUltimate ? incomingUltimate : (isSameCharacter ? previousCharacter?.ultimate : null);
+    };
+
+    const sanitizeCharacterProgression = (character) => {
+      if (!character || typeof character !== 'object') return character;
+
+      const rawLevel = Number(character.level);
+      const level = Number.isFinite(rawLevel)
+        ? Math.max(1, Math.min(MAX_CHARACTER_LEVEL, rawLevel))
+        : 1;
+      const allowedAbilitySlots = getAllowedAbilitySlots(level);
+      const abilities = Array.isArray(character.abilities)
+        ? character.abilities.slice(0, allowedAbilitySlots).filter(Boolean)
+        : [];
+      const ultimate = level >= 3 ? (character.ultimate || null) : null;
+
+      return {
+        ...character,
+        level,
+        abilities,
+        ultimate
+      };
     };
 
     const mergeCharacterPayload = (incomingCharacter, previousCharacter = {}) => {
-      return {
+      return sanitizeCharacterProgression({
         ...previousCharacter,
         ...incomingCharacter,
         abilities: resolveAbilities(incomingCharacter, previousCharacter),
         ultimate: resolveUltimate(incomingCharacter, previousCharacter)
-      };
+      });
     };
 
     useEffect(() => {
@@ -155,6 +187,19 @@ function Events(){
           }
           
           setEnemies(enemies);
+
+          const existingOverworldPositions = sessionStorage.getItem(`overworldPlayerPositions_${room}`);
+          const currentOverworldPositions = sessionStorage.getItem(`playerPositions_${room}`);
+          if (!existingOverworldPositions && currentOverworldPositions) {
+            try {
+              const parsedCurrentPositions = JSON.parse(currentOverworldPositions);
+              if (parsedCurrentPositions && typeof parsedCurrentPositions === 'object' && Object.keys(parsedCurrentPositions).length > 0) {
+                sessionStorage.setItem(`overworldPlayerPositions_${room}`, JSON.stringify(parsedCurrentPositions));
+              }
+            } catch (error) {
+              console.error('[POSITION SNAPSHOT] Failed to snapshot overworld positions before combat:', error);
+            }
+          }
           
           if (enemyPositions) {
             sessionStorage.setItem(`enemyPositions_${room}`, JSON.stringify(enemyPositions));
@@ -213,11 +258,14 @@ function Events(){
           setScreen("levelup");
         });
 
-        socket.on("level_up_complete", ({players}) => {
-          console.log(players);
-          if(players[playerName].level == 3 || players[playerName].level == 5){
+        socket.on("level_up_complete", (payload = {}) => {
+          const players = payload.players || playerCharacters || {};
+          const currentPlayer = players[playerName];
+          const currentLevel = Number(currentPlayer?.level || 0);
+
+          if (currentLevel === 3 || currentLevel === 5) {
             setScreen("chooseAbilities");
-          }else{
+          } else {
             setScreen("main");
           }
         });
@@ -249,7 +297,7 @@ function Events(){
           socket.off("level_up_complete");
           socket.off("game_reset");
         };
-    }, [room, playerName]);
+    }, [room, playerName, playerCharacters]);
     
     return (
         <>

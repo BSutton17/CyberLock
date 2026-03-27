@@ -51,6 +51,36 @@ const SCENE_ALIASES = {
 
 
 const TURN_START_ACTION_LOCK_MS = 500;
+const MAX_CHARACTER_LEVEL = 5;
+const DEFAULT_SCENE_KEY = 'city';
+
+const getAllowedAbilitySlots = (level) => {
+    if (level >= 5) return 3;
+    if (level >= 3) return 2;
+    return 1;
+};
+
+const sanitizeCharacterProgression = (character) => {
+    if (!character || typeof character !== 'object') return character;
+
+    const rawLevel = Number(character.level);
+    const level = Number.isFinite(rawLevel)
+        ? Math.max(1, Math.min(MAX_CHARACTER_LEVEL, rawLevel))
+        : 1;
+    const allowedAbilitySlots = getAllowedAbilitySlots(level);
+    const abilities = Array.isArray(character.abilities)
+        ? character.abilities.slice(0, allowedAbilitySlots).filter(Boolean)
+        : [];
+    const ultimate = level >= 3 ? (character.ultimate || null) : null;
+
+    return {
+        ...character,
+        level,
+        abilities,
+        ultimate
+    };
+};
+
 const SEWER_SLOW_TILE_KEYS = new Set([
     '3,0', '3,1', '3,2', '3,3', '3,4', '3,5', '3,6', '3,7', '3,8', '3,9',
     '1,4', '1,5', '2,4', '2,5', '4,4', '5,4', '5,5'
@@ -97,6 +127,7 @@ const resolveSceneKey = (rawKeyword = '') => {
 const TYPEWRITER_CHAR_INTERVAL_MS = 20;
 const TYPEWRITER_SENTENCE_GAP_FACTOR_MS = 18;
 const TURN_ADVANCE_AFTER_TYPING_MS = 1000;
+const POST_COMBAT_NARRATION_TIMEOUT_MS = 8000;
 
 const splitAiTextSegments = (message = '') => {
     const trimmedMessage = String(message || '').trim();
@@ -208,12 +239,15 @@ function Main() {
     const aiTypingCompletionByRequestIdRef = useRef(new Map());
     const pendingPostCombatActionRef = useRef(null);
     const pendingPostCombatNarrationRequestIdRef = useRef(null);
+    const pendingPostCombatFallbackTimeoutRef = useRef(null);
     const postCombatOverlayTimeoutRef = useRef(null);
     const preCombatPlayerPositionsRef = useRef(null);
     const combatLifecycleActiveRef = useRef(false);
     const cooldownStorageKey = room && playerName ? `cooldowns_${room}_${playerName}` : null;
+    const storyProgressStorageKey = room ? `storyProgress_${room}` : null;
     const isQuietLogs = debugLogLevel === 'quiet';
     const isVerboseLogs = debugLogLevel === 'verbose';
+    const [isStoryStateHydrated, setIsStoryStateHydrated] = useState(false);
 
     const logImportant = (...args) => {
         if (isQuietLogs) return;
@@ -231,6 +265,7 @@ function Main() {
         const currentPlayerPositionsKey = `playerPositions_${room}`;
         const currentEnemyPositionsKey = `enemyPositions_${room}`;
         const currentCooldownKey = `cooldowns_${room}_${playerName}`;
+        const currentStoryProgressKey = `storyProgress_${room}`;
 
         const removedKeys = [];
 
@@ -244,8 +279,11 @@ function Main() {
                 key.startsWith('cooldowns_') &&
                 key.endsWith(`_${playerName}`) &&
                 key !== currentCooldownKey;
+            const isStaleStoryProgress =
+                key.startsWith('storyProgress_') &&
+                key !== currentStoryProgressKey;
 
-            if (isStalePlayerPositions || isStaleEnemyPositions || isStaleCooldownForPlayer) {
+            if (isStalePlayerPositions || isStaleEnemyPositions || isStaleCooldownForPlayer || isStaleStoryProgress) {
                 removedKeys.push(key);
                 sessionStorage.removeItem(key);
             }
@@ -263,10 +301,24 @@ function Main() {
     const [choiceStartCombat, setChoiceStartCombat] = useState(false);
     const [combatFlowIndex, setCombatFlowIndex] = useState(0);
 
+    const livingStoryController = players.find(player => (playerCharacters[player]?.stats?.health || 0) > 0) || players[0] || null;
+    const isStoryController = livingStoryController === playerName;
+    const storyControllerLabel = livingStoryController || 'Admin';
+    const currentAiSentence = aiSentences[currentSentenceIndex] || '';
+    const isAiNarrationComplete = !aiBusy && (
+        !aiText?.trim() ||
+        (aiSentences.length > 0 && currentSentenceIndex >= aiSentences.length - 1 && typingIndex >= currentAiSentence.length)
+    );
+
     const getDecisionOwner = (requiredAttribute) => {
         if (!requiredAttribute) return null;
         const owner = players.find(player => attributeAllocations[player]?.[0] === requiredAttribute);
         return owner || null;
+    };
+
+    const abilityConsumesAction = (ability) => {
+        const resolvedAbility = typeof ability === 'string' ? getAbility(ability) : ability;
+        return resolvedAbility?.consumesAction !== false;
     };
 
     const arePositionsEqual = (firstPosition, secondPosition) => {
@@ -276,7 +328,7 @@ function Main() {
 
     const canPlayerDecide = (requiredAttribute) => {
         const owner = getDecisionOwner(requiredAttribute);
-        if (!owner) return isAdmin;
+        if (!owner) return isStoryController;
         return owner === playerName;
     };
     const [showYouDiedScreen, setShowYouDiedScreen] = useState(false);
@@ -407,15 +459,96 @@ function Main() {
     }, [selectedFaction]);
 
     useEffect(() => {
+        if (!storyProgressStorageKey) {
+            setIsStoryStateHydrated(false);
+            return;
+        }
+
+        const defaultStoryState = {
+            combatFlowIndex: 0,
+            selectedFaction: null,
+            currentSceneKey: DEFAULT_SCENE_KEY,
+            pendingFactionChoice: false,
+            pendingPostEncounterChoice: false,
+            pendingNextEncounterChoice: false,
+            hasRequestedIntro: false
+        };
+
+        let nextStoryState = defaultStoryState;
+        const storedStoryState = sessionStorage.getItem(storyProgressStorageKey);
+
+        if (storedStoryState) {
+            try {
+                const parsedStoryState = JSON.parse(storedStoryState);
+                const normalizedCombatFlowIndex = Number.isFinite(Number(parsedStoryState?.combatFlowIndex))
+                    ? Math.max(0, Math.min(STORY_COMBAT_FLOW.length, Number(parsedStoryState.combatFlowIndex)))
+                    : 0;
+                const normalizedSelectedFaction =
+                    parsedStoryState?.selectedFaction === 'enforcers' || parsedStoryState?.selectedFaction === 'rebels'
+                        ? parsedStoryState.selectedFaction
+                        : null;
+                const normalizedSceneKey = parsedStoryState?.currentSceneKey || DEFAULT_SCENE_KEY;
+
+                nextStoryState = {
+                    combatFlowIndex: normalizedCombatFlowIndex,
+                    selectedFaction: normalizedSelectedFaction,
+                    currentSceneKey: normalizedSceneKey,
+                    pendingFactionChoice: Boolean(parsedStoryState?.pendingFactionChoice) && !normalizedSelectedFaction,
+                    pendingPostEncounterChoice: Boolean(parsedStoryState?.pendingPostEncounterChoice),
+                    pendingNextEncounterChoice: Boolean(parsedStoryState?.pendingNextEncounterChoice),
+                    hasRequestedIntro:
+                        Boolean(parsedStoryState?.hasRequestedIntro) ||
+                        !!normalizedSelectedFaction ||
+                        normalizedCombatFlowIndex > 0
+                };
+            } catch (error) {
+                console.error('[STORY FLOW] Failed to parse stored story progress:', error);
+            }
+        }
+
+        combatFlowIndexRef.current = nextStoryState.combatFlowIndex;
+        setCombatFlowIndex(nextStoryState.combatFlowIndex);
+        selectedFactionRef.current = nextStoryState.selectedFaction;
+        setSelectedFaction(nextStoryState.selectedFaction);
+        setCurrentSceneKey(nextStoryState.currentSceneKey);
+        setPendingFactionChoice(nextStoryState.pendingFactionChoice);
+        setPendingPostEncounterChoice(nextStoryState.pendingPostEncounterChoice);
+        setPendingNextEncounterChoice(nextStoryState.pendingNextEncounterChoice);
+        hasRequestedIntroRef.current = nextStoryState.hasRequestedIntro;
+        setIsStoryStateHydrated(true);
+    }, [storyProgressStorageKey]);
+
+    useEffect(() => {
+        if (!storyProgressStorageKey || !isStoryStateHydrated) return;
+
+        sessionStorage.setItem(storyProgressStorageKey, JSON.stringify({
+            combatFlowIndex,
+            selectedFaction,
+            currentSceneKey,
+            pendingFactionChoice,
+            pendingPostEncounterChoice,
+            pendingNextEncounterChoice,
+            hasRequestedIntro: hasRequestedIntroRef.current
+        }));
+    }, [
+        storyProgressStorageKey,
+        isStoryStateHydrated,
+        combatFlowIndex,
+        selectedFaction,
+        currentSceneKey,
+        pendingFactionChoice,
+        pendingPostEncounterChoice,
+        pendingNextEncounterChoice
+    ]);
+
+    useEffect(() => {
         combatFlowIndexRef.current = combatFlowIndex;
     }, [combatFlowIndex]);
 
     useEffect(() => {
-        combatFlowIndexRef.current = 0;
         lastCombatConfigRef.current = null;
         preCombatPlayerPositionsRef.current = null;
         combatLifecycleActiveRef.current = false;
-        setCombatFlowIndex(0);
     }, [room]);
 
     useEffect(() => {
@@ -423,6 +556,10 @@ function Main() {
             if (postCombatOverlayTimeoutRef.current) {
                 clearTimeout(postCombatOverlayTimeoutRef.current);
                 postCombatOverlayTimeoutRef.current = null;
+            }
+            if (pendingPostCombatFallbackTimeoutRef.current) {
+                clearTimeout(pendingPostCombatFallbackTimeoutRef.current);
+                pendingPostCombatFallbackTimeoutRef.current = null;
             }
             if (turnStartLockTimeoutRef.current) {
                 clearTimeout(turnStartLockTimeoutRef.current);
@@ -737,7 +874,7 @@ function Main() {
                 setPendingFactionChoice(false);
                 setAiOptions(null);
 
-                if (pendingStartCombatRef.current && isAdmin) {
+                if (pendingStartCombatRef.current && isStoryController) {
                     pendingStartCombatRef.current = false;
                     handleStoryComplete();
                 }
@@ -748,14 +885,14 @@ function Main() {
         return () => {
             socket.off('faction_selected', handleFactionSelected);
         };
-    }, [socket, isAdmin]);
+    }, [socket, isStoryController]);
 
     const handlePostEncounterChoice = (choice) => {
         const requiredAttribute = choice === 'shop' ? 'banker' : 'navigator';
         const owner = getDecisionOwner(requiredAttribute);
         
-        // Allow if: has required attribute, or is admin, or in single-player mode with one player
-        const canProceed = owner === playerName || isAdmin || players.length === 1;
+        // Allow if: has required attribute, or is current story controller, or in single-player mode.
+        const canProceed = owner === playerName || isStoryController || players.length === 1;
         
         if (!canProceed) {
             logImportant('[POST-ENCOUNTER CHOICE] Blocked - player lacks required attribute:', requiredAttribute);
@@ -778,7 +915,7 @@ function Main() {
 
     const handleNextEncounter = () => {
         const owner = getDecisionOwner('navigator');
-        const canProceed = owner === playerName || isAdmin || players.length === 1;
+        const canProceed = owner === playerName || isStoryController || players.length === 1;
         
         if (!canProceed) {
             logImportant('[NEXT ENCOUNTER] Blocked - player lacks navigator attribute');
@@ -927,7 +1064,8 @@ function Main() {
     }, [aiSentences, currentSentenceIndex, typingIndex]);
 
     useEffect(() => {
-        if (!isAdmin || !room || hasRequestedIntroRef.current) return;
+        if (!isStoryStateHydrated) return;
+        if (!isStoryController || !room || hasRequestedIntroRef.current) return;
         if (selectedFactionRef.current) return;
         if (players.length === 0) return;
 
@@ -943,10 +1081,18 @@ function Main() {
             { party: partySummary },
             { scenarioType: 'street_encounter' }
         );
-    }, [isAdmin, room, players, playerCharacters]);
+    }, [isStoryController, room, players, playerCharacters, isStoryStateHydrated]);
 
     useEffect(() => {
+        const clearPendingPostCombatFallback = () => {
+            if (pendingPostCombatFallbackTimeoutRef.current) {
+                clearTimeout(pendingPostCombatFallbackTimeoutRef.current);
+                pendingPostCombatFallbackTimeoutRef.current = null;
+            }
+        };
+
         const proceedPostCombatAction = (postCombatAction) => {
+            clearPendingPostCombatFallback();
             logImportant('[POST-COMBAT] Proceeding with postCombatAction:', postCombatAction);
             
             if (postCombatAction === 'levelUp') {
@@ -994,10 +1140,11 @@ function Main() {
 
             // Handle post-combat narration FIRST, before options display logic
             if (
-                isAdmin &&
+                isStoryController &&
                 requestId &&
                 requestId === pendingPostCombatNarrationRequestIdRef.current
             ) {
+                clearPendingPostCombatFallback();
                 const postCombatAction = pendingPostCombatActionRef.current || 'none';
                 pendingPostCombatNarrationRequestIdRef.current = null;
                 pendingPostCombatActionRef.current = null;
@@ -1013,7 +1160,7 @@ function Main() {
             }
 
             // Handle start_combat flag from AI
-            if (startCombat && isAdmin) {
+            if (startCombat && isStoryController) {
                 if (!selectedFactionRef.current) {
                     pendingStartCombatRef.current = true;
                     setPendingFactionChoice(true);
@@ -1046,7 +1193,7 @@ function Main() {
             }
 
             if (eventType === 'choice_made' && !startCombat) {
-                if (pendingStartCombatRef.current && isAdmin) {
+                if (pendingStartCombatRef.current && isStoryController) {
                     if (selectedFactionRef.current) {
                         pendingStartCombatRef.current = false;
                         handleStoryComplete();
@@ -1068,7 +1215,7 @@ function Main() {
             }
 
             if (eventType === 'next_encounter' && !startCombat) {
-                if (pendingStartCombatRef.current && isAdmin) {
+                if (pendingStartCombatRef.current && isStoryController) {
                     pendingStartCombatRef.current = false;
                     handleStoryComplete("low");
                 }
@@ -1082,10 +1229,11 @@ function Main() {
             appendAiLog({ role: 'system', text: `AI error: ${error}`, eventType: 'error' });
 
             if (
-                isAdmin &&
+                isStoryController &&
                 requestId &&
                 requestId === pendingPostCombatNarrationRequestIdRef.current
             ) {
+                clearPendingPostCombatFallback();
                 const postCombatAction = pendingPostCombatActionRef.current || 'none';
                 pendingPostCombatNarrationRequestIdRef.current = null;
                 pendingPostCombatActionRef.current = null;
@@ -1134,7 +1282,7 @@ function Main() {
                 ...restoredPlayerCharacters
             }));
 
-            if (isAdmin && Object.keys(restoredPlayerCharacters).length > 0) {
+            if (isStoryController && Object.keys(restoredPlayerCharacters).length > 0) {
                 socket.emit('ability_used', {
                     room,
                     playerName,
@@ -1183,7 +1331,20 @@ function Main() {
             setTurnStartLockRemainingMs(0);
             setTurnTimeLeft(null);
 
-            const preCombatPositions = preCombatPlayerPositionsRef.current || {};
+            let preCombatPositions = preCombatPlayerPositionsRef.current || {};
+            if (Object.keys(preCombatPositions).length === 0) {
+                const storedOverworldPositions = sessionStorage.getItem(`overworldPlayerPositions_${room}`);
+                if (storedOverworldPositions) {
+                    try {
+                        const parsedOverworldPositions = JSON.parse(storedOverworldPositions);
+                        if (parsedOverworldPositions && typeof parsedOverworldPositions === 'object') {
+                            preCombatPositions = parsedOverworldPositions;
+                        }
+                    } catch (error) {
+                        console.error('[POSITION RESTORE] Failed to parse overworld positions after combat:', error);
+                    }
+                }
+            }
             const restoredPlayerPositions = {};
             players.forEach((playerId) => {
                 const savedPosition = preCombatPositions[playerId];
@@ -1200,6 +1361,7 @@ function Main() {
             setCharacterPositions(restoredPlayerPositions);
             sessionStorage.removeItem(`enemyPositions_${room}`);
             sessionStorage.setItem(`playerPositions_${room}`, JSON.stringify(restoredPlayerPositions));
+            sessionStorage.removeItem(`overworldPlayerPositions_${room}`);
             preCombatPlayerPositionsRef.current = null;
 
             if (postCombatOverlayTimeoutRef.current) {
@@ -1216,7 +1378,7 @@ function Main() {
                 setShowEnemiesDefeatedScreen(false);
                 postCombatOverlayTimeoutRef.current = null;
 
-                if (!isAdmin) return;
+                if (!isStoryController) return;
 
                 const narrationMessage =
                     postCombatAction === 'levelUp'
@@ -1231,6 +1393,17 @@ function Main() {
                     postCombatAction
                 });
                 pendingPostCombatNarrationRequestIdRef.current = requestId;
+
+                clearPendingPostCombatFallback();
+                pendingPostCombatFallbackTimeoutRef.current = setTimeout(() => {
+                    if (!isStoryController) return;
+                    if (pendingPostCombatNarrationRequestIdRef.current !== requestId) return;
+
+                    logImportant('[POST-COMBAT] AI narration timed out, continuing with fallback action:', postCombatAction);
+                    pendingPostCombatNarrationRequestIdRef.current = null;
+                    pendingPostCombatActionRef.current = null;
+                    proceedPostCombatAction(postCombatAction);
+                }, POST_COMBAT_NARRATION_TIMEOUT_MS);
             }, 2000);
         };
 
@@ -1245,7 +1418,7 @@ function Main() {
             socket.off('ai_thinking', handleAiThinking);
             socket.off('combat_ended', handleCombatEnded);
         };
-    }, [socket, isAdmin, room, playerName, players, playerCharacters, pendingFactionChoice, pendingPostEncounterChoice, pendingNextEncounterChoice]);
+    }, [socket, isStoryController, room, playerName, players, playerCharacters, pendingFactionChoice, pendingPostEncounterChoice, pendingNextEncounterChoice]);
 
     useEffect(() => {
         return () => {
@@ -2384,21 +2557,25 @@ function Main() {
 
                 console.log('[ENEMY TURN] Completing turn for', enemyId);
 
-                // Tick down cooldowns for ALL enemies
-                console.log('[ENEMY COOLDOWNS] Ticking down cooldowns for all enemies');
+                // Enemy cooldowns should only tick on that enemy's completed turn.
+                console.log('[ENEMY COOLDOWNS] Ticking down cooldowns for acting enemy only');
                 const latestEnemies = enemiesRef.current;
                 const updatedEnemies = latestEnemies.map(e => {
-                    const newCooldowns = { ...e.cooldowns };
-                    Object.keys(newCooldowns).forEach(abilityId => {
-                        if (newCooldowns[abilityId] > 0) {
-                            newCooldowns[abilityId]--;
-                            console.log(`[ENEMY COOLDOWNS]   - ${e.name} ${abilityId}: ${newCooldowns[abilityId]}`);
-                        }
-                    });
+                    const isActingEnemy = e.id === enemyId;
+                    const newCooldowns = isActingEnemy ? tickCooldowns(e.cooldowns || {}) : { ...(e.cooldowns || {}) };
+
+                    if (isActingEnemy) {
+                        Object.keys(newCooldowns).forEach(abilityId => {
+                            if ((e.cooldowns?.[abilityId] || 0) !== newCooldowns[abilityId]) {
+                                console.log(`[ENEMY COOLDOWNS]   - ${e.name} ${abilityId}: ${newCooldowns[abilityId]}`);
+                            }
+                        });
+                    }
+
                     return {
                         ...e,
                         cooldowns: newCooldowns,
-                        usedAbilityLastTurn: e.id === enemyId ? abilityUsedSuccessfully : (e.usedAbilityLastTurn || false)
+                        usedAbilityLastTurn: isActingEnemy ? abilityUsedSuccessfully : (e.usedAbilityLastTurn || false)
                     };
                 });
 
@@ -2441,25 +2618,27 @@ function Main() {
                         const prevCharacter = prevChars[name] || {};
                         const incomingAbilities = character?.abilities;
                         const previousAbilities = prevCharacter?.abilities;
+                        const isSameCharacter = character?.id && prevCharacter?.id && character.id === prevCharacter.id;
                         const shouldPreservePreviousAbilities =
                             Array.isArray(incomingAbilities) &&
                             incomingAbilities.length === 0 &&
                             Array.isArray(previousAbilities) &&
-                            previousAbilities.length > 0;
+                            previousAbilities.length > 0 &&
+                            isSameCharacter;
 
                         const incomingUltimate = character?.ultimate;
                         const hasValidIncomingUltimate =
                             (typeof incomingUltimate === 'string' && incomingUltimate.trim().length > 0) ||
                             (incomingUltimate && typeof incomingUltimate === 'object' && !!incomingUltimate.id);
 
-                        const mergedCharacter = {
+                        const mergedCharacter = sanitizeCharacterProgression({
                             ...prevCharacter,
                             ...character,
                             abilities: shouldPreservePreviousAbilities
                                 ? previousAbilities
                                 : (Array.isArray(incomingAbilities) ? incomingAbilities : previousAbilities),
-                            ultimate: hasValidIncomingUltimate ? incomingUltimate : prevCharacter?.ultimate
-                        };
+                            ultimate: hasValidIncomingUltimate ? incomingUltimate : (isSameCharacter ? prevCharacter?.ultimate : null)
+                        });
                         logVerbose('[ABILITY DEBUG] Merged character result:', {
                             player: name,
                             mergedAbilitiesType: Array.isArray(mergedCharacter?.abilities) ? 'array' : typeof mergedCharacter?.abilities,
@@ -3341,7 +3520,7 @@ function Main() {
             return;
         }
 
-        if (!isMyTurn || actionUsed || !isPlayerAlive || aiBusy) {
+        if (!isMyTurn || !isPlayerAlive || aiBusy) {
             return;
         }
 
@@ -3355,6 +3534,10 @@ function Main() {
 
         if (!abilityData) {
             console.log('[ABILITY CLICK] No ability data found!');
+            return;
+        }
+
+        if (actionUsed && abilityConsumesAction(abilityData)) {
             return;
         }
 
@@ -3496,7 +3679,7 @@ function Main() {
         setSelectedAbility(null);
         setSelectedTargets([]);
         setPendingRelocateTarget(null);
-        setActionUsed(true);
+        setActionUsed(abilityConsumesAction(abilityId));
 
         setTimeout(() => {
             if (isMyTurn && shouldAutoEndTurn()) {
@@ -3693,7 +3876,7 @@ function Main() {
             setExtraWeaponAttacksRemaining(noLimitsEffect.value || 0);
             setActionUsed(false);
         } else {
-            setActionUsed(true);
+            setActionUsed(abilityConsumesAction(abilityData));
         }
 
         // Auto-end only if movement is exhausted
@@ -3805,7 +3988,7 @@ function Main() {
 
         setSelectedAbility(null);
         setSelectedTargets([]);
-        setActionUsed(true);
+        setActionUsed(abilityConsumesAction(abilityId));
 
         // Auto-end only if movement is exhausted
         setTimeout(() => {
@@ -3932,7 +4115,7 @@ function Main() {
         console.log('[GROUND TARGET SYNC] Emitting updated game state to server');
 
         setSelectedAbility(null);
-        setActionUsed(true);
+        setActionUsed(abilityConsumesAction(abilityData));
 
         // Auto-end only if movement is exhausted
         setTimeout(() => {
@@ -4237,11 +4420,11 @@ function Main() {
                         </div>
                     )}
                     {/* AI-driven dynamic options */}
-                    {aiOptions && aiOptions.length > 0 && !aiBusy && (
+                    {aiOptions && aiOptions.length > 0 && isAiNarrationComplete && (
                         <div className="ai-choices">
                             {aiAttribute && (
                                 <div className="ai-choice-owner">
-                                    Decision owner: {getDecisionOwner(aiAttribute) || 'Admin'}
+                                    Decision owner: {getDecisionOwner(aiAttribute) || storyControllerLabel}
                                 </div>
                             )}
                             {aiOptions.map((option, idx) => (
@@ -4256,28 +4439,28 @@ function Main() {
                         </div>
                     )}
                     {/* Legacy faction choice fallback */}
-                    {pendingFactionChoice && !aiOptions && (
+                    {pendingFactionChoice && !aiOptions && isAiNarrationComplete && (
                         <div className="ai-choices">
                             <div className="ai-choice-owner">
-                                Decision owner: {getDecisionOwner('politician') || 'Admin'}
+                                Decision owner: {getDecisionOwner('politician') || storyControllerLabel}
                             </div>
                             <button onClick={() => handleFactionChoice('the Enforcers')} disabled={aiBusy || !canPlayerDecide('politician')}>Fight with Enforcers</button>
                             <button onClick={() => handleFactionChoice('the People of the City')} disabled={aiBusy || !canPlayerDecide('politician')}>Fight with the People of the City</button>
                         </div>
                     )}
-                    {pendingPostEncounterChoice && !aiOptions && (
+                    {pendingPostEncounterChoice && !aiOptions && isAiNarrationComplete && (
                         <div className="ai-choices">
                             <div className="ai-choice-owner">
-                                Shop decision: {getDecisionOwner('banker') || 'Admin'} | Travel decision: {getDecisionOwner('navigator') || 'Admin'}
+                                Shop decision: {getDecisionOwner('banker') || storyControllerLabel} | Travel decision: {getDecisionOwner('navigator') || storyControllerLabel}
                             </div>
                             <button onClick={() => handlePostEncounterChoice('shop')} disabled={aiBusy || !canPlayerDecide('banker')}>Go to Shop</button>
                             <button onClick={() => handlePostEncounterChoice('next_encounter')} disabled={aiBusy || !canPlayerDecide('navigator')}>Next Encounter</button>
                         </div>
                     )}
-                    {pendingNextEncounterChoice && !aiOptions && (
+                    {pendingNextEncounterChoice && !aiOptions && isAiNarrationComplete && (
                         <div className="ai-choices">
                             <div className="ai-choice-owner">
-                                Travel decision: {getDecisionOwner('navigator') || 'Admin'}
+                                Travel decision: {getDecisionOwner('navigator') || storyControllerLabel}
                             </div>
                             <button onClick={handleNextEncounter} disabled={aiBusy || !canPlayerDecide('navigator')}>Next Encounter</button>
                         </div>
@@ -4466,7 +4649,7 @@ function Main() {
                                             className={`ability-card ${isOnCooldown ? 'ability-on-cooldown' : ''
                                                 } ${isSelected ? 'ability-selected' : ''
                                                 }`}
-                                            disabled={!isMyTurn || isTurnActionLocked || isOnCooldown || actionUsed || !isPlayerAlive}
+                                            disabled={!isMyTurn || isTurnActionLocked || isOnCooldown || (actionUsed && abilityConsumesAction(resolvedAbility)) || !isPlayerAlive}
                                         >
                                             <div className='damage-scaling'>{scalerIcon}</div>
                                             <div className="ability-header">
@@ -4508,7 +4691,7 @@ function Main() {
                                         className={`ultimate-card ${isOnCooldown ? 'ultimate-on-cooldown' : ''
                                             } ${isSelected ? 'ultimate-selected' : ''
                                             }`}
-                                        disabled={!isMyTurn || isTurnActionLocked || isOnCooldown || actionUsed || !isPlayerAlive || !hasUltimate}
+                                        disabled={!isMyTurn || isTurnActionLocked || isOnCooldown || (actionUsed && hasUltimate && abilityConsumesAction(resolvedUltimate)) || !isPlayerAlive || !hasUltimate}
                                         onClick={() => {
                                             if (!hasUltimate) {
                                                 console.warn('[ABILITY DEBUG] Ultimate click blocked - invalid or missing ultimate:', rawUltimate);

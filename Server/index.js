@@ -1810,6 +1810,12 @@ io.on('connection', (socket) => {
   socket.on("level_up",({room}) => {
     if (rooms[room]) {
       rooms[room].levelUpReadyPlayers = [];
+      if (!rooms[room].playerScreens) {
+        rooms[room].playerScreens = {};
+      }
+      (rooms[room].players || []).forEach((player) => {
+        rooms[room].playerScreens[player] = 'levelup';
+      });
       io.to(room).emit('level_up_ready_status', []);
     }
     io.to(room).emit('level_up');
@@ -1841,8 +1847,19 @@ io.on('connection', (socket) => {
 
     if (allLevelReady) {
       rooms[room].abilityReadyPlayers = [];
+      const players = rooms[room].characterSelections || {};
+
+      if (!rooms[room].playerScreens) {
+        rooms[room].playerScreens = {};
+      }
+
+      (rooms[room].players || []).forEach((player) => {
+        const level = Number(players[player]?.level || 0);
+        rooms[room].playerScreens[player] = level === 3 || level === 5 ? 'chooseAbilities' : 'main';
+      });
+
       io.to(room).emit('ability_ready_status', []);
-      io.to(room).emit('level_up_complete');
+      io.to(room).emit('level_up_complete', { players });
     }
   });
 

@@ -69,11 +69,11 @@
       "role": "DPS",
       "level": 1,
       "stats": {
-        "health": 75,
-        "maxHealth": 75,
+        "health": 175,
+        "maxHealth": 175,
         "speed": 45,
-        "resistance": 20,
-        "strength": 45,
+        "resistance": 120,
+        "strength": 145,
         "ta": 15
       },
       "weapon": {

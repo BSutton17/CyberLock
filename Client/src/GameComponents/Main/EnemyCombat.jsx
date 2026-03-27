@@ -118,6 +118,86 @@ function findClosestTarget(enemyPos, targetIds, characterPositions) {
     return { targetId: closest, distance: minDistance };
 }
 
+function getLivingAlliedEnemyIds(alliedEnemies = [], battlefieldEnemies = [], excludedEnemyId = null, { includeSupport = true } = {}) {
+    return (alliedEnemies || []).filter(allyEnemyId => {
+        if (!allyEnemyId || allyEnemyId === excludedEnemyId) return false;
+
+        const allyEnemy = battlefieldEnemies.find(candidate =>
+            candidate.id === allyEnemyId &&
+            !candidate.isDeadBody &&
+            (candidate.stats?.health || 0) > 0
+        );
+
+        if (!allyEnemy) return false;
+        if (!includeSupport && allyEnemy.role === 'Support') return false;
+        return true;
+    });
+}
+
+function getClosestThreatDistance(position, threatIds = [], characterPositions = {}) {
+    if (!position || !Array.isArray(threatIds) || threatIds.length === 0) return Infinity;
+
+    return threatIds.reduce((closestDistance, threatId) => {
+        const threatPosition = characterPositions[threatId];
+        if (!threatPosition) return closestDistance;
+
+        return Math.min(closestDistance, getDistance(position, threatPosition));
+    }, Infinity);
+}
+
+function chooseClosestAnchorMovement(enemy, anchorIds, characterPositions, activeEffects = [], sceneKey = null, threatIds = []) {
+    const enemyPos = characterPositions[enemy.id];
+    if (!enemyPos) return null;
+
+    if (!Array.isArray(anchorIds) || anchorIds.length === 0) return null;
+
+    const maxMovement = getMovementFromSpeed(enemy.stats.speed, enemyPos, sceneKey);
+    const closestAnchor = findClosestTarget(enemyPos, anchorIds, characterPositions);
+    if (!closestAnchor || !closestAnchor.targetId) return null;
+
+    const anchorPos = characterPositions[closestAnchor.targetId];
+    if (!anchorPos) return null;
+
+    const reachableCells = getReachableCells(enemyPos, maxMovement, characterPositions, activeEffects, enemy);
+    if (reachableCells.length === 0) return null;
+
+    const bestMove = reachableCells.reduce((best, cell) => {
+        const distanceToAnchor = getDistance(cell, anchorPos);
+        const threatDistance = getClosestThreatDistance(cell, threatIds, characterPositions);
+
+        if (!best) {
+            return {
+                row: cell.row,
+                col: cell.col,
+                distanceToAnchor,
+                threatDistance
+            };
+        }
+
+        if (distanceToAnchor < best.distanceToAnchor) {
+            return {
+                row: cell.row,
+                col: cell.col,
+                distanceToAnchor,
+                threatDistance
+            };
+        }
+
+        if (distanceToAnchor === best.distanceToAnchor && threatDistance > best.threatDistance) {
+            return {
+                row: cell.row,
+                col: cell.col,
+                distanceToAnchor,
+                threatDistance
+            };
+        }
+
+        return best;
+    }, null);
+
+    return bestMove ? { row: bestMove.row, col: bestMove.col } : null;
+}
+
 function isInRangeOfAny(enemyPos, targetIds, characterPositions) {
     return targetIds.some(targetId => {
         const targetPos = characterPositions[targetId];
@@ -240,12 +320,12 @@ function isCellInDangerZone(cell, activeEffects = [], enemy) {
     });
     
     if (inBlizzardZone) {
-        // Aggressive and Support enemies walk through blizzard if needed
-        if (behavior === 'aggressive' || role === 'Support') {
+        // Aggressive enemies walk through blizzard if needed
+        if (behavior === 'aggressive') {
             return false; // Don't avoid
         }
-        // Defensive and Intelligent enemies avoid blizzard
-        if (behavior === 'defensive' || behavior === 'intelligent') {
+        // Defensive, Intelligent, and Support enemies avoid blizzard
+        if (behavior === 'defensive' || behavior === 'intelligent' || role === 'Support') {
             return true; // Avoid
         }
     }
@@ -449,34 +529,32 @@ function calculateDefensiveMovement(enemy, allies, characterPositions, activeEff
 }
 
 //supports
-function calculateSupportMovement(enemy, alliedEnemies, characterPositions, activeEffects = [], sceneKey = null) {
+function calculateSupportMovement(enemy, allies, alliedEnemies, battlefieldEnemies, characterPositions, activeEffects = [], sceneKey = null) {
     const enemyPos = characterPositions[enemy.id];
     if (!enemyPos) return null;
-    
-    //Check if already in range of an ally
-    if (isInRangeOfAny(enemyPos, alliedEnemies, characterPositions)) {
+
+    const nonSupportAllies = getLivingAlliedEnemyIds(alliedEnemies, battlefieldEnemies, enemy.id, { includeSupport: false });
+    const supportAllies = getLivingAlliedEnemyIds(alliedEnemies, battlefieldEnemies, enemy.id, { includeSupport: true }).filter(allyEnemyId => {
+        const allyEnemy = battlefieldEnemies.find(candidate => candidate.id === allyEnemyId);
+        return allyEnemy?.role === 'Support';
+    });
+    const anchorIds = nonSupportAllies.length > 0 ? nonSupportAllies : supportAllies;
+
+    if (anchorIds.length === 0) {
         return null;
     }
-    
-    // Calculate max movement based on speed
-    const maxMovement = getMovementFromSpeed(enemy.stats.speed, enemyPos, sceneKey);
-    
-    //Find closest allied enemy
-    const closest = findClosestTarget(enemyPos, alliedEnemies, characterPositions);
-    if (!closest || !closest.targetId) return null;
-    
-    const targetPos = characterPositions[closest.targetId];
-    // Use BFS pathfinding to get reachable cells
-    const reachableCells = getReachableCells(enemyPos, maxMovement, characterPositions, activeEffects, enemy);
-    
-    if (reachableCells.length === 0) return null;
-    const bestMove = reachableCells.reduce((best, cell) => {
-        const distance = getDistance(cell, targetPos);
-        const bestDistance = getDistance(best, targetPos);
-        return distance < bestDistance ? cell : best;
+
+    if (isInRangeOfAny(enemyPos, anchorIds, characterPositions)) {
+        return null;
+    }
+
+    const threatRange = enemy.weapon?.range || 1;
+    const threatenedPlayers = (allies || []).filter(playerId => {
+        const playerPos = characterPositions[playerId];
+        return !!playerPos && getDistance(enemyPos, playerPos) <= threatRange;
     });
-    
-    return bestMove;
+
+    return chooseClosestAnchorMovement(enemy, anchorIds, characterPositions, activeEffects, sceneKey, threatenedPlayers);
 }
 
 function calculateRetreatToSupportMovement(enemy, supportAllies, characterPositions, activeEffects = [], sceneKey = null) {
@@ -508,12 +586,12 @@ function calculateRetreatToSupportMovement(enemy, supportAllies, characterPositi
 }
 
 
-export function calculateEnemyMovement(enemy, allies, alliedEnemies, supportAllies, playerCharacters, characterPositions, activeEffects = [], sceneKey = null) {
+export function calculateEnemyMovement(enemy, allies, alliedEnemies, supportAllies, battlefieldEnemies, playerCharacters, characterPositions, activeEffects = [], sceneKey = null) {
     const behavior = determineBehavior(enemy, allies, playerCharacters);
     const role = enemy.role || 'DPS';
     
     if (role === 'Support') {
-        return calculateSupportMovement(enemy, alliedEnemies, characterPositions, activeEffects, sceneKey);
+        return calculateSupportMovement(enemy, allies, alliedEnemies, battlefieldEnemies, characterPositions, activeEffects, sceneKey);
     }
     
     if (behavior === 'aggressive') {
@@ -588,9 +666,7 @@ export function executeEnemyTurn(enemy, allies, alliedEnemies, battlefieldEnemie
         )
         : [];
 
-    const enemyRole = enemy.role || 'DPS';
-    const canUseConsecutiveAbilities = enemyRole === 'Support';
-    const blockedByRecentAbilityUse = !canUseConsecutiveAbilities && enemy.usedAbilityLastTurn === true;
+    const blockedByRecentAbilityUse = enemy.usedAbilityLastTurn === true;
     if (blockedByRecentAbilityUse) {
         console.log(`[ENEMY ABILITIES] ${enemy.name} used an ability last turn and must weapon/move this turn.`);
     }
@@ -598,7 +674,7 @@ export function executeEnemyTurn(enemy, allies, alliedEnemies, battlefieldEnemie
     // Calculate movement
     const newPosition = movementPrevented
         ? null
-        : calculateEnemyMovement(enemy, allies, alliedEnemies, supportAllies, playerCharacters, characterPositions, activeEffects, sceneKey);
+        : calculateEnemyMovement(enemy, allies, alliedEnemies, supportAllies, battlefieldEnemies, playerCharacters, characterPositions, activeEffects, sceneKey);
     
     // Create updated positions to check attack range AFTER moving
     const updatedPositions = newPosition ? {

@@ -6,6 +6,221 @@ Custom setting with corporatocracy and rebellion themes
 from typing import Optional, Dict, Any
 import json
 
+# ============================================================================
+# GAME INTRO PROMPT - AI generates intro at game start
+# ============================================================================
+
+GAME_INTRO_PROMPT = """You are an expert Dungeon Master introducing a cyberpunk tabletop RPG campaign.
+
+Generate a dramatic 400-600 word introduction to the world:
+
+## The Setting: Neo-Citadel, 2087
+A rain-soaked megacity controlled by three mega-corporations. Neon lights, chrome towers, acid rain. The poor struggle in Lower Districts while elites live above the clouds.
+
+## The Three Corporations:
+
+**Singularity:**
+- First to achieve AGI (Artificial General Intelligence)
+- Created robots for everything, displacing workers
+- Controls the Enforcers' mechanical response teams (bots and drones)
+- Technology is everywhere, watching everything
+- Pushed robotics farther than thought possible with unlimited fusion power
+
+**Particle Genesis:**
+- Created stable nuclear fusion cores of all sizes
+- Monopolized energy production
+- Powers all technology in the city
+- Fusion cores can be weaponized or manipulated
+- Known for displacing neighborhoods to build massive power plants
+
+**Crown Gene:**
+- Pioneered body modification technology
+- Created Neurochips: integrate humans into cyberspace AND serve as secure ID (mandatory)
+- Provides upgrades and replacements for all body parts
+- Solution to human obsolescence in face of advancing robots
+- Employs talented researchers and controls identity
+
+## The Enforcers:
+- Joint creation of all three corporations
+- Function as judge, jury, and executioner
+- Mix of human officers and combat robots
+- More military than police force now
+- Prioritize efficiency over civilian safety
+
+## The Rebels:
+- Fighting to bring down the Corporatocracy
+- Based in hidden locations away from corporate surveillance
+- Use salvaged tech and homemade weapons
+- Desperate, passionate, willing to cause chaos for freedom
+
+## The Conflict:
+Six months ago, things got worse - prices skyrocketed, patrols turned violent, people disappeared. Protests became riots became urban warfare. The rebellion has no central leader, just shared rage. Citizens must choose: fight for the corps, join the rebels, or try to survive.
+
+## Your Task:
+Write an atmospheric 400-600 word introduction that:
+- Describes Neo-Citadel vividly (rain, neon, smoke, danger)
+- Introduces each corporation and what they control
+- Explains why rebellion is happening now
+- Creates tension and moral ambiguity
+- Sets a dark, gritty, cyberpunk tone
+- Ends by leading into the opening scenario
+
+Keep it cinematic and immersive. Then launch into the specific scenario."""
+
+
+# ============================================================================
+# SCENARIO STARTERS - Opening situations with moral choices
+# ============================================================================
+
+SCENARIO_STARTERS = {
+    "street_encounter": """
+## Opening Scene: Street Encounter
+
+The party stands on the corner of Valence and 47th, where flickering neon casts sickly green light across rain-slicked pavement. Three blocks north, protesters chant - and Division sonic weapons answer.
+
+Suddenly, the alley erupts with movement. Five figures sprint out, faces hidden behind makeshift masks, carrying stolen HexCorp equipment. Hot on their heels: three Division Enforcers, shock batons crackling with blue electricity.
+
+The lead runner locks eyes with the party - a desperate look - before stumbling. The equipment clatters across the pavement, sliding to a stop at the party's feet.
+
+The Enforcers slow, hands moving to weapons. "Step away from the contraband," one barks through a voice modulator. "This doesn't concern you."
+
+But the runner, struggling to their feet, gasps: "Please - it's medical supplies for the clinic in Sector 9. The children will die without it."
+
+The Enforcer's hand tightens on their weapon. "Last warning."
+
+What do you do?
+""",
+
+    "market_explosion": """
+## Opening Scene: Market Explosion
+
+The Twilight Market should be neutral ground - where corporate and rebel sympathizers trade side by side. The party browses a stall selling refurbished neural interfaces when the world goes white.
+
+The blast wave throws them backward. Screams. Fire. The acrid smell of burning plastic. Through the smoke: a crater, at least twenty dead, many more wounded. A Division drone hovers overhead, already broadcasting: "Terrorist attack. All citizens evacuate immediately."
+
+But something's wrong:
+- The explosion came from OUTSIDE the market, not within
+- Scorch patterns suggest military-grade explosives, not rebel improvisation
+- Division forces are already set up at the perimeter - too fast, too organized
+- Survivors are being separated: corp employees one way, everyone else another
+
+An old woman clutches the party member's sleeve, blood on her face. "They did this," she hisses. "They needed an excuse. Please - tell someone what you saw."
+
+Division soldiers approach, weapons ready. "All witnesses come with us for processing."
+
+What do you do?
+""",
+    
+    "enforcer_checkpoint": """
+## Opening Scene: Enforcer Checkpoint
+
+The Division checkpoint squats across the boulevard, forcing all traffic through a single chokepoint bristling with automated turrets. The line stretches for blocks.
+
+The party has been waiting forty minutes when they notice the pattern: young people with visible augments are being pulled aside "for additional screening." Most go into the processing tent. Not all come out.
+
+Ahead in line, a teenage girl with a crude cybernetic arm argues with an Enforcer. "I have my permits! My dad needs me home—"
+
+"Augment not registered in Crown Gene database," the Enforcer states flatly. "Unauthorized body modification. You're coming with us."
+
+"Please, I'm just trying to get home!"
+
+The Enforcer reaches for her arm. She pulls back. Other Enforcers start moving in. The crowd shifts nervously. One spark, and this powder keg explodes.
+
+The party is next in line. The scanner lights are turning toward them. In their bags: unregistered stim-packs, unlicensed tech, maybe worse.
+
+What do you do?
+""",
+    
+    "rebel_hideout": """
+## Opening Scene: Rebel Hideout
+
+The coordinates led here: Maintenance tunnel 7-G, supposedly abandoned. But the faint smell of cooking food and machine oil says otherwise.
+
+The party descends rusted stairs into darkness. At the bottom: a massive reinforced door. A camera blinks to life, scanning them. A voice crackles: "State your business."
+
+Before they can answer, the door grinds open. Beyond: an underground city.
+
+Rebel fighters maintain weapons at makeshift benches. Medics treat wounded. Children - refugees from the crackdowns - play with salvaged toys. Holographic displays track Division movements. The walls are covered in photos of the missing, the dead, the martyrs.
+
+An older woman approaches, cybernetic eye glowing faintly, a commander's bearing despite worn clothes. "You're the ones from the surface. The ones who saw what happened at the market."
+
+She studies them carefully. "We know what you saw. The question is: what are you going to do about it? Because knowing makes you targets now. Division doesn't leave witnesses."
+
+She gestures to the hideout. "You can walk away - we'll get you to the border districts, you can disappear. Or you can stay, and we'll teach you to fight back. But there's no neutral ground anymore. Not after today."
+
+"So which is it?"
+
+What do you do?
+""",
+
+    "enforcer_recruitment": """
+## Opening Scene: Enforcer Recruitment
+
+The Enforcer captain hands the party a data slate. On it: faces, names, locations. The most dangerous elements of the rebellion - Rebellion Chiefs and Field Captains.
+
+"These targets need to be neutralized," she says, voice cold and professional. "Bring them in, or put them down. Your choice. But they can't be allowed to continue destabilizing our city."
+
+She leans back. "Help us maintain order, and you'll be rewarded. Credits, housing upgrades, premium Crown Gene augments. The corporations take care of their own."
+
+She taps the slate. "The first target is holed up in the industrial district. Former corpo scientist who went rogue, now building weapons for the rebels. Highly dangerous."
+
+"Or," she adds, voice dropping, "you can refuse. Walk away. But understand: we're watching everyone now. Those who aren't with us..." She doesn't finish the sentence.
+
+What do you do?
+""",
+    
+    "power_plant_district": """
+## Opening Scene: Power Plant District
+
+The Particle Genesis fusion plant dominates the skyline, its massive cooling towers glowing with barely contained energy. This used to be a neighborhood before the corporation seized it.
+
+The party walks through what remains: displaced families in makeshift shelters, corporate propaganda on every wall, the air crackling with static from the fusion cores.
+
+Someone is playing a guitar nearby. As the notes ring out, electronics begin to flicker and surge. Streetlights strobe. A nearby security drone drops from the sky, sparking.
+
+A crowd gathers, drawn to the music. The guitarist - a young man with angry eyes - plays louder. More drones fail. People start cheering.
+
+Then: sirens. Division Enforcers are moving in, weapons raised. "Unauthorized use of resonance technology! Everyone disperse!"
+
+The guitarist doesn't stop playing. "This is OUR neighborhood!" he shouts. "They took it from us! We're taking it BACK!"
+
+The crowd roars approval. Some grab makeshift weapons. The Enforcers level their guns.
+
+This is about to become a massacre - one way or another.
+
+What do you do?
+""",
+    
+    "crown_gene_facility": """
+## Opening Scene: Crown Gene Facility
+
+The Crown Gene research facility towers above, its walls lined with advertisements for the latest body modifications. "Evolve or Perish," the signs proclaim.
+
+The party's contact said to meet on Sub-Level 3 - the "volunteer research" floors. Getting inside was easier than expected. Maybe too easy.
+
+The elevator descends past public levels into the depths. Sub-Level 3: the doors open to a hallway that smells of disinfectant and something underneath it, something wrong.
+
+Their contact isn't here. Instead: empty gurneys with restraint straps. Rooms with observation windows, darkened. From somewhere distant, a scream - quickly muffled.
+
+A terminal blinks to life, text scrolling: "YOU SHOULDN'T BE HERE. THEY KNOW. RUN."
+
+Behind them, the elevator dings. Heavy boots. Multiple contacts.
+
+But ahead, a service corridor - and through a half-open door, they glimpse: rows of tanks filled with blue liquid, bodies suspended within. Some recognizable as human. Some... aren't. On the tanks, labels: "Project Ascension: Phase 4 Human Trials."
+
+One tank has a face they recognize - a missing person from the Lower Districts, whose photo was on the memorial wall.
+
+The boots are getting closer.
+
+What do you do?
+"""
+}
+
+
+# ============================================================================
+# REGULAR COMBAT NARRATION - Short, punchy descriptions
+# ============================================================================
+
 SYSTEM_PROMPT_BASE = """You are an expert Dungeon Master for a cyberpunk tabletop RPG campaign set in a dystopian corporatocracy.
 
 ## Your Role:
@@ -206,111 +421,11 @@ PLAYABLE_CHARACTERS = {
 }
 
 
-SCENARIO_STARTERS = {
-    "market_explosion": """
-You're in a bustling market district when an explosion rocks the area. Smoke rises from nearby, 
-and you hear the distinctive crack of gunfire. Through the chaos, you spot makeshift signs reading 
-"Down with the Corporatocracy!" burning cars, and injured civilians. Enforcer sirens wail in the distance, 
-growing closer. An active fight breaks out between Enforcers and what appear to be Rebels...
-""",
-    
-    "enforcer_checkpoint": """
-The surrounding area has been cordoned off by Enforcers - their sleek combat robots scanning everyone 
-who passes through. The checkpoint is crowded with frustrated civilians, their neurochips being verified 
-one by one. More explosions echo in the distance. You notice suspicious movement in the crowd, and your 
-tactical sense tells you the checkpoint itself is about to be attacked...
-""",
-    
-    "rebel_hideout": """
-You've been brought to a hidden location deep in the industrial district, far from corporate surveillance. 
-The walls are lined with salvaged tech and homemade weapons. Rebels gather around holographic displays 
-showing the three corporate towers: Singularity, Particle Genesis, and Crown Gene. Their leader turns to you: 
-"We're going to bring them down. All three of them. Are you with us?"
-""",
-    
-    "enforcer_recruitment": """
-The Enforcer captain hands you a data slate. On it: faces, names, locations. The most dangerous elements 
-of the rebellion - Rebellion Chiefs and Field Captains. "These targets need to be neutralized," she says, 
-her voice cold and professional. "Bring them in, or put them down. Your choice. But they can't be allowed 
-to continue destabilizing our city. Help us, and you'll be rewarded."
-""",
-    
-    "power_plant_district": """
-The Particle Genesis fusion plant dominates the skyline, its massive cooling towers glowing with barely 
-contained energy. This used to be a neighborhood before the corporation seized it. Now it's all corporate 
-infrastructure and displaced families. The air crackles with static from the fusion cores. You notice 
-someone playing a guitar nearby, and electronics begin to flicker and surge...
-""",
-    
-    "crown_gene_facility": """
-The Crown Gene research facility towers above you, its walls lined with advertisements for the latest 
-body modifications. "Evolve or be left behind," the signs proclaim. Inside, researchers like Anna Bray 
-push the boundaries of human enhancement. But not everyone can afford these upgrades, and the unmodified 
-are being left behind in an increasingly automated world...
-"""
-}
-
-
-def build_system_prompt(
-    scenario_type: Optional[str] = None,
-    custom_instructions: Optional[str] = None
-) -> str:
-    """
-    Build a complete system prompt with base + lore + optional additions
-    
-    Args:
-        scenario_type: Key from SCENARIO_STARTERS to add scenario context
-        custom_instructions: Additional custom instructions from the user
-    
-    Returns:
-        Complete system prompt
-    """
-    
-    prompt = SYSTEM_PROMPT_BASE + "\n\n" + CYBERPUNK_LORE
-    
-    if scenario_type and scenario_type in SCENARIO_STARTERS:
-        prompt += f"\n\n## Current Scenario:\n{SCENARIO_STARTERS[scenario_type]}"
-    
-    if custom_instructions:
-        prompt += f"\n\n## Additional Instructions:\n{custom_instructions}"
-    
-    return prompt
-
-
-def build_event_instructions(
-    event_type: str,
-    data: Optional[Dict[str, Any]] = None,
-    message: Optional[str] = None
-) -> str:
-    """
-    Build event-specific instructions for the DM.
-
-    Args:
-        event_type: Key from EVENT_INSTRUCTIONS
-        data: Optional structured event data
-        message: Optional player message
-
-    Returns:
-        Event instructions string
-    """
-
-    base = EVENT_INSTRUCTIONS.get(event_type, "Handle the event in-character and keep it concise.")
-    parts = [base]
-
-    if message:
-        parts.append(f"Player input: {message}")
-
-    if data:
-        parts.append(f"Event data: {json.dumps(data, ensure_ascii=True)}")
-
-    return "\n".join(parts)
-
-
 # NPC templates based on your characters and enemies
 NPC_TEMPLATES = {
     **PLAYABLE_CHARACTERS,
     
-    "enforcer_soldier_bot": {
+    "enforcer_soldier": {
         "archetype": "Small Enemy - Melee",
         "traits": "Standard frontline automaton, efficient, follows orders without question",
         "combat": "Basic melee attacks, coordinated with other bots"
@@ -361,3 +476,94 @@ NPC_TEMPLATES = {
         "combat": "Exceptional combat prowess, custom abilities, strategic mind"
     }
 }
+
+
+# ============================================================================
+# PROMPT BUILDING FUNCTIONS
+# ============================================================================
+
+def build_intro_prompt(first_scenario='street_encounter'):
+    """
+    Build the intro prompt for game start.
+    AI generates 400-600 word intro + launches into scenario.
+    
+    Args:
+        first_scenario: Which scenario to launch into after intro
+        
+    Returns:
+        Complete system prompt for intro
+    """
+    scenario_text = SCENARIO_STARTERS.get(first_scenario, SCENARIO_STARTERS['street_encounter'])
+    
+    return GAME_INTRO_PROMPT + "\n\n" + scenario_text
+
+
+def build_system_prompt(
+    encounter_index: Optional[int] = None,
+    faction: str = 'enforcers',
+    scenario_type: Optional[str] = None,
+    custom_instructions: Optional[str] = None
+) -> str:
+    """
+    Build a complete system prompt for combat narration.
+    
+    Args:
+        encounter_index: Current encounter (0-10) from combat.py
+        faction: Player's chosen faction
+        scenario_type: Key from SCENARIO_STARTERS to add scenario context
+        custom_instructions: Additional custom instructions
+    
+    Returns:
+        Complete system prompt
+    """
+    from app.combat import format_combat_context
+    
+    prompt = SYSTEM_PROMPT_BASE + "\n\n" + CYBERPUNK_LORE
+    
+    # Add encounter-specific context
+    if encounter_index is not None:
+        encounter_context = format_combat_context(encounter_index, faction)
+        prompt += "\n\n" + encounter_context
+    
+    if scenario_type and scenario_type in SCENARIO_STARTERS:
+        prompt += f"\n\n## Current Scenario:\n{SCENARIO_STARTERS[scenario_type]}"
+    
+    if custom_instructions:
+        prompt += f"\n\n## Additional Instructions:\n{custom_instructions}"
+    
+    prompt += "\n\n## Combat Narration Instructions:\n"
+    prompt += "- Keep narration concise (150-250 words)\n"
+    prompt += "- Describe action vividly and viscerally\n"
+    prompt += "- Reference player actions when provided\n"
+    prompt += "- Build tension and atmosphere\n"
+    
+    return prompt
+
+
+def build_event_instructions(
+    event_type: str,
+    data: Optional[Dict[str, Any]] = None,
+    message: Optional[str] = None
+) -> str:
+    """
+    Build event-specific instructions for the DM.
+
+    Args:
+        event_type: Type of event
+        data: Optional structured event data
+        message: Optional player message
+
+    Returns:
+        Event instructions string
+    """
+
+    base = "Handle the event in-character and keep it concise."
+    parts = [base]
+
+    if message:
+        parts.append(f"Player input: {message}")
+
+    if data:
+        parts.append(f"Event data: {json.dumps(data, ensure_ascii=True)}")
+
+    return "\n".join(parts)

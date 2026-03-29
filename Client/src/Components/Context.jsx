@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState } from 'react';
 import { IoLogoElectron } from "react-icons/io5";
 import { FaFistRaised } from "react-icons/fa";
+import { LuCirclePlus } from "react-icons/lu";
 import io from 'socket.io-client';
 
 const GameContext = createContext();
@@ -43,6 +44,7 @@ export const GameProvider = ({ children }) => {
     const [storyText, setStoryText] = useState('The adventure begins...');
     const [combatRewards, setCombatRewards] = useState(null);
     const [attributeAllocations, setAttributeAllocations] = useState({});
+    const [attributePoints, setAttributePoints] = useState({});
     const [chat, setChat] = useState(false);
 
     const characterImageMap = {
@@ -64,7 +66,7 @@ export const GameProvider = ({ children }) => {
       rebel_field_tech: '/Rebel_Field_Tech.png',
       division_command: '/Enforcer_Division_Command.png',
       division_strategist: '/Enforcer_Division_Strategist.png',
-      vanguard_captain: '/Enforcer_Vanguard_Captain.png',
+      vanguard_captain: '/Enforcer_Vangaurd_Captain.png',
       field_captain: '/Rebel_Field_Captain.png',
       rebel_coordinator: '/Rebel_Field_Coordinator.png',
       operations_handler: '/Rebel_Field_Tech.png',
@@ -90,6 +92,11 @@ export const GameProvider = ({ children }) => {
       return icon;
     }
 
+    const getIsBonusAction = (ability) => {
+      const icon = ability?.consumesAction == false ? <LuCirclePlus /> : "";
+      return icon;
+    }
+
   return (
     <GameContext.Provider
       value={{
@@ -111,12 +118,14 @@ export const GameProvider = ({ children }) => {
         chat, setChat,
         enemies, setEnemies,
         attributeAllocations, setAttributeAllocations,
+        attributePoints, setAttributePoints,
         debugLogLevel,
         characterImageMap,
         enemyImageMap,
         getCharacterImage,
         getEnemyImage,
-        getAbilityScaler
+        getAbilityScaler,
+        getIsBonusAction
       }}
     >
       {children}

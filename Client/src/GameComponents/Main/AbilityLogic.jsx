@@ -55,6 +55,64 @@ function isEffectActiveNow(effect) {
     return effect?.turnsRemaining > 0 && !effect?.appliedThisTurn;
 }
 
+function getNumericEffectValue(effect) {
+    const parsedValue = Number(effect?.value);
+    return Number.isFinite(parsedValue) ? parsedValue : null;
+}
+
+function getNumericEffectMultiplier(effect) {
+    const parsedMultiplier = Number(effect?.multiplier);
+    return Number.isFinite(parsedMultiplier) ? parsedMultiplier : null;
+}
+
+function resolveEnemyStatEffectDelta(effect, currentStatValue) {
+    const explicitValue = getNumericEffectValue(effect);
+    if (explicitValue !== null) {
+        return explicitValue;
+    }
+
+    const multiplier = getNumericEffectMultiplier(effect);
+    if (multiplier !== null) {
+        const adjustedValue = Math.floor((Number(currentStatValue) || 0) * multiplier);
+        return adjustedValue - (Number(currentStatValue) || 0);
+    }
+
+    return 0;
+}
+
+function getPlayerStatEffectBreakdown(character, playerName, statName, activeEffects = []) {
+    const baseValue = Number(character?.stats?.[statName]) || 0;
+    const relevantEffects = (activeEffects || []).filter(effect =>
+        effect?.target === playerName &&
+        effect?.stat === statName &&
+        (effect?.type === 'stat_buff' || effect?.type === 'stat_debuff') &&
+        !effect?.appliedThisTurn
+    );
+
+    const flatModifier = relevantEffects.reduce((total, effect) => {
+        const explicitValue = getNumericEffectValue(effect);
+        return explicitValue !== null ? total + explicitValue : total;
+    }, 0);
+
+    const multiplier = relevantEffects.reduce((product, effect) => {
+        const nextMultiplier = getNumericEffectMultiplier(effect);
+        return nextMultiplier !== null ? product * nextMultiplier : product;
+    }, 1);
+
+    const preMultiplierTotal = baseValue + flatModifier;
+    const totalValue = multiplier !== 1
+        ? Math.floor(preMultiplierTotal * multiplier)
+        : preMultiplierTotal;
+
+    return {
+        baseValue,
+        flatModifier,
+        multiplier,
+        totalValue,
+        displayModifier: totalValue - baseValue
+    };
+}
+
 export function hasDamageImmunity(activeEffects = [], targetId) {
     return activeEffects.some(effect =>
         effect.type === 'damage_immunity' &&
@@ -156,6 +214,10 @@ export function applyAbilityEffects(result, gameState) {
             if (target in updates.playerCharacters) {
                 const character = updates.playerCharacters[target];
                 const currentHealth = character.stats.health;
+                if ((currentHealth || 0) <= 0) {
+                    console.log(`[HEAL] Skipping heal on dead target ${character.name} (${target})`);
+                    return;
+                }
                 const maxHealth = character.stats.maxHealth;
                 const newHealth = Math.min(maxHealth, currentHealth + amount);
                 
@@ -305,7 +367,8 @@ export function tickActiveEffects(activeEffects, playerCharacters, enemies, endi
                 if (enemyIndex !== -1) {
                     const enemy = updatedEnemies[enemyIndex];
                     const oldValue = enemy.stats[effect.stat] || 0;
-                    const newValue = oldValue + effect.value;
+                    const effectDelta = resolveEnemyStatEffectDelta(effect, oldValue);
+                    const newValue = oldValue + effectDelta;
                     updatedEnemies[enemyIndex] = {
                         ...enemy,
                         stats: {
@@ -313,11 +376,12 @@ export function tickActiveEffects(activeEffects, playerCharacters, enemies, endi
                             [effect.stat]: newValue
                         }
                     };
+                    updatedEffect.resolvedValue = effectDelta;
                     const effectLabel = effect.type === 'stat_debuff' ? 'DEBUFF' : 'BUFF';
                     console.log(`[${effectLabel} APPLIED] ${enemy.name} (${effect.target}):`);
                     console.log(`  - Stat: ${effect.stat}`);
                     console.log(`  - Old value: ${oldValue}`);
-                    console.log(`  - Effect amount: ${effect.value}`);
+                    console.log(`  - Effect amount: ${effectDelta}`);
                     console.log(`  - New value: ${newValue}`);
                 }
             }
@@ -337,6 +401,10 @@ export function tickActiveEffects(activeEffects, playerCharacters, enemies, endi
         // Apply healing_over_time before decrementing
         if (effect.type === 'healing_over_time' && effect.target in updatedCharacters) {
             const character = updatedCharacters[effect.target];
+            if ((character.stats.health || 0) <= 0) {
+                console.log(`[HEALING OVER TIME] Removing effect on dead target ${effect.target}`);
+                updatedEffect.turnsRemaining = 0;
+            } else {
             const oldHealth = character.stats.health;
             const maxHealth = character.stats.maxHealth || character.stats.max_health;
             const newHealth = Math.min(maxHealth, oldHealth + effect.amount);
@@ -348,6 +416,7 @@ export function tickActiveEffects(activeEffects, playerCharacters, enemies, endi
                 }
             };
             console.log(`[HEALING OVER TIME] ${character.name} healed for ${effect.amount} HP (${oldHealth} -> ${newHealth})`);
+            }
         }
         
         // Apply burn damage before decrementing
@@ -475,7 +544,8 @@ export function tickActiveEffects(activeEffects, playerCharacters, enemies, endi
                 if (enemyIndex !== -1) {
                     const enemy = updatedEnemies[enemyIndex];
                     const oldValue = enemy.stats[effect.stat];
-                    const newValue = oldValue - effect.value;
+                    const effectDelta = getNumericEffectValue(effect) ?? getNumericEffectValue({ value: effect.resolvedValue }) ?? resolveEnemyStatEffectDelta(effect, oldValue);
+                    const newValue = oldValue - effectDelta;
                     updatedEnemies[enemyIndex] = {
                         ...enemy,
                         stats: {
@@ -487,7 +557,7 @@ export function tickActiveEffects(activeEffects, playerCharacters, enemies, endi
                     console.log(`[${effectLabel} EXPIRED] ${enemy.name} (${effect.target}):`);
                     console.log(`  - Stat: ${effect.stat}`);
                     console.log(`  - Old value: ${oldValue}`);
-                    console.log(`  - Effect amount removed: ${effect.value}`);
+                    console.log(`  - Effect amount removed: ${effectDelta}`);
                     console.log(`  - New value: ${newValue}`);
                     console.log(`  - Effect lasted: ${effect.duration} turns`);
                 }
@@ -518,35 +588,27 @@ export function tickActiveEffects(activeEffects, playerCharacters, enemies, endi
  * @returns {number} Total stat value (base + bonuses - debuffs)
  */
 export function calculateTotalStat(character, playerName, statName, activeEffects) {
-    let total = character.stats[statName] || 0;
-    
-    // Add bonuses from active effects
-    activeEffects.forEach(effect => {
-        if (effect.target === playerName && effect.stat === statName && !effect.appliedThisTurn) {
-            if (effect.type === 'stat_buff') {
-                total += effect.value;
-            } else if (effect.type === 'stat_debuff') {
-                total += effect.value; // value is already negative for debuffs
-            }
-        }
-    });
-    
-    return total;
+    return getPlayerStatEffectBreakdown(character, playerName, statName, activeEffects).totalValue;
 }
 
 /**
  * Get all stat bonuses for a character (for UI display)
+ * @param {Object} character - The character object with base stats
  * @param {string} playerName - The player name/ID
  * @param {Array} activeEffects - Array of active effects
  * @returns {Object} Object with stat bonuses { speed: 15, strength: 10, ... }
  */
-export function getStatBonuses(playerName, activeEffects) {
+export function getStatBonuses(character, playerName, activeEffects) {
     const bonuses = {};
-    
-    activeEffects.forEach(effect => {
-        if (effect.target === playerName && (effect.type === 'stat_buff' || effect.type === 'stat_debuff') && !effect.appliedThisTurn) {
-            const statName = effect.stat;
-            bonuses[statName] = (bonuses[statName] || 0) + effect.value;
+
+    if (!character?.stats) {
+        return bonuses;
+    }
+
+    Object.keys(character.stats).forEach((statName) => {
+        const { displayModifier } = getPlayerStatEffectBreakdown(character, playerName, statName, activeEffects);
+        if (displayModifier !== 0) {
+            bonuses[statName] = displayModifier;
         }
     });
     
@@ -624,12 +686,15 @@ export function updateBlizzardFieldEffects(activeEffects, enemies, characterPosi
         
         if (inAnyBlizzard && !hasBlizzardDebuff) {
             // Enemy entered blizzard - apply speed debuff
-            const speedDebuff = -(Math.floor(enemy.stats.speed / 2));
+            const speedMultiplier = 0.5;
+            const adjustedSpeed = Math.floor((enemy.stats.speed || 0) * speedMultiplier);
+            const speedDebuff = adjustedSpeed - (enemy.stats.speed || 0);
             updatedEffects.push({
                 type: 'stat_debuff',
                 target: enemy.id,
                 stat: 'speed',
-                value: speedDebuff,
+                multiplier: speedMultiplier,
+                resolvedValue: speedDebuff,
                 duration: 1, // Will be refreshed each turn while in blizzard
                 stackable: false,
                 source: 'blizzard',

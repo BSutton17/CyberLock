@@ -51,6 +51,68 @@ const SCENE_ALIASES = {
 
 
 const TURN_START_ACTION_LOCK_MS = 500;
+const MAX_CHARACTER_LEVEL = 5;
+const DEFAULT_SCENE_KEY = 'city';
+const DECISION_ATTRIBUTE_ALIASES = {
+    politics: 'politician',
+    political: 'politician',
+    persuasion: 'politician',
+    diplomat: 'politician',
+    diplomacy: 'politician',
+    intimidation: 'intimidation',
+    scholar: 'scholar',
+    research: 'scholar',
+    spy: 'spy',
+    stealth: 'spy',
+    detective: 'detective',
+    investigation: 'detective',
+    investigate: 'detective',
+    medic: 'medic',
+    medicine: 'medic',
+    medical: 'medic',
+    navigator: 'navigator',
+    navigation: 'navigator',
+    travel: 'navigator',
+    banker: 'banker',
+    finance: 'banker',
+    financial: 'banker',
+    money: 'banker',
+    crook: 'crook',
+    criminal: 'crook',
+    underworld: 'crook',
+    electrician: 'electrician',
+    electric: 'electrician',
+    electrical: 'electrician',
+    tech: 'electrician'
+};
+
+const getAllowedAbilitySlots = (level) => {
+    if (level >= 5) return 3;
+    if (level >= 3) return 2;
+    return 1;
+};
+
+const sanitizeCharacterProgression = (character) => {
+    if (!character || typeof character !== 'object') return character;
+
+    const rawLevel = Number(character.level);
+    const level = Number.isFinite(rawLevel)
+        ? Math.max(1, Math.min(MAX_CHARACTER_LEVEL, rawLevel))
+        : 1;
+    const allowedAbilitySlots = getAllowedAbilitySlots(level);
+    const abilities = Array.isArray(character.abilities)
+        ? character.abilities.slice(0, allowedAbilitySlots).filter(Boolean)
+        : [];
+    const ultimate = level >= 3 ? (character.ultimate || null) : null;
+
+    return {
+        ...character,
+        level,
+        abilities,
+        ultimate
+    };
+};
+
 const SEWER_SLOW_TILE_KEYS = new Set([
     '3,0', '3,1', '3,2', '3,3', '3,4', '3,5', '3,6', '3,7', '3,8', '3,9',
     '1,4', '1,5', '2,4', '2,5', '4,4', '5,4', '5,5'
@@ -88,6 +150,10 @@ const normalizeSceneToken = (value = '') =>
         .trim()
         .replace(/[^a-z0-9]+/g, '_')
         .replace(/^_+|_+$/g, '');
+const normalizeDecisionAttribute = (rawAttribute = '') => {
+    const normalizedAttribute = normalizeSceneToken(rawAttribute);
+    return DECISION_ATTRIBUTE_ALIASES[normalizedAttribute] || normalizedAttribute || null;
+};
 
 const resolveSceneKey = (rawKeyword = '') => {
     const normalizedKeyword = normalizeSceneToken(rawKeyword);
@@ -97,6 +163,7 @@ const resolveSceneKey = (rawKeyword = '') => {
 const TYPEWRITER_CHAR_INTERVAL_MS = 20;
 const TYPEWRITER_SENTENCE_GAP_FACTOR_MS = 18;
 const TURN_ADVANCE_AFTER_TYPING_MS = 1000;
+const POST_COMBAT_NARRATION_TIMEOUT_MS = 8000;
 
 const splitAiTextSegments = (message = '') => {
     const trimmedMessage = String(message || '').trim();
@@ -151,10 +218,13 @@ function Main() {
         room,
         socket,
         getAbilityScaler,
+        attributePoints,
         attributeAllocations,
         setGamePhase,
         isMyTurn,
         currentTurn,
+        setCurrentTurn,
+        setIsMyTurn,
         enemies,
         setEnemies,
         turnOrder,
@@ -165,7 +235,8 @@ function Main() {
         getEnemyImage,
         debugLogLevel,
         chat,
-        setChat
+        setChat,
+        getIsBonusAction
     } = useGameContext();
     const [currentPlayerCharacter, setCurrentPlayerCharacter] = useState(null);
     const [ultimateReady, setUltimateReady] = useState(false);
@@ -208,12 +279,16 @@ function Main() {
     const aiTypingCompletionByRequestIdRef = useRef(new Map());
     const pendingPostCombatActionRef = useRef(null);
     const pendingPostCombatNarrationRequestIdRef = useRef(null);
+    const pendingStartCombatNarrationRequestIdRef = useRef(null);
+    const pendingPostCombatFallbackTimeoutRef = useRef(null);
     const postCombatOverlayTimeoutRef = useRef(null);
     const preCombatPlayerPositionsRef = useRef(null);
     const combatLifecycleActiveRef = useRef(false);
     const cooldownStorageKey = room && playerName ? `cooldowns_${room}_${playerName}` : null;
+    const storyProgressStorageKey = room ? `storyProgress_${room}` : null;
     const isQuietLogs = debugLogLevel === 'quiet';
     const isVerboseLogs = debugLogLevel === 'verbose';
+    const [isStoryStateHydrated, setIsStoryStateHydrated] = useState(false);
 
     const logImportant = (...args) => {
         if (isQuietLogs) return;
@@ -231,6 +306,7 @@ function Main() {
         const currentPlayerPositionsKey = `playerPositions_${room}`;
         const currentEnemyPositionsKey = `enemyPositions_${room}`;
         const currentCooldownKey = `cooldowns_${room}_${playerName}`;
+        const currentStoryProgressKey = `storyProgress_${room}`;
 
         const removedKeys = [];
 
@@ -244,8 +320,11 @@ function Main() {
                 key.startsWith('cooldowns_') &&
                 key.endsWith(`_${playerName}`) &&
                 key !== currentCooldownKey;
+            const isStaleStoryProgress =
+                key.startsWith('storyProgress_') &&
+                key !== currentStoryProgressKey;
 
-            if (isStalePlayerPositions || isStaleEnemyPositions || isStaleCooldownForPlayer) {
+            if (isStalePlayerPositions || isStaleEnemyPositions || isStaleCooldownForPlayer || isStaleStoryProgress) {
                 removedKeys.push(key);
                 sessionStorage.removeItem(key);
             }
@@ -262,11 +341,47 @@ function Main() {
     const [choiceAttribute, setChoiceAttribute] = useState(null);
     const [choiceStartCombat, setChoiceStartCombat] = useState(false);
     const [combatFlowIndex, setCombatFlowIndex] = useState(0);
+    const [allowFallbackFactionChoices, setAllowFallbackFactionChoices] = useState(false);
+    const [allowFallbackPostEncounterChoices, setAllowFallbackPostEncounterChoices] = useState(false);
+    const [allowFallbackNextEncounterChoice, setAllowFallbackNextEncounterChoice] = useState(false);
+
+    const livingStoryController = players.find(player => (playerCharacters[player]?.stats?.health || 0) > 0) || players[0] || null;
+    const isStoryController = livingStoryController === playerName;
+    const storyControllerLabel = livingStoryController || 'Admin';
+    const currentAiSentence = aiSentences[currentSentenceIndex] || '';
+    const isAiNarrationComplete = !aiBusy && (
+        !aiText?.trim() ||
+        (aiSentences.length > 0 && currentSentenceIndex >= aiSentences.length - 1 && typingIndex >= currentAiSentence.length)
+    );
 
     const getDecisionOwner = (requiredAttribute) => {
-        if (!requiredAttribute) return null;
-        const owner = players.find(player => attributeAllocations[player]?.[0] === requiredAttribute);
+        const normalizedAttribute = normalizeDecisionAttribute(requiredAttribute);
+        if (!normalizedAttribute) return null;
+
+        let bestOwner = null;
+        let bestScore = -1;
+
+        players.forEach((player) => {
+            const score = Number(attributePoints?.[player]?.[normalizedAttribute]);
+            if (!Number.isFinite(score)) return;
+
+            if (score > bestScore) {
+                bestScore = score;
+                bestOwner = player;
+            }
+        });
+
+        if (bestOwner) {
+            return bestOwner;
+        }
+
+        const owner = players.find(player => attributeAllocations[player]?.[0] === normalizedAttribute);
         return owner || null;
+    };
+
+    const abilityConsumesAction = (ability) => {
+        const resolvedAbility = typeof ability === 'string' ? getAbility(ability) : ability;
+        return resolvedAbility?.consumesAction !== false;
     };
 
     const arePositionsEqual = (firstPosition, secondPosition) => {
@@ -276,9 +391,23 @@ function Main() {
 
     const canPlayerDecide = (requiredAttribute) => {
         const owner = getDecisionOwner(requiredAttribute);
-        if (!owner) return isAdmin;
+        if (!owner) return isStoryController;
         return owner === playerName;
     };
+    const hasDynamicAiChoices = !!(aiOptions && aiOptions.length > 0 && isAiNarrationComplete);
+    const hasFallbackFactionChoices = !!(pendingFactionChoice && !aiOptions && allowFallbackFactionChoices && isAiNarrationComplete);
+    const hasFallbackPostEncounterChoices = !!(pendingPostEncounterChoice && !aiOptions && allowFallbackPostEncounterChoices && isAiNarrationComplete);
+    const hasFallbackNextEncounterChoices = !!(pendingNextEncounterChoice && !aiOptions && allowFallbackNextEncounterChoice && isAiNarrationComplete);
+    const hasAnyVisibleAiChoices =
+        hasDynamicAiChoices ||
+        hasFallbackFactionChoices ||
+        hasFallbackPostEncounterChoices ||
+        hasFallbackNextEncounterChoices;
+    const shouldShowMobileAiOverlay = !isMyTurn && (
+        aiBusy ||
+        Boolean(displayText?.trim()) ||
+        hasAnyVisibleAiChoices
+    );
     const [showYouDiedScreen, setShowYouDiedScreen] = useState(false);
     const [showEnemiesDefeatedScreen, setShowEnemiesDefeatedScreen] = useState(false);
     const [gameOver, setGameOver] = useState(false);
@@ -407,15 +536,126 @@ function Main() {
     }, [selectedFaction]);
 
     useEffect(() => {
+        if (!storyProgressStorageKey) {
+            setIsStoryStateHydrated(false);
+            return;
+        }
+
+        const defaultStoryState = {
+            combatFlowIndex: 0,
+            selectedFaction: null,
+            currentSceneKey: DEFAULT_SCENE_KEY,
+            pendingFactionChoice: false,
+            pendingPostEncounterChoice: false,
+            pendingNextEncounterChoice: false,
+            hasRequestedIntro: false,
+            aiText: '',
+            aiOptions: null,
+            aiAttribute: null,
+            allowFallbackFactionChoices: false,
+            allowFallbackPostEncounterChoices: false,
+            allowFallbackNextEncounterChoice: false
+        };
+
+        let nextStoryState = defaultStoryState;
+        const storedStoryState = sessionStorage.getItem(storyProgressStorageKey);
+
+        if (storedStoryState) {
+            try {
+                const parsedStoryState = JSON.parse(storedStoryState);
+                const normalizedCombatFlowIndex = Number.isFinite(Number(parsedStoryState?.combatFlowIndex))
+                    ? Math.max(0, Math.min(STORY_COMBAT_FLOW.length, Number(parsedStoryState.combatFlowIndex)))
+                    : 0;
+                const normalizedSelectedFaction =
+                    parsedStoryState?.selectedFaction === 'enforcers' || parsedStoryState?.selectedFaction === 'rebels'
+                        ? parsedStoryState.selectedFaction
+                        : null;
+                const normalizedSceneKey = parsedStoryState?.currentSceneKey || DEFAULT_SCENE_KEY;
+
+                nextStoryState = {
+                    combatFlowIndex: normalizedCombatFlowIndex,
+                    selectedFaction: normalizedSelectedFaction,
+                    currentSceneKey: normalizedSceneKey,
+                    pendingFactionChoice: Boolean(parsedStoryState?.pendingFactionChoice) && !normalizedSelectedFaction,
+                    pendingPostEncounterChoice: Boolean(parsedStoryState?.pendingPostEncounterChoice),
+                    pendingNextEncounterChoice: Boolean(parsedStoryState?.pendingNextEncounterChoice),
+                    aiText: typeof parsedStoryState?.aiText === 'string' ? parsedStoryState.aiText : '',
+                    aiOptions: Array.isArray(parsedStoryState?.aiOptions) ? parsedStoryState.aiOptions.filter(option => typeof option === 'string') : null,
+                    aiAttribute: normalizeDecisionAttribute(parsedStoryState?.aiAttribute || ''),
+                    allowFallbackFactionChoices: Boolean(parsedStoryState?.allowFallbackFactionChoices),
+                    allowFallbackPostEncounterChoices: Boolean(parsedStoryState?.allowFallbackPostEncounterChoices),
+                    allowFallbackNextEncounterChoice: Boolean(parsedStoryState?.allowFallbackNextEncounterChoice),
+                    hasRequestedIntro:
+                        Boolean(parsedStoryState?.hasRequestedIntro) ||
+                        !!normalizedSelectedFaction ||
+                        normalizedCombatFlowIndex > 0
+                };
+            } catch (error) {
+                console.error('[STORY FLOW] Failed to parse stored story progress:', error);
+            }
+        }
+
+        combatFlowIndexRef.current = nextStoryState.combatFlowIndex;
+        setCombatFlowIndex(nextStoryState.combatFlowIndex);
+        selectedFactionRef.current = nextStoryState.selectedFaction;
+        setSelectedFaction(nextStoryState.selectedFaction);
+        setCurrentSceneKey(nextStoryState.currentSceneKey);
+        setPendingFactionChoice(nextStoryState.pendingFactionChoice);
+        setPendingPostEncounterChoice(nextStoryState.pendingPostEncounterChoice);
+        setPendingNextEncounterChoice(nextStoryState.pendingNextEncounterChoice);
+        setAiText(nextStoryState.aiText);
+        setAiOptions(nextStoryState.aiOptions);
+        setAiAttribute(nextStoryState.aiAttribute);
+        setAllowFallbackFactionChoices(nextStoryState.allowFallbackFactionChoices);
+        setAllowFallbackPostEncounterChoices(nextStoryState.allowFallbackPostEncounterChoices);
+        setAllowFallbackNextEncounterChoice(nextStoryState.allowFallbackNextEncounterChoice);
+        hasRequestedIntroRef.current = nextStoryState.hasRequestedIntro;
+        setIsStoryStateHydrated(true);
+    }, [storyProgressStorageKey]);
+
+    useEffect(() => {
+        if (!storyProgressStorageKey || !isStoryStateHydrated) return;
+
+        sessionStorage.setItem(storyProgressStorageKey, JSON.stringify({
+            combatFlowIndex,
+            selectedFaction,
+            currentSceneKey,
+            pendingFactionChoice,
+            pendingPostEncounterChoice,
+            pendingNextEncounterChoice,
+            aiText,
+            aiOptions,
+            aiAttribute,
+            allowFallbackFactionChoices,
+            allowFallbackPostEncounterChoices,
+            allowFallbackNextEncounterChoice,
+            hasRequestedIntro: hasRequestedIntroRef.current
+        }));
+    }, [
+        storyProgressStorageKey,
+        isStoryStateHydrated,
+        combatFlowIndex,
+        selectedFaction,
+        currentSceneKey,
+        pendingFactionChoice,
+        pendingPostEncounterChoice,
+        pendingNextEncounterChoice,
+        aiText,
+        aiOptions,
+        aiAttribute,
+        allowFallbackFactionChoices,
+        allowFallbackPostEncounterChoices,
+        allowFallbackNextEncounterChoice
+    ]);
+
+    useEffect(() => {
         combatFlowIndexRef.current = combatFlowIndex;
     }, [combatFlowIndex]);
 
     useEffect(() => {
-        combatFlowIndexRef.current = 0;
         lastCombatConfigRef.current = null;
         preCombatPlayerPositionsRef.current = null;
         combatLifecycleActiveRef.current = false;
-        setCombatFlowIndex(0);
     }, [room]);
 
     useEffect(() => {
@@ -423,6 +663,10 @@ function Main() {
             if (postCombatOverlayTimeoutRef.current) {
                 clearTimeout(postCombatOverlayTimeoutRef.current);
                 postCombatOverlayTimeoutRef.current = null;
+            }
+            if (pendingPostCombatFallbackTimeoutRef.current) {
+                clearTimeout(pendingPostCombatFallbackTimeoutRef.current);
+                pendingPostCombatFallbackTimeoutRef.current = null;
             }
             if (turnStartLockTimeoutRef.current) {
                 clearTimeout(turnStartLockTimeoutRef.current);
@@ -595,6 +839,15 @@ function Main() {
         setAiBusy(true);
         setAiOptions(null);
         setAiAttribute(null);
+        if (eventType === 'game_start') {
+            setAllowFallbackFactionChoices(false);
+        }
+        if (eventType === 'encounter_end') {
+            setAllowFallbackPostEncounterChoices(false);
+        }
+        if (eventType === 'shop_intro' || eventType === 'next_encounter') {
+            setAllowFallbackNextEncounterChoice(false);
+        }
         socket.emit('ai_request', {
             requestId,
             room,
@@ -681,6 +934,17 @@ function Main() {
         });
     };
 
+    const startCombatAfterNarration = async (requestIds = []) => {
+        const uniqueRequestIds = [...new Set((requestIds || []).filter(Boolean))];
+        await waitForNarrationTypingCompletion(uniqueRequestIds, TURN_ADVANCE_AFTER_TYPING_MS);
+
+        if (!isStoryController) return;
+
+        pendingStartCombatNarrationRequestIdRef.current = null;
+        pendingStartCombatRef.current = false;
+        handleStoryComplete();
+    };
+
     const resolveFactionAlignment = (rawChoice = '') => {
         const normalized = String(rawChoice || '').toLowerCase();
 
@@ -724,6 +988,7 @@ function Main() {
         socket.emit('faction_selected', { room, faction: normalizedChoice });
 
         setPendingFactionChoice(false);
+        setAllowFallbackFactionChoices(false);
         setAiOptions(null);
         pendingStartCombatRef.current = true;
         emitAiEvent('choice_made', `The party chooses to fight with ${choice}.`, { choice });
@@ -735,11 +1000,11 @@ function Main() {
                 setSelectedFaction(faction);
                 selectedFactionRef.current = faction;
                 setPendingFactionChoice(false);
+                setAllowFallbackFactionChoices(false);
                 setAiOptions(null);
 
-                if (pendingStartCombatRef.current && isAdmin) {
-                    pendingStartCombatRef.current = false;
-                    handleStoryComplete();
+                if (pendingStartCombatRef.current && isStoryController) {
+                    void startCombatAfterNarration([pendingStartCombatNarrationRequestIdRef.current]);
                 }
             }
         };
@@ -748,14 +1013,14 @@ function Main() {
         return () => {
             socket.off('faction_selected', handleFactionSelected);
         };
-    }, [socket, isAdmin]);
+    }, [socket, isStoryController]);
 
     const handlePostEncounterChoice = (choice) => {
         const requiredAttribute = choice === 'shop' ? 'banker' : 'navigator';
         const owner = getDecisionOwner(requiredAttribute);
         
-        // Allow if: has required attribute, or is admin, or in single-player mode with one player
-        const canProceed = owner === playerName || isAdmin || players.length === 1;
+        // Allow if: has required attribute, or is current story controller, or in single-player mode.
+        const canProceed = owner === playerName || isStoryController || players.length === 1;
         
         if (!canProceed) {
             logImportant('[POST-ENCOUNTER CHOICE] Blocked - player lacks required attribute:', requiredAttribute);
@@ -765,6 +1030,7 @@ function Main() {
         logImportant('[POST-ENCOUNTER CHOICE] Choice made:', choice, 'by player:', playerName);
         
         setPendingPostEncounterChoice(false);
+        setAllowFallbackPostEncounterChoices(false);
         setAiOptions(null);
         
         if (choice === 'shop') {
@@ -778,7 +1044,7 @@ function Main() {
 
     const handleNextEncounter = () => {
         const owner = getDecisionOwner('navigator');
-        const canProceed = owner === playerName || isAdmin || players.length === 1;
+        const canProceed = owner === playerName || isStoryController || players.length === 1;
         
         if (!canProceed) {
             logImportant('[NEXT ENCOUNTER] Blocked - player lacks navigator attribute');
@@ -787,6 +1053,7 @@ function Main() {
         
         logImportant('[NEXT ENCOUNTER] Proceeding from shop');
         setPendingNextEncounterChoice(false);
+        setAllowFallbackNextEncounterChoice(false);
         setAiOptions(null);
         pendingStartCombatRef.current = true;
         emitAiEvent('next_encounter', 'Leaving the shop, the party moves toward the next encounter.', { choice: 'next_encounter' });
@@ -927,7 +1194,8 @@ function Main() {
     }, [aiSentences, currentSentenceIndex, typingIndex]);
 
     useEffect(() => {
-        if (!isAdmin || !room || hasRequestedIntroRef.current) return;
+        if (!isStoryStateHydrated) return;
+        if (!isStoryController || !room || hasRequestedIntroRef.current) return;
         if (selectedFactionRef.current) return;
         if (players.length === 0) return;
 
@@ -943,16 +1211,25 @@ function Main() {
             { party: partySummary },
             { scenarioType: 'street_encounter' }
         );
-    }, [isAdmin, room, players, playerCharacters]);
+    }, [isStoryController, room, players, playerCharacters, isStoryStateHydrated]);
 
     useEffect(() => {
+        const clearPendingPostCombatFallback = () => {
+            if (pendingPostCombatFallbackTimeoutRef.current) {
+                clearTimeout(pendingPostCombatFallbackTimeoutRef.current);
+                pendingPostCombatFallbackTimeoutRef.current = null;
+            }
+        };
+
         const proceedPostCombatAction = (postCombatAction) => {
+            clearPendingPostCombatFallback();
             logImportant('[POST-COMBAT] Proceeding with postCombatAction:', postCombatAction);
             
             if (postCombatAction === 'levelUp') {
                 socket.emit('level_up', { room });
                 // After level up, set pending choice so next encounter button appears
                 setPendingPostEncounterChoice(true);
+                setAllowFallbackPostEncounterChoices(false);
                 logImportant('[POST-COMBAT] Level up sent; pending choice set for next phase');
                 return;
             }
@@ -960,6 +1237,7 @@ function Main() {
             if (postCombatAction === 'shop') {
                 setSceneFromKeyword('shop');
                 setPendingPostEncounterChoice(true);  // Changed from pendingNextEncounterChoice to pendingPostEncounterChoice
+                setAllowFallbackPostEncounterChoices(false);
                 logImportant('[POST-COMBAT] Shop scene set; pending choice set');
                 return;
             }
@@ -967,10 +1245,11 @@ function Main() {
             // For 'none', proceed directly to next encounter
             pendingStartCombatRef.current = false;
             setPendingPostEncounterChoice(true);
+            setAllowFallbackPostEncounterChoices(false);
             logImportant('[POST-COMBAT] No post-combat action; pending choice set for next encounter');
         };
 
-        const handleAiMessage = ({ requestId, eventType, response, location, attribute, startCombat, options }) => {
+        const handleAiMessage = ({ requestId, eventType, response, location, attribute, startCombat, options, fallback }) => {
             markAiRequestCompleted(requestId);
             markAiTypingExpectedCompletion(requestId, response || '');
             setAiBusy(false);
@@ -990,49 +1269,46 @@ function Main() {
             }
 
             // Store attribute for decision-making
-            setAiAttribute(attribute || null);
+            setAiAttribute(normalizeDecisionAttribute(attribute || ''));
 
             // Handle post-combat narration FIRST, before options display logic
             if (
-                isAdmin &&
+                isStoryController &&
                 requestId &&
                 requestId === pendingPostCombatNarrationRequestIdRef.current
             ) {
+                clearPendingPostCombatFallback();
                 const postCombatAction = pendingPostCombatActionRef.current || 'none';
                 pendingPostCombatNarrationRequestIdRef.current = null;
                 pendingPostCombatActionRef.current = null;
-                
-                // Generate default options if AI didn't provide them (fallback mode)
-                if (!options) {
-                    setAiOptions(['Continue to next encounter']);
-                    logImportant('[POST-COMBAT] Generated fallback option "Continue to next encounter" for postCombatAction:', postCombatAction);
-                }
-                
+
                 proceedPostCombatAction(postCombatAction);
+                setAllowFallbackPostEncounterChoices(Boolean(fallback));
                 return;
             }
 
             // Handle start_combat flag from AI
-            if (startCombat && isAdmin) {
+            if (startCombat && isStoryController) {
                 if (!selectedFactionRef.current) {
                     pendingStartCombatRef.current = true;
+                    pendingStartCombatNarrationRequestIdRef.current = requestId || null;
                     setPendingFactionChoice(true);
                     logImportant('[FACTION] start_combat received before faction selection; waiting for faction choice.');
                     return;
                 }
 
-                pendingStartCombatRef.current = false;
-                handleStoryComplete();
+                void startCombatAfterNarration([requestId]);
                 return;
             }
 
             // Display options from AI only when a decision state is active
             const hasIncomingOptions = Array.isArray(options) && options.length > 0;
+            const normalizedIncomingAttribute = normalizeDecisionAttribute(attribute || '');
             const shouldAcceptAiOptions =
                 pendingFactionChoice ||
                 pendingPostEncounterChoice ||
                 pendingNextEncounterChoice ||
-                (!selectedFactionRef.current && (eventType === 'game_start' || attribute === 'politician'));
+                (!selectedFactionRef.current && (eventType === 'game_start' || normalizedIncomingAttribute === 'politician'));
 
             if (hasIncomingOptions && shouldAcceptAiOptions) {
                 setAiOptions(options);
@@ -1043,13 +1319,13 @@ function Main() {
             // Fallback event-type logic for cases where AI doesn't set structured fields
             if (eventType === 'game_start' && !options && !selectedFactionRef.current) {
                 setPendingFactionChoice(true);
+                setAllowFallbackFactionChoices(Boolean(fallback));
             }
 
             if (eventType === 'choice_made' && !startCombat) {
-                if (pendingStartCombatRef.current && isAdmin) {
+                if (pendingStartCombatRef.current && isStoryController) {
                     if (selectedFactionRef.current) {
-                        pendingStartCombatRef.current = false;
-                        handleStoryComplete();
+                        void startCombatAfterNarration([requestId]);
                     } else {
                         logImportant('[FACTION] Waiting for faction_selected before starting combat');
                     }
@@ -1058,19 +1334,19 @@ function Main() {
 
             if (eventType === 'encounter_end' && !options) {
                 logImportant('[ENCOUNTER_END] No AI options provided in fallback/normal response');
-                setPendingPostEncounterChoice(false);
+                setAllowFallbackPostEncounterChoices(Boolean(fallback));
             } else if (eventType === 'encounter_end') {
                 logImportant('[ENCOUNTER_END] AI provided options:', options);
             }
 
             if (eventType === 'shop_intro' && !options) {
                 setPendingNextEncounterChoice(true);
+                setAllowFallbackNextEncounterChoice(Boolean(fallback));
             }
 
             if (eventType === 'next_encounter' && !startCombat) {
-                if (pendingStartCombatRef.current && isAdmin) {
-                    pendingStartCombatRef.current = false;
-                    handleStoryComplete("low");
+                if (pendingStartCombatRef.current && isStoryController) {
+                    void startCombatAfterNarration([requestId]);
                 }
             }
         };
@@ -1081,15 +1357,27 @@ function Main() {
             setAiBusy(false);
             appendAiLog({ role: 'system', text: `AI error: ${error}`, eventType: 'error' });
 
+            if (pendingFactionChoice) {
+                setAllowFallbackFactionChoices(true);
+            }
+            if (pendingPostEncounterChoice) {
+                setAllowFallbackPostEncounterChoices(true);
+            }
+            if (pendingNextEncounterChoice) {
+                setAllowFallbackNextEncounterChoice(true);
+            }
+
             if (
-                isAdmin &&
+                isStoryController &&
                 requestId &&
                 requestId === pendingPostCombatNarrationRequestIdRef.current
             ) {
+                clearPendingPostCombatFallback();
                 const postCombatAction = pendingPostCombatActionRef.current || 'none';
                 pendingPostCombatNarrationRequestIdRef.current = null;
                 pendingPostCombatActionRef.current = null;
                 proceedPostCombatAction(postCombatAction);
+                setAllowFallbackPostEncounterChoices(true);
             }
         };
 
@@ -1134,7 +1422,7 @@ function Main() {
                 ...restoredPlayerCharacters
             }));
 
-            if (isAdmin && Object.keys(restoredPlayerCharacters).length > 0) {
+            if (isStoryController && Object.keys(restoredPlayerCharacters).length > 0) {
                 socket.emit('ability_used', {
                     room,
                     playerName,
@@ -1183,7 +1471,20 @@ function Main() {
             setTurnStartLockRemainingMs(0);
             setTurnTimeLeft(null);
 
-            const preCombatPositions = preCombatPlayerPositionsRef.current || {};
+            let preCombatPositions = preCombatPlayerPositionsRef.current || {};
+            if (Object.keys(preCombatPositions).length === 0) {
+                const storedOverworldPositions = sessionStorage.getItem(`overworldPlayerPositions_${room}`);
+                if (storedOverworldPositions) {
+                    try {
+                        const parsedOverworldPositions = JSON.parse(storedOverworldPositions);
+                        if (parsedOverworldPositions && typeof parsedOverworldPositions === 'object') {
+                            preCombatPositions = parsedOverworldPositions;
+                        }
+                    } catch (error) {
+                        console.error('[POSITION RESTORE] Failed to parse overworld positions after combat:', error);
+                    }
+                }
+            }
             const restoredPlayerPositions = {};
             players.forEach((playerId) => {
                 const savedPosition = preCombatPositions[playerId];
@@ -1197,9 +1498,12 @@ function Main() {
 
             setEnemies([]);
             setTurnOrder([]);
+            setCurrentTurn(null);
+            setIsMyTurn(false);
             setCharacterPositions(restoredPlayerPositions);
             sessionStorage.removeItem(`enemyPositions_${room}`);
             sessionStorage.setItem(`playerPositions_${room}`, JSON.stringify(restoredPlayerPositions));
+            sessionStorage.removeItem(`overworldPlayerPositions_${room}`);
             preCombatPlayerPositionsRef.current = null;
 
             if (postCombatOverlayTimeoutRef.current) {
@@ -1216,7 +1520,7 @@ function Main() {
                 setShowEnemiesDefeatedScreen(false);
                 postCombatOverlayTimeoutRef.current = null;
 
-                if (!isAdmin) return;
+                if (!isStoryController) return;
 
                 const narrationMessage =
                     postCombatAction === 'levelUp'
@@ -1231,6 +1535,18 @@ function Main() {
                     postCombatAction
                 });
                 pendingPostCombatNarrationRequestIdRef.current = requestId;
+
+                clearPendingPostCombatFallback();
+                pendingPostCombatFallbackTimeoutRef.current = setTimeout(() => {
+                    if (!isStoryController) return;
+                    if (pendingPostCombatNarrationRequestIdRef.current !== requestId) return;
+
+                    logImportant('[POST-COMBAT] AI narration timed out, continuing with fallback action:', postCombatAction);
+                    pendingPostCombatNarrationRequestIdRef.current = null;
+                    pendingPostCombatActionRef.current = null;
+                    proceedPostCombatAction(postCombatAction);
+                    setAllowFallbackPostEncounterChoices(true);
+                }, POST_COMBAT_NARRATION_TIMEOUT_MS);
             }, 2000);
         };
 
@@ -1245,7 +1561,7 @@ function Main() {
             socket.off('ai_thinking', handleAiThinking);
             socket.off('combat_ended', handleCombatEnded);
         };
-    }, [socket, isAdmin, room, playerName, players, playerCharacters, pendingFactionChoice, pendingPostEncounterChoice, pendingNextEncounterChoice]);
+    }, [socket, isStoryController, room, playerName, players, playerCharacters, pendingFactionChoice, pendingPostEncounterChoice, pendingNextEncounterChoice]);
 
     useEffect(() => {
         return () => {
@@ -1508,25 +1824,51 @@ function Main() {
         return 1;
     };
 
-    const generateSpreadColumns = (count, totalCols = 10) => {
-        if (count <= 0) return [];
-        const preferredMiddle = [4, 5, 6].filter(col => col >= 0 && col < totalCols);
+    const chooseWeightedSpawnColumn = (preferredCol, alternateCol) => {
+        if (!Number.isInteger(preferredCol)) return alternateCol;
+        if (!Number.isInteger(alternateCol)) return preferredCol;
+        return Math.random() < 0.6 ? preferredCol : alternateCol;
+    };
+
+    const getEnemySpawnColumnOrder = (preferredRow, totalCols = 10) => {
         const center = (totalCols - 1) / 2;
+        const sortByCenterDistance = (firstCol, secondCol) => {
+            const firstDistance = Math.abs(firstCol - center);
+            const secondDistance = Math.abs(secondCol - center);
+
+            if (firstDistance !== secondDistance) {
+                return firstDistance - secondDistance;
+            }
+
+            return firstCol - secondCol;
+        };
+
+        const scriptedSlots = preferredRow === 0
+            ? [[5], [4, 3], [6, 7], [2, 1], [8, 9]]
+            : preferredRow === 1
+                ? [[4], [3, 2], [5, 6], [1, 0], [7, 8]]
+                : [];
+
+        const orderedColumns = [];
+        const usedColumns = new Set();
+
+        scriptedSlots.forEach((slot) => {
+            const validColumns = slot.filter(col => col >= 0 && col < totalCols && !usedColumns.has(col));
+            if (validColumns.length === 0) return;
+
+            const selectedColumn = validColumns.length === 1
+                ? validColumns[0]
+                : chooseWeightedSpawnColumn(validColumns[0], validColumns[1]);
+
+            orderedColumns.push(selectedColumn);
+            usedColumns.add(selectedColumn);
+        });
 
         const remainingColumns = Array.from({ length: totalCols }, (_, col) => col)
-            .filter(col => !preferredMiddle.includes(col))
-            .sort((firstCol, secondCol) => {
-                const firstDistance = Math.abs(firstCol - center);
-                const secondDistance = Math.abs(secondCol - center);
+            .filter(col => !usedColumns.has(col))
+            .sort(sortByCenterDistance);
 
-                if (firstDistance !== secondDistance) {
-                    return firstDistance - secondDistance;
-                }
-
-                return firstCol - secondCol;
-            });
-
-        return [...preferredMiddle, ...remainingColumns].slice(0, count);
+        return [...orderedColumns, ...remainingColumns];
     };
 
     const generateEnemyFallbackPositions = (enemyList = []) => {
@@ -1534,7 +1876,6 @@ function Main() {
             getEnemySpawnDepth(secondEnemy) - getEnemySpawnDepth(firstEnemy)
         );
 
-        const columns = generateSpreadColumns(sortedEnemies.length, 10);
         const positions = {};
         const usedCells = new Set();
 
@@ -1577,13 +1918,27 @@ function Main() {
             return { row: preferredRow, col: preferredCol };
         };
 
-        sortedEnemies.forEach((enemy, index) => {
+        const enemiesByRow = sortedEnemies.reduce((rowsMap, enemy) => {
             const preferredRow = getEnemySpawnDepth(enemy);
-            const preferredCol = columns[index] ?? 0;
-            const spawnCell = findOpenCell(preferredRow, preferredCol);
+            if (!rowsMap.has(preferredRow)) {
+                rowsMap.set(preferredRow, []);
+            }
 
-            positions[enemy.id] = spawnCell;
-            usedCells.add(`${spawnCell.row},${spawnCell.col}`);
+            rowsMap.get(preferredRow).push(enemy);
+            return rowsMap;
+        }, new Map());
+
+        [...enemiesByRow.keys()].sort((firstRow, secondRow) => firstRow - secondRow).forEach((preferredRow) => {
+            const rowEnemies = enemiesByRow.get(preferredRow) || [];
+            const rowColumns = getEnemySpawnColumnOrder(preferredRow, 10);
+
+            rowEnemies.forEach((enemy, index) => {
+                const preferredCol = rowColumns[index] ?? rowColumns[rowColumns.length - 1] ?? 0;
+                const spawnCell = findOpenCell(preferredRow, preferredCol);
+
+                positions[enemy.id] = spawnCell;
+                usedCells.add(`${spawnCell.row},${spawnCell.col}`);
+            });
         });
 
         return positions;
@@ -2384,21 +2739,25 @@ function Main() {
 
                 console.log('[ENEMY TURN] Completing turn for', enemyId);
 
-                // Tick down cooldowns for ALL enemies
-                console.log('[ENEMY COOLDOWNS] Ticking down cooldowns for all enemies');
+                // Enemy cooldowns should only tick on that enemy's completed turn.
+                console.log('[ENEMY COOLDOWNS] Ticking down cooldowns for acting enemy only');
                 const latestEnemies = enemiesRef.current;
                 const updatedEnemies = latestEnemies.map(e => {
-                    const newCooldowns = { ...e.cooldowns };
-                    Object.keys(newCooldowns).forEach(abilityId => {
-                        if (newCooldowns[abilityId] > 0) {
-                            newCooldowns[abilityId]--;
-                            console.log(`[ENEMY COOLDOWNS]   - ${e.name} ${abilityId}: ${newCooldowns[abilityId]}`);
-                        }
-                    });
+                    const isActingEnemy = e.id === enemyId;
+                    const newCooldowns = isActingEnemy ? tickCooldowns(e.cooldowns || {}) : { ...(e.cooldowns || {}) };
+
+                    if (isActingEnemy) {
+                        Object.keys(newCooldowns).forEach(abilityId => {
+                            if ((e.cooldowns?.[abilityId] || 0) !== newCooldowns[abilityId]) {
+                                console.log(`[ENEMY COOLDOWNS]   - ${e.name} ${abilityId}: ${newCooldowns[abilityId]}`);
+                            }
+                        });
+                    }
+
                     return {
                         ...e,
                         cooldowns: newCooldowns,
-                        usedAbilityLastTurn: e.id === enemyId ? abilityUsedSuccessfully : (e.usedAbilityLastTurn || false)
+                        usedAbilityLastTurn: isActingEnemy ? abilityUsedSuccessfully : (e.usedAbilityLastTurn || false)
                     };
                 });
 
@@ -2441,25 +2800,27 @@ function Main() {
                         const prevCharacter = prevChars[name] || {};
                         const incomingAbilities = character?.abilities;
                         const previousAbilities = prevCharacter?.abilities;
+                        const isSameCharacter = character?.id && prevCharacter?.id && character.id === prevCharacter.id;
                         const shouldPreservePreviousAbilities =
                             Array.isArray(incomingAbilities) &&
                             incomingAbilities.length === 0 &&
                             Array.isArray(previousAbilities) &&
-                            previousAbilities.length > 0;
+                            previousAbilities.length > 0 &&
+                            isSameCharacter;
 
                         const incomingUltimate = character?.ultimate;
                         const hasValidIncomingUltimate =
                             (typeof incomingUltimate === 'string' && incomingUltimate.trim().length > 0) ||
                             (incomingUltimate && typeof incomingUltimate === 'object' && !!incomingUltimate.id);
 
-                        const mergedCharacter = {
+                        const mergedCharacter = sanitizeCharacterProgression({
                             ...prevCharacter,
                             ...character,
                             abilities: shouldPreservePreviousAbilities
                                 ? previousAbilities
                                 : (Array.isArray(incomingAbilities) ? incomingAbilities : previousAbilities),
-                            ultimate: hasValidIncomingUltimate ? incomingUltimate : prevCharacter?.ultimate
-                        };
+                            ultimate: hasValidIncomingUltimate ? incomingUltimate : (isSameCharacter ? prevCharacter?.ultimate : null)
+                        });
                         logVerbose('[ABILITY DEBUG] Merged character result:', {
                             player: name,
                             mergedAbilitiesType: Array.isArray(mergedCharacter?.abilities) ? 'array' : typeof mergedCharacter?.abilities,
@@ -3341,7 +3702,7 @@ function Main() {
             return;
         }
 
-        if (!isMyTurn || actionUsed || !isPlayerAlive || aiBusy) {
+        if (!isMyTurn || !isPlayerAlive || aiBusy) {
             return;
         }
 
@@ -3355,6 +3716,10 @@ function Main() {
 
         if (!abilityData) {
             console.log('[ABILITY CLICK] No ability data found!');
+            return;
+        }
+
+        if (actionUsed && abilityConsumesAction(abilityData)) {
             return;
         }
 
@@ -3496,7 +3861,7 @@ function Main() {
         setSelectedAbility(null);
         setSelectedTargets([]);
         setPendingRelocateTarget(null);
-        setActionUsed(true);
+        setActionUsed(abilityConsumesAction(abilityId));
 
         setTimeout(() => {
             if (isMyTurn && shouldAutoEndTurn()) {
@@ -3693,7 +4058,7 @@ function Main() {
             setExtraWeaponAttacksRemaining(noLimitsEffect.value || 0);
             setActionUsed(false);
         } else {
-            setActionUsed(true);
+            setActionUsed(abilityConsumesAction(abilityData));
         }
 
         // Auto-end only if movement is exhausted
@@ -3805,7 +4170,7 @@ function Main() {
 
         setSelectedAbility(null);
         setSelectedTargets([]);
-        setActionUsed(true);
+        setActionUsed(abilityConsumesAction(abilityId));
 
         // Auto-end only if movement is exhausted
         setTimeout(() => {
@@ -3932,7 +4297,7 @@ function Main() {
         console.log('[GROUND TARGET SYNC] Emitting updated game state to server');
 
         setSelectedAbility(null);
-        setActionUsed(true);
+        setActionUsed(abilityConsumesAction(abilityData));
 
         // Auto-end only if movement is exhausted
         setTimeout(() => {
@@ -4237,11 +4602,11 @@ function Main() {
                         </div>
                     )}
                     {/* AI-driven dynamic options */}
-                    {aiOptions && aiOptions.length > 0 && !aiBusy && (
+                    {hasDynamicAiChoices && (
                         <div className="ai-choices">
                             {aiAttribute && (
                                 <div className="ai-choice-owner">
-                                    Decision owner: {getDecisionOwner(aiAttribute) || 'Admin'}
+                                    Decision owner: {getDecisionOwner(aiAttribute) || storyControllerLabel}
                                 </div>
                             )}
                             {aiOptions.map((option, idx) => (
@@ -4256,28 +4621,28 @@ function Main() {
                         </div>
                     )}
                     {/* Legacy faction choice fallback */}
-                    {pendingFactionChoice && !aiOptions && (
+                    {hasFallbackFactionChoices && (
                         <div className="ai-choices">
                             <div className="ai-choice-owner">
-                                Decision owner: {getDecisionOwner('politician') || 'Admin'}
+                                Decision owner: {getDecisionOwner('politician') || storyControllerLabel}
                             </div>
                             <button onClick={() => handleFactionChoice('the Enforcers')} disabled={aiBusy || !canPlayerDecide('politician')}>Fight with Enforcers</button>
                             <button onClick={() => handleFactionChoice('the People of the City')} disabled={aiBusy || !canPlayerDecide('politician')}>Fight with the People of the City</button>
                         </div>
                     )}
-                    {pendingPostEncounterChoice && !aiOptions && (
+                    {hasFallbackPostEncounterChoices && (
                         <div className="ai-choices">
                             <div className="ai-choice-owner">
-                                Shop decision: {getDecisionOwner('banker') || 'Admin'} | Travel decision: {getDecisionOwner('navigator') || 'Admin'}
+                                Shop decision: {getDecisionOwner('banker') || storyControllerLabel} | Travel decision: {getDecisionOwner('navigator') || storyControllerLabel}
                             </div>
                             <button onClick={() => handlePostEncounterChoice('shop')} disabled={aiBusy || !canPlayerDecide('banker')}>Go to Shop</button>
                             <button onClick={() => handlePostEncounterChoice('next_encounter')} disabled={aiBusy || !canPlayerDecide('navigator')}>Next Encounter</button>
                         </div>
                     )}
-                    {pendingNextEncounterChoice && !aiOptions && (
+                    {hasFallbackNextEncounterChoices && (
                         <div className="ai-choices">
                             <div className="ai-choice-owner">
-                                Travel decision: {getDecisionOwner('navigator') || 'Admin'}
+                                Travel decision: {getDecisionOwner('navigator') || storyControllerLabel}
                             </div>
                             <button onClick={handleNextEncounter} disabled={aiBusy || !canPlayerDecide('navigator')}>Next Encounter</button>
                         </div>
@@ -4294,8 +4659,8 @@ function Main() {
                     </span>
                 </div>
             </div>
-            <div className={`inventory ${(aiBusy || displayText?.trim()) ? 'mobile-ai-active' : ''}`}>
-                <div className="mobile-ai-overlay" aria-hidden={!(aiBusy || displayText?.trim())}>
+            <div className={`inventory ${shouldShowMobileAiOverlay ? 'mobile-ai-active' : ''}`}>
+                <div className="mobile-ai-overlay" aria-hidden={!shouldShowMobileAiOverlay}>
                     <div className="mobile-ai-overlay-content">
                         {aiBusy && (
                             <div className="mobile-ai-overlay-status">The DM is crafting the story...</div>
@@ -4303,6 +4668,50 @@ function Main() {
                         <div className="mobile-ai-overlay-text">
                             {displayText}
                         </div>
+                        {hasDynamicAiChoices && (
+                            <div className="mobile-ai-overlay-choices">
+                                {aiAttribute && (
+                                    <div className="mobile-ai-choice-owner">
+                                        Decision owner: {getDecisionOwner(aiAttribute) || storyControllerLabel}
+                                    </div>
+                                )}
+                                {aiOptions.map((option, idx) => (
+                                    <button
+                                        key={`mobile-ai-option-${idx}`}
+                                        onClick={() => handleAiOptionClick(option)}
+                                        disabled={aiBusy || (aiAttribute && !canPlayerDecide(aiAttribute))}
+                                    >
+                                        {option}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                        {hasFallbackFactionChoices && (
+                            <div className="mobile-ai-overlay-choices">
+                                <div className="mobile-ai-choice-owner">
+                                    Decision owner: {getDecisionOwner('politician') || storyControllerLabel}
+                                </div>
+                                <button onClick={() => handleFactionChoice('the Enforcers')} disabled={aiBusy || !canPlayerDecide('politician')}>Fight with Enforcers</button>
+                                <button onClick={() => handleFactionChoice('the People of the City')} disabled={aiBusy || !canPlayerDecide('politician')}>Fight with the People of the City</button>
+                            </div>
+                        )}
+                        {hasFallbackPostEncounterChoices && (
+                            <div className="mobile-ai-overlay-choices">
+                                <div className="mobile-ai-choice-owner">
+                                    Shop decision: {getDecisionOwner('banker') || storyControllerLabel} | Travel decision: {getDecisionOwner('navigator') || storyControllerLabel}
+                                </div>
+                                <button onClick={() => handlePostEncounterChoice('shop')} disabled={aiBusy || !canPlayerDecide('banker')}>Go to Shop</button>
+                                <button onClick={() => handlePostEncounterChoice('next_encounter')} disabled={aiBusy || !canPlayerDecide('navigator')}>Next Encounter</button>
+                            </div>
+                        )}
+                        {hasFallbackNextEncounterChoices && (
+                            <div className="mobile-ai-overlay-choices">
+                                <div className="mobile-ai-choice-owner">
+                                    Travel decision: {getDecisionOwner('navigator') || storyControllerLabel}
+                                </div>
+                                <button onClick={handleNextEncounter} disabled={aiBusy || !canPlayerDecide('navigator')}>Next Encounter</button>
+                            </div>
+                        )}
                     </div>
                 </div>
                 {currentPlayerCharacter ? (
@@ -4344,11 +4753,11 @@ function Main() {
                                 <h4>Stats</h4>
                                 <div className="stats-grid">
                                     {(() => {
-                                        const statBonuses = getStatBonuses(playerName, activeEffects);
+                                        const statBonuses = getStatBonuses(currentPlayerCharacter, playerName, activeEffects);
                                         const currentPosition = characterPositions[playerName];
-                                        const sewerSpeedPenalty = isSewerSlowTile(currentSceneKey, currentPosition)
-                                            ? Math.floor((currentPlayerCharacter?.stats?.speed || 0) / 2)
-                                            : 0;
+                                        const totalSpeedBeforeTerrain = calculateTotalStat(currentPlayerCharacter, playerName, 'speed', activeEffects);
+                                        const sewerAdjustedSpeed = getSewerAdjustedSpeed(currentSceneKey, totalSpeedBeforeTerrain, currentPosition);
+                                        const sewerSpeedPenalty = Math.max(0, totalSpeedBeforeTerrain - sewerAdjustedSpeed);
                                         return (
                                             <>
                                                 <div className="stat-item">
@@ -4451,6 +4860,7 @@ function Main() {
                                     const range = resolvedAbility.range === 1 ? "Melee" : resolvedAbility.range === undefined ? "" : "Range: " + resolvedAbility.range;
                                     const canonicalAbility = getAbility(resolvedAbility.id) || resolvedAbility;
                                     const scalerIcon = getAbilityScaler(canonicalAbility);
+                                    const bonusIcon = getIsBonusAction(canonicalAbility);
 
                                     // console.log('[ABILITY SCALER]', {
                                     //     abilityId: resolvedAbility.id,
@@ -4466,9 +4876,9 @@ function Main() {
                                             className={`ability-card ${isOnCooldown ? 'ability-on-cooldown' : ''
                                                 } ${isSelected ? 'ability-selected' : ''
                                                 }`}
-                                            disabled={!isMyTurn || isTurnActionLocked || isOnCooldown || actionUsed || !isPlayerAlive}
+                                            disabled={!isMyTurn || isTurnActionLocked || isOnCooldown || (actionUsed && abilityConsumesAction(resolvedAbility)) || !isPlayerAlive}
                                         >
-                                            <div className='damage-scaling'>{scalerIcon}</div>
+                                            <div className='damage-scaling'>{scalerIcon}{bonusIcon}</div>
                                             <div className="ability-header">
                                                 <div className="ability-name">{resolvedAbility.name}</div>
                                                 <div className="ability-cd">
@@ -4508,7 +4918,7 @@ function Main() {
                                         className={`ultimate-card ${isOnCooldown ? 'ultimate-on-cooldown' : ''
                                             } ${isSelected ? 'ultimate-selected' : ''
                                             }`}
-                                        disabled={!isMyTurn || isTurnActionLocked || isOnCooldown || actionUsed || !isPlayerAlive || !hasUltimate}
+                                        disabled={!isMyTurn || isTurnActionLocked || isOnCooldown || (actionUsed && hasUltimate && abilityConsumesAction(resolvedUltimate)) || !isPlayerAlive || !hasUltimate}
                                         onClick={() => {
                                             if (!hasUltimate) {
                                                 console.warn('[ABILITY DEBUG] Ultimate click blocked - invalid or missing ultimate:', rawUltimate);

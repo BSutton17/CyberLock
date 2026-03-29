@@ -3,6 +3,14 @@ import { useEffect } from 'react';
 import { useGameContext } from './Context.jsx';
 import { enrichCharacterAbilities } from '../Utils/characterUtils';
 
+const MAX_CHARACTER_LEVEL = 5;
+
+const getAllowedAbilitySlots = (level) => {
+  if (level >= 5) return 3;
+  if (level >= 3) return 2;
+  return 1;
+};
+
 function Events(){
 
     const { socket, setPlayers, setDisplayGame, 
@@ -10,7 +18,7 @@ function Events(){
       setReadyPlayers, setGamePhase, setStoryText, characterPositions,
       setCombatRewards, room, setEnemies, 
       setTurnOrder, setCurrentTurn, 
-      setIsMyTurn, playerName, setAttributeAllocations, playerCharacters, debugLogLevel } = useGameContext();
+      setIsMyTurn, playerName, setAttributeAllocations, setAttributePoints, playerCharacters, debugLogLevel } = useGameContext();
 
     const isQuiet = debugLogLevel === 'quiet';
     const isVerbose = debugLogLevel === 'verbose';
@@ -28,6 +36,7 @@ function Events(){
     const resolveAbilities = (incomingCharacter, previousCharacter) => {
       const incomingAbilities = incomingCharacter?.abilities;
       const previousAbilities = previousCharacter?.abilities;
+      const isSameCharacter = incomingCharacter?.id && previousCharacter?.id && incomingCharacter.id === previousCharacter.id;
 
       if (!Array.isArray(incomingAbilities)) {
         return previousAbilities;
@@ -36,7 +45,7 @@ function Events(){
       const hasPreviousAbilities = Array.isArray(previousAbilities) && previousAbilities.length > 0;
       const incomingIsEmpty = incomingAbilities.length === 0;
 
-      if (incomingIsEmpty && hasPreviousAbilities) {
+      if (incomingIsEmpty && hasPreviousAbilities && isSameCharacter) {
         console.warn('[ABILITY DEBUG] Ignoring empty incoming abilities, preserving previous abilities.');
         return previousAbilities;
       }
@@ -50,16 +59,39 @@ function Events(){
         (typeof incomingUltimate === 'string' && incomingUltimate.trim().length > 0) ||
         (incomingUltimate && typeof incomingUltimate === 'object' && !!incomingUltimate.id);
 
-      return hasValidIncomingUltimate ? incomingUltimate : previousCharacter?.ultimate;
+      const isSameCharacter = incomingCharacter?.id && previousCharacter?.id && incomingCharacter.id === previousCharacter.id;
+
+      return hasValidIncomingUltimate ? incomingUltimate : (isSameCharacter ? previousCharacter?.ultimate : null);
+    };
+
+    const sanitizeCharacterProgression = (character) => {
+      if (!character || typeof character !== 'object') return character;
+
+      const rawLevel = Number(character.level);
+      const level = Number.isFinite(rawLevel)
+        ? Math.max(1, Math.min(MAX_CHARACTER_LEVEL, rawLevel))
+        : 1;
+      const allowedAbilitySlots = getAllowedAbilitySlots(level);
+      const abilities = Array.isArray(character.abilities)
+        ? character.abilities.slice(0, allowedAbilitySlots).filter(Boolean)
+        : [];
+      const ultimate = level >= 3 ? (character.ultimate || null) : null;
+
+      return {
+        ...character,
+        level,
+        abilities,
+        ultimate
+      };
     };
 
     const mergeCharacterPayload = (incomingCharacter, previousCharacter = {}) => {
-      return {
+      return sanitizeCharacterProgression({
         ...previousCharacter,
         ...incomingCharacter,
         abilities: resolveAbilities(incomingCharacter, previousCharacter),
         ultimate: resolveUltimate(incomingCharacter, previousCharacter)
-      };
+      });
     };
 
     useEffect(() => {
@@ -155,6 +187,19 @@ function Events(){
           }
           
           setEnemies(enemies);
+
+          const existingOverworldPositions = sessionStorage.getItem(`overworldPlayerPositions_${room}`);
+          const currentOverworldPositions = sessionStorage.getItem(`playerPositions_${room}`);
+          if (!existingOverworldPositions && currentOverworldPositions) {
+            try {
+              const parsedCurrentPositions = JSON.parse(currentOverworldPositions);
+              if (parsedCurrentPositions && typeof parsedCurrentPositions === 'object' && Object.keys(parsedCurrentPositions).length > 0) {
+                sessionStorage.setItem(`overworldPlayerPositions_${room}`, JSON.stringify(parsedCurrentPositions));
+              }
+            } catch (error) {
+              console.error('[POSITION SNAPSHOT] Failed to snapshot overworld positions before combat:', error);
+            }
+          }
           
           if (enemyPositions) {
             sessionStorage.setItem(`enemyPositions_${room}`, JSON.stringify(enemyPositions));
@@ -199,6 +244,10 @@ function Events(){
           setAttributeAllocations(allocations);
         });
 
+        socket.on("attribute_points_updated", (points) => {
+          setAttributePoints(points || {});
+        });
+
         socket.on("player_health_updated", ({ playerName: damagedPlayer, newHealth }) => {
           setPlayerCharacters(prev => ({
             ...prev,
@@ -215,6 +264,21 @@ function Events(){
 
         socket.on("level_up_complete", (payload = {}) => {
           const players = payload.players || playerCharacters || {};
+
+          setPlayerCharacters(prevCharacters => {
+            const mergedPlayers = Object.fromEntries(
+              Object.entries(players).map(([name, character]) => {
+                const previousCharacter = prevCharacters[name] || {};
+                return [name, enrichCharacterAbilities(mergeCharacterPayload(character, previousCharacter))];
+              })
+            );
+
+            return {
+              ...prevCharacters,
+              ...mergedPlayers
+            };
+          });
+
           const currentPlayer = players[playerName];
           const currentLevel = Number(currentPlayer?.level || 0);
 
@@ -231,6 +295,7 @@ function Events(){
           setEnemies([]);
           setTurnOrder([]);
           setAttributeAllocations({});
+          setAttributePoints({});
           setScreen("waiting");
         });
 
@@ -247,6 +312,7 @@ function Events(){
           socket.off("turn_changed");
           socket.off("turn_order_updated");
           socket.off("attribute_allocations_updated");
+          socket.off("attribute_points_updated");
           socket.off("player_health_updated");
           socket.off("level_up");
           socket.off("level_up_complete");

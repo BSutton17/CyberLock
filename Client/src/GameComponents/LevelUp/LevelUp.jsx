@@ -12,6 +12,7 @@ const STATS = [
 ];
 
 const STAT_CAP_BONUS = 30;
+const MAX_CHARACTER_LEVEL = 5;
 
 function LevelUp(){
     const {players, playerCharacters, setPlayerCharacters, playerName, room, socket } = useGameContext();
@@ -70,7 +71,7 @@ function LevelUp(){
             ...playerCharacters,
             [playerName]: {
                 ...playerInfo,
-                level: (playerInfo?.level || 1) + 1,
+                level: Math.min(MAX_CHARACTER_LEVEL, (playerInfo?.level || 1) + 1),
                 stats: {
                     ...stats,
                     health: currentCharacter.stats.maxHealth

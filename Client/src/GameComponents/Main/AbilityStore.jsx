@@ -5,7 +5,8 @@ export const ABILITIES = {
         description: 'Grants yourself +5 in all stats for 2 turns',
         role: "Tank",
         level: 1,
-        cooldown: 3,
+        cooldown: 4,
+        consumesAction: false,
         targetType: 'self',
         type: 'buff',
         
@@ -71,7 +72,7 @@ export const ABILITIES = {
         description: 'Use energy chains to temporarily immobilize 2 enemies for 1 turn',
         role: "Tank",
         level: 3,
-        cooldown: 2,
+        cooldown: 3,
         targetType: 'multi-enemy', 
         maxTargets: 2,
         range: 4,
@@ -137,15 +138,21 @@ export const ABILITIES = {
                 (caster.stats.ta / 10) * 10 - (enemy.stats.resistance / 10)
             ));
             
-            // Find weakest ally (lowest current HP)
+            // Find weakest living ally by health ratio, not raw HP total.
             let weakestAlly = null;
-            let lowestHP = Infinity;
+            let lowestHealthRatio = Infinity;
             let weakestPlayerName = null;
             
             Object.keys(playerCharacters).forEach(playerName => {
                 const character = playerCharacters[playerName];
-                if (character.stats.health < lowestHP) {
-                    lowestHP = character.stats.health;
+                const currentHealth = character?.stats?.health || 0;
+                const maxHealth = Math.max(1, character?.stats?.maxHealth || character?.stats?.max_health || currentHealth || 1);
+                if (currentHealth <= 0) return;
+
+                const healthRatio = currentHealth / maxHealth;
+                const weakestCurrentHealth = weakestAlly?.stats?.health ?? Infinity;
+                if (healthRatio < lowestHealthRatio || (healthRatio === lowestHealthRatio && currentHealth < weakestCurrentHealth)) {
+                    lowestHealthRatio = healthRatio;
                     weakestAlly = character;
                     weakestPlayerName = playerName;
                 }
@@ -153,6 +160,13 @@ export const ABILITIES = {
             
             // Convert 25% of damage to healing
             const healAmount = Math.floor(finalDamage * 0.25);
+
+            const healing = weakestPlayerName
+                ? [{
+                    target: weakestPlayerName,
+                    amount: healAmount
+                }]
+                : [];
             
             return {
                 success: true,
@@ -160,11 +174,10 @@ export const ABILITIES = {
                     target: enemy.id,
                     amount: finalDamage
                 }],
-                healing: [{
-                    target: weakestPlayerName,
-                    amount: healAmount
-                }],
-                message: `${caster.name} drains ${enemy.name} for ${finalDamage} damage! ${weakestAlly.name} is healed for ${healAmount} HP!`
+                healing,
+                message: weakestAlly
+                    ? `${caster.name} drains ${enemy.name} for ${finalDamage} damage! ${weakestAlly.name} is healed for ${healAmount} HP!`
+                    : `${caster.name} drains ${enemy.name} for ${finalDamage} damage!`
             };
         }
     },
@@ -249,7 +262,8 @@ export const ABILITIES = {
                 type: 'blizzard_field',
                 center: { row, col },
                 radius: 1, // 3x3 area (1 square in each direction)
-                duration: 3
+                duration: 3,
+                tickOnCastTurn: true
             });
             
             // Find all enemies currently in the 3x3 area and apply speed debuff
@@ -265,12 +279,11 @@ export const ABILITIES = {
                     affectedEnemies.push(enemy.name);
                     
                     // Apply speed debuff (half their current speed)
-                    const speedDebuff = -(Math.floor(enemy.stats.speed / 2));
                     effects.push({
                         type: 'stat_debuff',
                         target: enemy.id,
                         stat: 'speed',
-                        value: speedDebuff,
+                        multiplier: 0.5,
                         duration: 3,
                         stackable: false,
                         source: 'blizzard' // Track that this is from blizzard field
@@ -848,7 +861,8 @@ export const ABILITIES = {
         description: 'See the health of all enemies for one turn',
         role: "Support",
         level: 5,
-        cooldown: 2,
+        cooldown: 3,
+        consumesAction: false,
         targetType: 'self',
         type: 'buff',
         
@@ -960,6 +974,7 @@ export const ABILITIES = {
         role: "Support",
         level: 1,
         cooldown: 3,
+        consumesAction: false,
         targetType: 'ground-target',
         type: 'heal',
         range: 3,
@@ -993,6 +1008,7 @@ export const ABILITIES = {
             // Find all allies in 3x3 area
             Object.keys(playerCharacters).forEach(playerName => {
                 const ally = playerCharacters[playerName];
+                if ((ally?.stats?.health || 0) <= 0) return;
                 const allyPos = characterPositions[playerName] || characterPositions[ally?.name];
                 if (!allyPos) return;
                 
@@ -1067,12 +1083,12 @@ export const ABILITIES = {
                         type: 'stat_debuff',
                         target: enemy.id,
                         stat: 'speed',
-                        value: -Math.floor(enemy.stats.speed / 2),
+                        multiplier: 0.5,
                         duration: 2,
                         stackable: false
                     }
                 ],
-                message: `${caster.name} freezes ${enemy.name} for ${finalDamage} damage and reduces speed by ${Math.floor(enemy.stats.speed / 2)}!`
+                message: `${caster.name} freezes ${enemy.name} for ${finalDamage} damage and cuts their speed in half!`
             };
         }
     },
@@ -1083,6 +1099,7 @@ export const ABILITIES = {
         role: "DPS",
         level: 3,
         cooldown: 3,
+        consumesAction: false,
         targetType: 'self',
         type: 'buff',
         
@@ -1208,7 +1225,8 @@ export const ABILITIES = {
         description: 'Grants yourself +15 Speed, +15 Bonus Health, and +10 Strength for 2 turns',
         role: "Tank",
         level: 5,
-        cooldown: 3,
+        cooldown: 4,
+        consumesAction: false,
         targetType: 'self',
         type: 'buff',
         
@@ -1567,6 +1585,7 @@ export const ABILITIES = {
         level: 3,
         cooldown: 2,
         targetType: 'all-allies',
+        consumesAction: false,
         type: 'heal',
         
         /**
@@ -2078,6 +2097,7 @@ export const ABILITIES = {
         level: 1,
         cooldown: 2,
         targetType: 'ally',
+        consumesAction: false,
         type: 'heal',
         
         /**
@@ -2141,7 +2161,8 @@ export const ABILITIES = {
                 center: { row, col },
                 radius: 1,
                 duration: 2,
-                amount: totalDamage
+                amount: totalDamage,
+                tickOnCastTurn: true
             });
 
             enemies.forEach(enemy => {

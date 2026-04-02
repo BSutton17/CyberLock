@@ -10,6 +10,7 @@ from typing import List, Dict, Optional, Any
 from datetime import datetime
 import uuid
 import sqlite3
+import shutil
 from loguru import logger
 from pathlib import Path
 
@@ -44,7 +45,7 @@ class MemoryStore:
         logger.info(f"Loading embedding model: {embedding_model}")
         self.embedding_model = SentenceTransformer(embedding_model)
         
-        # Get or create collection
+        # Get or create collection with better conflict handling
         try:
             self.collection = self.client.get_or_create_collection(
                 name=collection_name,
@@ -54,36 +55,49 @@ class MemoryStore:
             if "collections.topic" not in str(exc):
                 raise
             logger.warning(
-                "ChromaDB schema mismatch detected; backing up and rebuilding store. Error: %s",
+                "ChromaDB schema mismatch detected; attempting to reset client. Error: %s",
                 exc
             )
-            self._rebuild_store()
-            self.collection = self.client.get_or_create_collection(
-                name=collection_name,
-                metadata={"hnsw:space": "cosine"}  # Use cosine similarity
-            )
+            # Try to reset the client instead of creating new databases
+            try:
+                self.client.reset()  # Clear the database
+                self.collection = self.client.get_or_create_collection(
+                    name=collection_name,
+                    metadata={"hnsw:space": "cosine"}
+                )
+                logger.info("ChromaDB reset successfully")
+            except Exception as reset_exc:
+                logger.error("Failed to reset ChromaDB: %s", reset_exc)
+                # Only as a last resort, backup the old one
+                self._backup_and_reinit()
+                self.collection = self.client.get_or_create_collection(
+                    name=collection_name,
+                    metadata={"hnsw:space": "cosine"}
+                )
         
         logger.success("MemoryStore initialized successfully")
 
-    def _rebuild_store(self) -> None:
-        """Back up the existing store and reinitialize a fresh ChromaDB store."""
-
+    def _backup_and_reinit(self) -> None:
+        """Back up the existing store and reinitialize using the same path."""
+        
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        backup_path = self.db_path.with_name(f"{self.db_path.name}.bak-{timestamp}")
-        rebuild_path = self.db_path.with_name(f"{self.db_path.name}.rebuild-{timestamp}")
-
+        backup_path = self.db_path.parent / f"chroma_db_backup_{timestamp}"
+        
         if self.db_path.exists():
             try:
-                self.db_path.rename(backup_path)
+                # Create backup without changing our main path
+                import shutil
+                shutil.copytree(self.db_path, backup_path)
                 logger.info("Backed up ChromaDB to %s", backup_path)
-            except PermissionError as exc:
-                logger.warning(
-                    "Backup rename failed (%s). Using new store at %s",
-                    exc,
-                    rebuild_path
-                )
-                self.db_path = rebuild_path
-
+                
+                # Remove current database files
+                shutil.rmtree(self.db_path)
+                logger.info("Removed corrupted database")
+                
+            except Exception as exc:
+                logger.error("Backup failed: %s", exc)
+        
+        # Recreate database at the same path
         self.db_path.mkdir(parents=True, exist_ok=True)
         self.client = chromadb.PersistentClient(
             path=str(self.db_path),
@@ -92,6 +106,7 @@ class MemoryStore:
                 allow_reset=True
             )
         )
+        logger.info("Reinitialized ChromaDB at original path")
     
     def add_memory(
         self,

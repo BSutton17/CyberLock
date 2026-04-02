@@ -52,9 +52,13 @@ class GameEventRequest(BaseModel):
 
 class GameEventResponse(BaseModel):
     """Response from a structured game event"""
-    response: str = Field(..., description="AI's response")
+    response: str = Field(..., description="AI's narrative response")
     session_id: str = Field(..., description="Session identifier")
     event_type: str = Field(..., description="Event type")
+    location: Optional[str] = Field(None, description="Scene location key (e.g. warehouse, sewer, city_square)")
+    attribute: Optional[str] = Field(None, description="Attribute for decision making (e.g. politician, banker, navigator)")
+    start_combat: bool = Field(False, description="Whether combat should start after this response")
+    options: Optional[List[str]] = Field(None, description="Array of option strings for player choice buttons")
     tokens_generated: Optional[int] = Field(None, description="Number of tokens generated")
     memories_used: int = Field(0, description="Number of memories retrieved")
     processing_time: float = Field(..., description="Processing time in seconds")

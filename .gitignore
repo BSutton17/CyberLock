@@ -40,6 +40,8 @@ data/
 *.db
 *.sqlite
 chroma_db/
+chroma_db*/
+*chroma_db*
 
 # IDE
 .vscode/
@@ -63,5 +65,3 @@ Training/outputs/
 
 # HuggingFace cache
 .cache/
-PROJECT-COMPLETE-OVERVIEW.md
-INTEGRATION.md

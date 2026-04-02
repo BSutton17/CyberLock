@@ -7,34 +7,6 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 
 
-class Message(BaseModel):
-    """Single message in a conversation"""
-    role: str = Field(..., description="Role: 'user' or 'assistant'")
-    content: str = Field(..., description="Message content")
-
-
-class ChatRequest(BaseModel):
-    """Request for chat completion"""
-    session_id: str = Field(..., description="Unique session identifier")
-    message: str = Field(..., description="User's message/action")
-    character_name: Optional[str] = Field(None, description="Player character name")
-    use_memory: bool = Field(True, description="Whether to use RAG memory retrieval")
-    scenario_type: Optional[str] = Field(None, description="Scenario type for system prompt")
-    
-    # Generation parameters (optional overrides)
-    temperature: Optional[float] = Field(None, ge=0.0, le=2.0)
-    max_tokens: Optional[int] = Field(None, ge=50, le=4096)
-
-
-class ChatResponse(BaseModel):
-    """Response from chat completion"""
-    response: str = Field(..., description="AI's response")
-    session_id: str = Field(..., description="Session identifier")
-    tokens_generated: Optional[int] = Field(None, description="Number of tokens generated")
-    memories_used: int = Field(0, description="Number of memories retrieved")
-    processing_time: float = Field(..., description="Processing time in seconds")
-
-
 class GameEventRequest(BaseModel):
     """Request for a structured game event"""
     session_id: str = Field(..., description="Unique session identifier")
@@ -52,9 +24,13 @@ class GameEventRequest(BaseModel):
 
 class GameEventResponse(BaseModel):
     """Response from a structured game event"""
-    response: str = Field(..., description="AI's response")
+    response: str = Field(..., description="AI's narrative response")
     session_id: str = Field(..., description="Session identifier")
     event_type: str = Field(..., description="Event type")
+    location: Optional[str] = Field(None, description="Scene location key (e.g. warehouse, sewer, city_square)")
+    attribute: Optional[str] = Field(None, description="Attribute for decision making (e.g. politician, banker, navigator)")
+    start_combat: bool = Field(False, description="Whether combat should start after this response")
+    options: Optional[List[str]] = Field(None, description="Array of option strings for player choice buttons")
     tokens_generated: Optional[int] = Field(None, description="Number of tokens generated")
     memories_used: int = Field(0, description="Number of memories retrieved")
     processing_time: float = Field(..., description="Processing time in seconds")

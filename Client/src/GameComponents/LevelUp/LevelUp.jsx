@@ -11,13 +11,8 @@ const STATS = [
     { id: 'ta', label: 'Technical Ability' }
 ];
 
-const STAT_CAPS = {
-    maxHealth: 150,
-    speed: 60,
-    resistance: 65,
-    strength: 80,
-    ta: 80
-};
+const STAT_CAP_BONUS = 30;
+const MAX_CHARACTER_LEVEL = 5;
 
 function LevelUp(){
     const {players, playerCharacters, setPlayerCharacters, playerName, room, socket } = useGameContext();
@@ -27,12 +22,14 @@ function LevelUp(){
     const [levelPoints, setLevelPoints] = useState(
         STATS.reduce((acc, attr) => ({ ...acc, [attr.id]: 0}), {})
     );
+    const [baseStats, setBaseStats] = useState(null);
 
     const currentCharacter = playerCharacters[playerName];
 
     useEffect(() => {
         if (!currentCharacter) return;
         setLevelPoints(STATS.reduce((acc, attr) => ({ ...acc, [attr.id]: 0}), {}));
+        setBaseStats({ ...currentCharacter.stats });
     }, [currentCharacter?.id]);
 
     useEffect(() => {
@@ -56,6 +53,11 @@ function LevelUp(){
     const totalPointsUsed = Object.values(levelPoints).reduce((sum, val) => sum + val, 0);
     const remainingPoints = TOTAL_POINTS - totalPointsUsed;
 
+    const getStatCap = (attrId) => {
+        const baseValue = baseStats?.[attrId] ?? currentCharacter?.stats?.[attrId] ?? 0;
+        return baseValue + STAT_CAP_BONUS;
+    };
+
     const handleReady = () => {
         if (hasSubmittedReady) return;
         // Check if applied all points
@@ -69,7 +71,7 @@ function LevelUp(){
             ...playerCharacters,
             [playerName]: {
                 ...playerInfo,
-                level: (playerInfo?.level || 1) + 1,
+                level: Math.min(MAX_CHARACTER_LEVEL, (playerInfo?.level || 1) + 1),
                 stats: {
                     ...stats,
                     health: currentCharacter.stats.maxHealth
@@ -90,13 +92,13 @@ function LevelUp(){
     const canIncrement = (attrId) => {
         if (remainingPoints <= 0) return false;
         const currentValue = currentCharacter?.stats?.[attrId] ?? 0;
-        const cap = STAT_CAPS[attrId] ?? Infinity;
+        const cap = getStatCap(attrId);
         return currentValue < cap;
     };
 
     const handleIncrement = (attrId) => {
         if (canIncrement(attrId)) {
-            const cap = STAT_CAPS[attrId] ?? Infinity;
+            const cap = getStatCap(attrId);
             const currentValue = currentCharacter?.stats?.[attrId] ?? 0;
             const nextValue = Math.min(currentValue + 1, cap);
             if (nextValue === currentValue) return;
@@ -144,17 +146,6 @@ function LevelUp(){
             setPlayerCharacters(updatedCharacter);
         }
     };
-
-    if (!currentCharacter) {
-        return (
-            <div className="level-up-container">
-                <div className="levelup-header">
-                    <h1>Level Up</h1>
-                </div>
-                <div className="levelup-empty">Waiting for your character data...</div>
-            </div>
-        );
-    }
 
     return(
         <div className="level-up-container">

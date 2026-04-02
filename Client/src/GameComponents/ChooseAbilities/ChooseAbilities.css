@@ -2,7 +2,7 @@
 	background-image: url('/AttributesBackground.jpg');
 	background-size: cover;
 	background-position: center;
-	background-attachment: fixed;
+	background-attachment: scroll;
 	min-height: 100vh;
 	color: #ffffff;
 	padding: 1.98vmin;
@@ -39,7 +39,7 @@
 
 .abilities-header h1 {
 	margin: 0;
-	font-size: 3.564vmin;
+	font-size: clamp(18px, 3.564vmin, 36px);
 	font-weight: 900;
 	text-transform: uppercase;
 	letter-spacing: 0.372vmin;
@@ -52,7 +52,7 @@
 .abilities-header p {
 	margin: 0.99vmin 0 0;
 	color: #d1d5db;
-	font-size: 1.584vmin;
+	font-size: clamp(12px, 1.584vmin, 20px);
 	text-transform: uppercase;
 	letter-spacing: 0.248vmin;
 }
@@ -77,7 +77,7 @@
 }
 
 .ability-description{
-	font-size: 0.9vmin;
+	font-size: clamp(10px, 0.9vmin, 20px);
 	gap: 1vmin;
 }
 
@@ -99,7 +99,7 @@
 .character-section h3,
 .current-abilities-section h3 {
 	margin: 0 0 1.584vmin 0;
-	font-size: 1.881vmin;
+	font-size: clamp(12px, 1.881vmin, 20px);
 	text-transform: uppercase;
 	letter-spacing: 0.248vmin;
 	color: #c4b5fd;
@@ -116,7 +116,7 @@
 
 .character-name {
 	margin: 0;
-	font-size: 2.178vmin;
+	font-size: clamp(14px, 2.178vmin, 26px);
 	font-weight: 900;
 	color: #f3f4f6;
 	text-transform: uppercase;
@@ -125,14 +125,14 @@
 
 .character-level {
 	margin: 0;
-	font-size: 1.782vmin;
+	font-size: clamp(12px, 1.782vmin, 20px);
 	color: #a78bfa;
 	font-weight: 700;
 }
 
 .character-role {
 	margin: 0;
-	font-size: 1.683vmin;
+	font-size: clamp(12px, 1.683vmin, 20px);
 	color: #d1d5db;
 }
 
@@ -174,13 +174,13 @@
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	font-size: 2vmin;
+	font-size: clamp(14px, 2vmin, 26px);
 	color: #9ca3af;
 	pointer-events: none;
 }
 
 .ability-level {
-	font-size: 1.75vmin;
+	font-size: clamp(12px, 1.75vmin, 20px);
 	text-transform: uppercase;
 	letter-spacing: 0.062vmin;
 	color: #9ca3af;
@@ -198,7 +198,7 @@
 }
 
 .ability-name {
-	font-size: 2vmin;
+	font-size: clamp(14px, 2vmin, 26px);
 	color: #f3f4f6;
 	font-weight: 600;
 	text-align: left;
@@ -207,7 +207,7 @@
 
 .ability-description{
     margin: 0;
-    font-size: 1.5vmin;
+    font-size: clamp(12px, 1.5vmin, 20px);
     color: #d1d5db;
     font-weight: 400;
     text-align: left;
@@ -233,7 +233,7 @@
 }
 .ability-category h4 {
 	margin: 0 0 1.485vmin 0;
-	font-size: 1.683vmin;
+	font-size: clamp(12px, 1.683vmin, 20px);
 	text-transform: uppercase;
 	letter-spacing: 0.186vmin;
 	color: #c4b5fd;
@@ -253,7 +253,7 @@
 	padding: 1.683vmin 1.98vmin;
 	border: none;
 	border-radius: 0.99vmin;
-	font-size: 1.782vmin;
+	font-size: clamp(12px, 1.782vmin, 20px);
 	font-weight: 700;
 	text-transform: uppercase;
 	letter-spacing: 0.062vmin;
@@ -269,7 +269,8 @@
 	box-shadow: 0 0.495vmin 1.485vmin rgba(0, 0, 0, 0.3);
 }
 
-.dropdown-toggle:hover:not(:disabled)::before {
+.dropdown-toggle:hover:not(:disabled)::before,
+.dropdown-toggle:active:not(:disabled)::before {
 	left: 100%;
 }
 
@@ -289,7 +290,7 @@
 .dropdown-selected {
 	flex: 1;
 	text-align: right;
-	font-size: 1.683vmin;
+	font-size: clamp(12px, 1.683vmin, 20px);
 	color: #d1d5db;
 	font-weight: 600;
 }
@@ -297,7 +298,7 @@
 .dropdown-arrow {
 	transition: transform 0.3s ease;
 	display: inline-block;
-	font-size: 1.485vmin;
+	font-size: clamp(12px, 1.485vmin, 20px);
 }
 
 .dropdown-arrow.open {
@@ -328,7 +329,7 @@
 	border: none;
 	color: #f3f4f6;
 	text-align: left;
-	font-size: 1.683vmin;
+	font-size: clamp(12px, 1.683vmin, 20px);
 	font-weight: 600;
 	cursor: pointer;
 	transition: all 0.2s ease;
@@ -341,7 +342,8 @@
 	border-bottom: none;
 }
 
-.dropdown-item:hover {
+.dropdown-item:hover,
+.dropdown-item:active {
 	background: rgba(139, 92, 246, 0.15);
 	padding-left: 2.475vmin;
 }
@@ -351,7 +353,8 @@
 	box-shadow: 0 0.495vmin 1.485vmin rgba(147, 112, 219, 0.3);
 }
 
-.ultimate-category .dropdown-toggle:hover:not(:disabled) {
+.ultimate-category .dropdown-toggle:hover:not(:disabled),
+.ultimate-category .dropdown-toggle:active:not(:disabled) {
 	background: linear-gradient(135deg, #8a55db 0%, #9370db 100%);
 	transform: translateY(-0.248vmin);
 	box-shadow: 0 0.743vmin 1.98vmin rgba(147, 112, 219, 0.5);
@@ -362,7 +365,8 @@
 	box-shadow: 0 0.495vmin 1.485vmin rgba(220, 38, 38, 0.3);
 }
 
-.level5-category .dropdown-toggle:hover:not(:disabled) {
+.level5-category .dropdown-toggle:hover:not(:disabled),
+.level5-category .dropdown-toggle:active:not(:disabled) {
 	background: linear-gradient(135deg, #b91c1c 0%, #dc2626 100%);
 	transform: translateY(-0.248vmin);
 	box-shadow: 0 0.743vmin 1.98vmin rgba(220, 38, 38, 0.5);
@@ -372,7 +376,8 @@
 	box-shadow: 0 0.495vmin 1.485vmin rgba(34, 197, 94, 0.3);
 }
 
-.level3-category .dropdown-toggle:hover:not(:disabled) {
+.level3-category .dropdown-toggle:hover:not(:disabled),
+.level3-category .dropdown-toggle:active:not(:disabled) {
 	background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
 	transform: translateY(-0.248vmin);
 	box-shadow: 0 0.743vmin 1.98vmin rgba(34, 197, 94, 0.5);
@@ -383,7 +388,8 @@
 	box-shadow: 0 0.495vmin 1.485vmin rgba(107, 114, 128, 0.3);
 }
 
-.level1-category .dropdown-toggle:hover:not(:disabled) {
+.level1-category .dropdown-toggle:hover:not(:disabled),
+.level1-category .dropdown-toggle:active:not(:disabled) {
 	background: linear-gradient(135deg, #4b5563 0%, #6b7280 100%);
 	transform: translateY(-0.248vmin);
 	box-shadow: 0 0.743vmin 1.98vmin rgba(107, 114, 128, 0.5);
@@ -408,11 +414,52 @@
 	box-shadow: 0 0.99vmin 2.97vmin rgba(0, 0, 0, 0.35);
 }
 
+.ability-legend {
+	align-self: flex-end;
+	width: 42vmin;
+	padding: 1.25vmin 1.5vmin;
+	border-radius: 1.238vmin;
+	border: 0.248vmin solid rgba(139, 92, 246, 0.28);
+	background: rgba(20, 20, 40, 0.72);
+	backdrop-filter: blur(1.1vmin);
+	box-shadow: 0 0.75vmin 2.2vmin rgba(0, 0, 0, 0.32);
+	display: flex;
+	flex-direction: column;
+	gap: 0.8vmin;
+	position: absolute;
+	bottom: 12vmin;
+}
+
+.ability-legend-list {
+	display: flex;
+	flex-direction: row;
+	gap: 0.7vmin;
+
+}
+
+.ability-legend-item {
+	display: flex;
+	align-items: center;
+	gap: 0.8vmin;
+	font-size: clamp(12px, 1.25vmin, 2vmin);
+	color: #e5e7eb;
+	line-height: 1.25;
+}
+
+.ability-legend-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 2.1vmin;
+	font-size: clamp(14px, 1.9vmin, 2.5vmin);
+	color: #9ca3af;
+}
+
 .ready-button {
 	border: none;
 	border-radius: 0.99vmin;
 	padding: 1.346vmin 2.772vmin;
-	font-size: 1.881vmin;
+	font-size: clamp(12px, 1.881vmin, 20px);
 	font-weight: 900;
 	text-transform: uppercase;
 	letter-spacing: 0.124vmin;
@@ -423,7 +470,8 @@
 	box-shadow: 0 0.99vmin 2.475vmin rgba(99, 102, 241, 0.45);
 }
 
-.ready-button:hover:not(:disabled) {
+.ready-button:hover:not(:disabled),
+.ready-button:active:not(:disabled) {
 	transform: translateY(-0.124vmin);
 	box-shadow: 0 1.238vmin 2.97vmin rgba(99, 102, 241, 0.6);
 }
@@ -437,7 +485,7 @@
 .ready-status {
 	margin: 0;
 	color: #d1d5db;
-	font-size: 1.624vmin;
+	font-size: clamp(12px, 1.624vmin, 20px);
 	text-transform: uppercase;
 	letter-spacing: 0.124vmin;
 }
@@ -468,35 +516,90 @@
 }
 
 
-@media (max-width: 126.72vmin) {
-	.abilities-content {
-		grid-template-columns: 1fr;
-	}
-}
-
-@media (max-width: 74.25vmin) {
+@media (max-width: 768px) {
 	.choose-abilities-wrapper {
-		padding: 1.485vmin;
+		overflow-x: auto;
+		overflow-y: auto;
+		width: 375vmin;
+		height: 158vmin;
+		transform: scale(0.5);
+		transform-origin: top left;
 	}
 
-	.abilities-header {
-		padding: 1.485vmin;
+	.character-name{
+		font-size: clamp(14px, 2.178vmin, 26px);
 	}
 
-	.abilities-header h1 {
-		font-size: 2.475vmin;
+	.character-level{
+		font-size: clamp(8px, 1.782vmin, 20px);
+	}
+	.ability-description{
+		font-size: clamp(14px, 0.9vmin, 20px);
+		gap: 1vmin;
 	}
 
-	.abilities-header p {
-		font-size: 1.386vmin;
+	.ability-description-drop{
+		font-size: clamp(8px, 0.9vmin, 20px);
+		gap: 1vmin;
+		font-weight: 100;
+	}
+
+	.ability-name{
+		font-size: clamp(20px, 0.5vmin, 20px);
+	}
+	.current-ability-item{
+		height: 15vmin;
+	}
+	.current-abilities-list{
+		gap: 2.5vmin;
+	}
+
+	.ability-style{
+		display: inline;
+	}
+
+	.ability-name-drop{
+		font-size: clamp(10px, 2vmin, 26px);
+		font-weight: 600;
+	}
+
+	.ability-description-drop{
+		display: inline;
+		white-space: nowrap;
+	}
+
+	.ability-level{
+		width: auto;
+		font-size: clamp(14px, 1.75vmin, 20px);
+		margin-right: 5vmin;
+	}
+
+	.abilities-panel{
+		gap: 15vmin;
+	}
+
+	.abilities-header h1{
+		font-size: 7vmin;
+	}
+
+	.character-section{
+		height: auto;
+	}
+	.current-abilities-section{
+		height: 90vmin;
+	}
+
+	.abilities-content {
+		grid-template-columns: 1fr 1.5fr;
+		min-width: 1400px;
 	}
 
 	.builder-footer {
-		flex-direction: column;
-		gap: 1.485vmin;
+		flex-direction: row;
+		gap: 0;
 	}
 
 	.ready-button {
-		width: 100%;
+		width: auto;
 	}
 }

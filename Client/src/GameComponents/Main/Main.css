@@ -39,8 +39,7 @@
     background-image: url('/AttributesBackground.jpg');
     background-size: cover;
     background-position: center;
-    background-attachment: fixed;
-    background-color: var(--theme-bg-color);
+    background-attachment: scroll;
     color: #ffffff;
     gap: 0.5rem;
     padding: 0.5rem;
@@ -72,17 +71,17 @@ li {
 }
 
 h1 {
-    font-size: 3vmin;
+    font-size: clamp(18px, 3vmin, 26px);
 }
 
 h2 {
-    font-size: 2vmin;
+    font-size: clamp(14px, 2vmin, 26px);
 }
 
 h3,
 h4,
 p {
-    font-size: 1vmin;
+    font-size: clamp(12px, 1vmin, 20px);
 }
 
 
@@ -106,10 +105,9 @@ p {
     font-weight: 900;
 }
 
-.scene-name h2:first-child,
-.scene-name h2:nth-child(2) {
+.title {
     margin: 0;
-    font-size: 2.7vmin;
+    font-size: clamp(14px, 2.7vmin, 26px);
     font-weight: 900;
     text-transform: uppercase;
     letter-spacing: 0.281vmin;
@@ -123,7 +121,7 @@ p {
     transform: translateX(-50%);
 }
 
-.leave-main {
+.leave-main, .leave-main-help {
     position: absolute;
     left: 1.5rem;
     top: 50%;
@@ -131,7 +129,7 @@ p {
     min-width: 3vmin;
     min-height: 1.5vmin;
     border: 1.5px solid var(--neon-cyan);
-    font-size: 1.1vmin;
+    font-size: clamp(12px, 1.1vmin, 20px);
     padding: 0.7rem 1rem;
     border-radius: 0.5rem;
     background: rgba(16, 16, 25, 0.75);
@@ -147,7 +145,14 @@ p {
     z-index: 10;
 }
 
-.leave-main:hover {
+.leave-main-help{
+    left: 20vmin;
+}
+
+.leave-main:hover,
+.leave-main:active,
+.leave-main-help:hover,
+.leave-main-help:active {
     border-color: rgba(139, 92, 246, 0.8);
     box-shadow: 0 0 15px rgba(139, 92, 246, 0.4), inset 0 0 10px rgba(139, 92, 246, 0.2);
     background: rgba(30, 30, 50, 0.85);
@@ -162,7 +167,7 @@ p {
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    font-size: 1.75vmin;
+    font-size: clamp(12px, 1.75vmin, 20px);
     font-weight: 700;
     color: #e0ffff;
     text-shadow: 0 0 8px rgba(var(--neon-cyan-rgb), 0.7);
@@ -175,7 +180,7 @@ p {
 }
 
 .turn-timer {
-    font-size: 1.1vmin;
+    font-size: clamp(12px, 1.1vmin, 20px);
     font-weight: 700;
     padding: 0.15rem 0.45rem;
     border-radius: 0.4rem;
@@ -199,7 +204,7 @@ p {
 
 .party h3 {
     margin: 0 0 1.125vmin 0;
-    font-size: 1.425vmin;
+    font-size: clamp(12px, 1.425vmin, 20px);
     text-transform: uppercase;
     letter-spacing: 0.188vmin;
     color: #c4b5fd;
@@ -245,7 +250,7 @@ p {
 }
 
 .character-name {
-    font-size: 1.5vmin !important;
+    font-size: clamp(12px, 1.5vmin, 20px) !important;
     font-weight: 600;
     color: #eaeaf0;
     overflow: hidden;
@@ -256,7 +261,7 @@ p {
 .character-stats {
     display: flex;
     gap: 0.75rem;
-    font-size: 1.25vmin;
+    font-size: clamp(12px, 1.25vmin, 20px);
 }
 
 .stat-speed {
@@ -317,7 +322,8 @@ p {
     min-height: 0;
 }
 
-.grid-cell:hover {
+.grid-cell:hover,
+.grid-cell:active {
     background: rgba(42, 42, 58, 0.3);
     border-color: rgba(74, 106, 138, 0.4);
 }
@@ -400,7 +406,8 @@ p {
     box-shadow: 0 0 0.5rem rgba(106, 138, 170, 0.3);
 }
 
-.grid-cell.ground-target-range:hover {
+.grid-cell.ground-target-range:hover,
+.grid-cell.ground-target-range:active {
     background: rgba(106, 138, 170, 0.35);
     border-color: rgba(106, 138, 170, 0.8);
     box-shadow: 0 0 1rem rgba(106, 138, 170, 0.5);
@@ -425,7 +432,7 @@ p {
 }
 
 .enemy-corpse-icon {
-    font-size: 2.2vmin;
+    font-size: clamp(14px, 2.2vmin, 26px);
     color: #cfcfe0;
     display: flex;
     align-items: center;
@@ -434,7 +441,7 @@ p {
 }
 
 .enemy-health {
-    font-size: 0.75vmin;
+    font-size: clamp(10px, 0.75vmin, 20px);
     font-weight: 700;
     color: #ff6b6b;
     background: rgba(0, 0, 0, 0.6);
@@ -446,7 +453,7 @@ p {
 }
 
 .enemy-name {
-    font-size: 0.85vmin;
+    font-size: clamp(10px, 0.85vmin, 20px);
     font-weight: 600;
 }
 
@@ -465,7 +472,7 @@ p {
     color: white;
     padding: 1rem 2rem;
     border-radius: 0.9vmin;
-    font-size: 1.125vmin;
+    font-size: clamp(12px, 1.125vmin, 20px);
     font-weight: 900;
     text-transform: uppercase;
     letter-spacing: 0.225vmin;
@@ -475,20 +482,21 @@ p {
     text-shadow: 0 0.15vmin 0.3vmin rgba(0, 0, 0, 0.3);
 }
 
-.continue-btn:hover {
+.continue-btn:hover,
+.continue-btn:active {
     transform: translateY(-0.225vmin);
     box-shadow: 0 0.6vmin 2.25vmin rgba(139, 92, 246, 0.8);
     background: linear-gradient(135deg, #a78bfa 0%, #818cf8 100%);
 }
 
 .attributes {
-    font-size: 1.25vmin !important;
+    font-size: clamp(12px, 1.25vmin, 20px) !important;
     display: flex;
     flex-direction: row;
 }
 
 .attributes .small {
-    font-size: 1.10vmin !important;
+    font-size: clamp(12px, 1.10vmin, 20px) !important;
 }
 
 .stat-buff {
@@ -655,7 +663,7 @@ p {
     line-height: 1.4;
     display: flex;
     align-items: flex-start;
-    font-size: 2.5vmin;
+    font-size: clamp(14px, 2.5vmin, 26px);
     min-height: 6vmin;
     height: auto;
     overflow-wrap: break-word;
@@ -678,7 +686,7 @@ p {
 
 .ai-choice-owner {
     width: 100%;
-    font-size: 1.1vmin;
+    font-size: clamp(12px, 1.1vmin, 20px);
     color: #9fb7d4;
     letter-spacing: 0.03em;
     text-align: left;
@@ -697,14 +705,15 @@ p {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.15vmin;
+    font-size: clamp(12px, 1.15vmin, 20px);
     min-height: 1.75vmin;
     flex-shrink: 0;
     width: 100%;
     min-width: 20vmin;
 }
 
-.ai-choices button:hover {
+.ai-choices button:hover,
+.ai-choices button:active {
     background: rgba(90, 122, 170, 0.35);
     border-color: rgba(90, 122, 170, 0.7);
 }
@@ -769,6 +778,10 @@ p {
     height: 21vmin;
 }
 
+.mobile-ai-overlay {
+    display: none;
+}
+
 .character-sheet-header {
     display: flex;
     flex-direction: column;
@@ -822,11 +835,11 @@ p {
 }
 
 .status-effect-indicator-party {
-    font-size: 1.85vmin;
+    font-size: clamp(12px, 1.85vmin, 20px);
 }
 
 .status-effect-indicator-grid {
-    font-size: 1.85vmin;
+    font-size: clamp(12px, 1.85vmin, 20px);
 }
 
 .grid-character.player-grid-character {
@@ -859,14 +872,14 @@ p {
 }
 
 .char-name {
-    font-size: 1.875vmin;
+    font-size: clamp(12px, 1.875vmin, 20px);
     font-weight: 700;
     color: #eaeaf0;
     letter-spacing: 0.02em;
 }
 
 .char-role {
-    font-size: 1.7vmin;
+    font-size: clamp(12px, 1.7vmin, 20px);
     color: #7a9aba;
     text-transform: uppercase;
 }
@@ -884,7 +897,7 @@ p {
 .abilities-section h4,
 .ultimate-section h4 {
     margin: 0 0 1.5vmin 0;
-    font-size: 1.32vmin;
+    font-size: clamp(12px, 1.32vmin, 20px);
     text-transform: uppercase;
     letter-spacing: 0.188vmin;
     color: #c4b5fd;
@@ -902,6 +915,7 @@ p {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 0.45vmin;
+    margin-top: -2vmin;
 }
 
 .stat-item {
@@ -917,14 +931,15 @@ p {
     transition: all 0.2s ease;
 }
 
-.stat-item:hover {
+.stat-item:hover,
+.stat-item:active {
     transform: translateY(-0.15vmin);
     border-color: rgba(139, 92, 246, 0.7);
     box-shadow: 0 0.45vmin 1.5vmin rgba(139, 92, 246, 0.3);
 }
 
 .stat-label {
-    font-size: 1.1vmin;
+    font-size: clamp(12px, 1.1vmin, 20px);
     color: #c4b5fd;
     font-weight: 600;
     text-transform: uppercase;
@@ -932,7 +947,7 @@ p {
 }
 
 .stat-value {
-    font-size: 1.2vmin;
+    font-size: clamp(12px, 1.2vmin, 20px);
     font-weight: 700;
     color: #ffffff;
 }
@@ -954,7 +969,8 @@ p {
     justify-content: center;
 }
 
-.weapon-card:hover {
+.weapon-card:hover,
+.weapon-card:active {
     border-color: #ffffff;
     box-shadow: 0 0 15px rgba(var(--neon-cyan-rgb), 0.6), inset 0 0 30px rgba(var(--neon-cyan-rgb), 0.5);
     background: linear-gradient(135deg, rgba(150, 0, 200, 0.25) 0%, rgba(90, 0, 130, 0.45) 100%);
@@ -974,7 +990,7 @@ p {
 }
 
 .weapon-icon {
-    font-size: 1.25vmin;
+    font-size: clamp(12px, 1.25vmin, 20px);
     filter: drop-shadow(0 0 0.5rem rgba(74, 138, 138, 0.4));
 }
 
@@ -989,28 +1005,21 @@ p {
 }
 
 .weapon-name {
-    font-size: 1.75vmin;
-    font-weight: 800;
-    color: #ffffff;
-    text-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
-    letter-spacing: 0.05em;
+    font-size: clamp(14px, 2vmin, 26px);
+    font-weight: 700;
+    color: #c669fc;
 }
 
 .weapon-damage {
-    font-size: 1.5vmin;
+    font-size: clamp(12px, 1.5vmin, 20px);
     color: #ff6b6b;
     font-weight: 600;
 }
 
 .weapon-range {
-    font-size: 1.1vmin;
-    color: #7a9aba;
-    background: rgba(122, 154, 186, 0.15);
-    padding: 0.125rem 0.375rem;
-    border-radius: 0.25rem;
-    position: absolute;
-    top: 0.4rem;
-    right: 0.5rem;
+    font-size: clamp(12px, 1.5vmin, 20px);
+    color: #17a536;
+    font-weight: 600;
 }
 
 .abilities-grid {
@@ -1025,7 +1034,7 @@ p {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 2vmin;
+    font-size: clamp(14px, 2vmin, 26px);
     z-index: 20;
     pointer-events: none;
     color: white;
@@ -1048,7 +1057,8 @@ p {
     position: relative;
 }
 
-.ability-card:hover {
+.ability-card:hover,
+.ability-card:active {
     transform: translateY(-0.125rem);
     border-color: #ffffff;
     background: linear-gradient(135deg, rgba(150, 0, 200, 0.25) 0%, rgba(90, 0, 130, 0.45) 100%);
@@ -1067,7 +1077,8 @@ p {
     border-color: #3a4a6a;
 }
 
-.ability-card.ability-on-cooldown:hover {
+.ability-card.ability-on-cooldown:hover,
+.ability-card.ability-on-cooldown:active {
     transform: none;
     box-shadow: none;
 }
@@ -1082,7 +1093,7 @@ p {
 }
 
 .ability-card .ability-name {
-    font-size: 1.75vmin;
+    font-size: clamp(12px, 1.75vmin, 20px);
     font-weight: 800;
     color: #ffffff;
     text-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
@@ -1091,7 +1102,7 @@ p {
 }
 
 .ability-cd, .ability-cd-ultimate {
-    font-size: 1.1vmin;
+    font-size: clamp(12px, 1.25vmin, 20px);
     color: #7a9aba;
     background: rgba(122, 154, 186, 0.15);
     padding: 0.125rem 0.375rem;
@@ -1112,7 +1123,7 @@ p {
 }
 
 .ability-desc {
-    font-size: 1.5vmin;
+    font-size: clamp(12px, 1.5vmin, 20px);
     color: #9a9aaa;
     line-height: 1.3;
     text-align: center;
@@ -1138,7 +1149,8 @@ p {
     position: relative;
 }
 
-.ultimate-card:hover {
+.ultimate-card:hover,
+.ultimate-card:active {
     transform: translateY(-0.125rem);
     border: 1.5px solid #ffffff;
     background: linear-gradient(135deg, rgba(0, 150, 200, 0.25) 0%, rgba(0, 80, 130, 0.45) 100%);
@@ -1157,7 +1169,8 @@ p {
     border-color: #3a4a6a;
 }
 
-.ultimate-card.ultimate-on-cooldown:hover {
+.ultimate-card.ultimate-on-cooldown:hover,
+.ultimate-card.ultimate-on-cooldown:active {
     transform: none;
     box-shadow: none;
 }
@@ -1174,7 +1187,7 @@ p {
 }
 
 .ultimate-card .ultimate-name {
-    font-size: 1.75vmin;
+    font-size: clamp(12px, 1.75vmin, 20px);
     font-weight: 800;
     color: var(--neon-magenta);
     text-transform: uppercase;
@@ -1184,7 +1197,7 @@ p {
 }
 
 .ultimate-desc {
-    font-size: 1.25vmin;
+    font-size: clamp(12px, 1.25vmin, 20px);
     color: var(--text-muted-magenta);
     /* unified muted magenta text color */
     line-height: 1.3;
@@ -1201,7 +1214,7 @@ p {
     align-items: center;
     justify-content: center;
     color: #7a9aba;
-    font-size: 1vmin;
+    font-size: clamp(12px, 1vmin, 20px);
     opacity: 0.6;
 }
 
@@ -1214,7 +1227,7 @@ p {
     border: none;
     padding: 0.9vmin 2.5vmin;
     border-radius: 0.9vmin;
-    font-size: 1.4vmin;
+    font-size: clamp(12px, 1.4vmin, 20px);
     font-weight: 900;
     text-transform: uppercase;
     letter-spacing: 0.279vmin;
@@ -1225,10 +1238,11 @@ p {
 }
 
 .small {
-    font-size: 0.75vmin !important;
+    font-size: clamp(10px, 0.75vmin, 20px) !important;
 }
 
-.end-turn:hover:not(:disabled) {
+.end-turn:hover:not(:disabled),
+.end-turn:active:not(:disabled) {
     transform: translateY(-0.25vmin);
     box-shadow: 0 0.836vmin 3.342vmin rgba(139, 92, 246, 0.7);
     background: linear-gradient(135deg, #c4b5fd 0%, #93c5fd 100%);
@@ -1239,122 +1253,6 @@ p {
     color: #666;
     cursor: not-allowed;
     box-shadow: none;
-}
-
-@media (max-width: 1024px) {
-    .main-game-container {
-        grid-template-columns: 1fr;
-        grid-template-areas:
-            "scene"
-            "main"
-            "party"
-            "ai"
-            "inventory";
-        gap: 0.5rem;
-        padding: 0.5rem;
-    }
-
-    .battle-grid {
-        max-width: 98%;
-    }
-
-    .party {
-        max-height: 30vh;
-    }
-
-    .inventory {
-        grid-template-columns: 1fr;
-        gap: 0.5rem;
-        max-height: none;
-    }
-
-    .stats-grid {
-        grid-template-columns: repeat(3, 1fr);
-    }
-
-    .abilities-grid {
-        flex-wrap: wrap;
-    }
-
-    .end-turn {
-        bottom: 1rem;
-        right: 1rem;
-        padding: 0.75rem 1.25rem;
-        font-size: 0.9vmin;
-    }
-}
-
-@media (max-width: 768px) {
-    .scene-name {
-        min-height: 3rem;
-        padding: 0 0.75rem;
-    }
-
-    .battle-grid {
-        max-width: 100%;
-    }
-
-    .character-icon {
-        width: 2.5rem;
-        height: 2.5rem;
-    }
-
-    .character-name {
-        font-size: 0.8vmin;
-    }
-
-    .character-stats {
-        font-size: 0.7vmin;
-        gap: 0.5rem;
-    }
-
-    .weapon-card,
-    .ability-card {
-        height: 7rem;
-    }
-
-    .ultimate-card {
-        width: 100%;
-        height: 7rem;
-    }
-}
-
-@media (max-width: 480px) {
-    .main-game-container {
-        gap: 0.375rem;
-        padding: 0.375rem;
-    }
-
-    .party h3,
-    .AI-script {
-        font-size: 0.8vmin;
-    }
-
-    .grid-cell {
-        font-size: 0.7vmin;
-    }
-
-    .enemy-health,
-    .enemy-name {
-        font-size: 0.65vmin;
-    }
-
-    .portrait-icon {
-        width: 2.5rem;
-        height: 2.5rem;
-    }
-
-    .weapon-card,
-    .ability-card {
-        min-width: 5rem;
-        height: 6rem;
-        padding: 0.375rem;
-    }
-
-    .ultimate-card {
-        height: 6rem;
-        padding: 0.375rem;
-    }
 }
 
 .you-died-screen {
@@ -1378,8 +1276,278 @@ p {
     text-align: center;
 }
 
+@media (max-width: 1024px) {
+    .main-game-container {
+        grid-template-columns: 2fr 10fr;
+        grid-template-rows: 1fr 10fr 0fr 4fr;
+        grid-template-areas:
+            "scene scene scene"
+            "party main main"
+            "ai ai ai"
+            "inventory inventory inventory";
+        width: 374vmin;
+        min-width: 374vmin;
+        height: 158vmin;
+        min-height: 158vmin;
+        transform: scale(0.5);
+        transform-origin: top left;
+    }
+
+    .main-game-container > .scene-name,
+    .main-game-container > .party,
+    .main-game-container > .main-game,
+    .main-game-container > .AI-script,
+    .main-game-container > .inventory {
+        transform: scale(1);
+        transform-origin: top center;
+    }
+
+    .inventory {
+        grid-template-columns: auto auto minmax(0, 1fr) auto;
+        gap: 0.6rem;
+        padding: 0.55rem;
+        width: 99%;
+        height: 36vmin;
+        min-height: 36vmin;
+        position: relative;
+    }
+
+    .AI-script {
+        display: none;
+    }
+
+    .inventory.mobile-ai-active .mobile-ai-overlay {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2.4vmin 3vmin;
+        background: rgba(20, 20, 40, 0.94);
+        z-index: 20;
+    }
+
+    .mobile-ai-overlay-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        gap: 1.5vmin;
+        text-align: center;
+        overflow-y: auto;
+    }
+
+    .mobile-ai-overlay-status {
+        font-size: clamp(14px, 1.7vmin, 22px);
+        font-weight: 700;
+        color: #9fb7d4;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+    }
+
+    .mobile-ai-overlay-text {
+        font-size: clamp(28px, 3vmin, 36px);
+        line-height: 1.35;
+        color: #eaeaf0;
+        white-space: normal;
+        overflow-wrap: break-word;
+        word-break: break-word;
+        max-width: 100%;
+    }
+
+    .mobile-ai-overlay-choices {
+        display: flex;
+        flex-direction: column;
+        gap: 1.1vmin;
+        width: min(92%, 72vmin);
+        align-items: stretch;
+    }
+
+    .mobile-ai-choice-owner {
+        font-size: clamp(13px, 1.6vmin, 20px);
+        color: #9fb7d4;
+        line-height: 1.25;
+    }
+
+    .mobile-ai-overlay-choices button {
+        background: rgba(74, 106, 138, 0.22);
+        border: 1px solid rgba(74, 106, 138, 0.5);
+        color: #eaeaf0;
+        padding: 1.4vmin 1.8vmin;
+        border-radius: 1.2vmin;
+        font-size: clamp(16px, 1.9vmin, 24px);
+        line-height: 1.2;
+        min-height: 6.5vmin;
+    }
+
+    .mobile-ai-overlay-choices button:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+
+    .character-portrait {
+        display: none;
+    }
+
+    .character-icon {
+        display: none;
+    }
+
+    .stats-grid {
+        gap: 0.75vmin;
+    }
+
+    .stats-section {
+        min-width: 34vmin;
+    }
+
+    .stats-section h4 {
+        font-size: clamp(14px, 1.7vmin, 20px) !important;
+        margin-bottom: 1.2vmin;
+        padding-bottom: 1.1vmin;
+    }
+
+    .stat-item {
+        padding: 0.4rem 0.65rem;
+        min-height: 4.2vmin;
+    }
+
+    .stat-label {
+        font-size: clamp(12px, 1.3vmin, 18px) !important;
+    }
+
+    .stat-value {
+        font-size: clamp(13px, 1.45vmin, 19px) !important;
+    }
+
+    .abilities-grid {
+        gap: 0.35rem;
+    }
+
+    .weapon-card {
+        height: 24vmin;
+        width: 22vmin;
+        padding: 0.4rem 0.5rem;
+    }
+
+    .ability-cd{
+        height: 7vmin;
+        width: 15vmin;
+        font-size: clamp(14px, 1.25vmin, 30px) !important;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .ability-card {
+        width: 10vmin;
+        height: 28vmin;
+        padding: 0.4rem 0.5rem;
+    }
+
+    .ultimate-card {
+        width: 70vmin;
+        height: 28vmin;
+        padding: 0.4rem 0.5rem;
+    }
+
+    .weapon-name {
+        font-size: clamp(20px, 3vmin, 22px) !important;
+    }
+
+    .ability-name{
+        font-size: clamp(25px, 0.95vmin, 30px) !important;
+    }
+
+    .ultimate-name {
+        font-size: clamp(18px, 1.7vmin, 22px) !important;
+    }
+
+    .leave-main-help{
+        left: 35vmin;
+    }
+
+    .scene-name h2,
+    .party h3,
+    .char-name,
+    .char-role,
+    .stats-section h4,
+    .weapon-section h4,
+    .abilities-section h4,
+    .ultimate-section h4 {
+        font-size: clamp(16px, 1.1vmin, 16px);
+    }
+
+    .stat-label,
+    .stat-value,
+    .weapon-icon,
+    .ability-cd,
+    .ability-cd-ultimate,
+    .damage-scaling,
+    .ai-chat-message,
+    .ai-chat-input,
+    .ai-chat-log,
+    .ai-chat-response,
+    .end-turn-timer,
+    .end-turn-help {
+        font-size: clamp(10px, 0.95vmin, 14px);
+    }
+    
+    .weapon-range{
+        font-size: clamp(14px, 1.5vmin, 20px) !important;
+    }
+
+    .title{
+        font-size: clamp(24px, 1.25vmin, 20px) !important;
+    }
+
+    .ability-desc{
+        font-size: clamp(14px, 1.05vmin, 14px) !important;
+    }
+    .ultimate-desc{
+        font-size: clamp(14px, 1.05vmin, 14px) !important;
+    }
+
+    .end-turn{
+        position: absolute;
+        bottom: 45vmin;
+        right: 353vmin;
+        height: 13vmin;
+        z-index: 10;
+    }
+
+    .ability-card,
+    .ability-desc,
+    .ultimate-card .ultimate-name,
+    .ultimate-desc {
+        font-size: clamp(11px, 1.2vmin, 18px);
+    }
+
+    .weapon-damage,
+    .weapon-range,
+    .ability-card,
+    .ability-desc,
+    .ultimate-card .ultimate-name,
+    .ultimate-desc,
+    .weapon-name {
+        font-size: clamp(10px, 1.05vmin, 15px);
+    }
+
+    .leave-main,
+    .leave-main-help,
+    .ai-choices button,
+    .ai-chat button,
+    .end-turn {
+        font-size: clamp(9px, 0.95vmin, 14px);
+        line-height: 1.1;
+    }
+}
+
 .you-died-content h1 {
-    font-size: 4vmin;
+    font-size: clamp(18px, 4vmin, 36px);
     color: #c2bf08;
     font-weight: bold;
     text-shadow: 0 0 20px rgba(255, 68, 68, 0.8);
@@ -1389,7 +1557,7 @@ p {
 }
 
 .enemies-defeated-content h1 {
-    font-size: 4vmin;
+    font-size: clamp(18px, 4vmin, 36px);
     font-weight: bold;
     margin: 0;
     text-transform: uppercase;
@@ -1402,7 +1570,7 @@ p {
 }
 
 .you-died-content p {
-    font-size: 1.25vmin;
+    font-size: clamp(12px, 1.25vmin, 20px);
     color: #aaaaaa;
     margin-top: 1rem;
     font-style: italic;
@@ -1432,7 +1600,7 @@ p {
 }
 
 .game-over-screen h1 {
-    font-size: 3.5vmin;
+    font-size: clamp(18px, 3.5vmin, 36px);
     color: #ff4444;
     font-weight: bold;
     text-shadow: 0 0 20px rgba(255, 68, 68, 0.8);
@@ -1442,7 +1610,7 @@ p {
 }
 
 .game-over-screen p {
-    font-size: 1.25vmin;
+    font-size: clamp(12px, 1.25vmin, 20px);
     color: #cccccc;
     margin-bottom: 2rem;
     line-height: 1.5;
@@ -1457,7 +1625,7 @@ p {
 
 .game-over-button {
     padding: 0.75rem 2rem;
-    font-size: 1.1vmin;
+    font-size: clamp(12px, 1.1vmin, 20px);
     font-weight: bold;
     color: #eaeaf0;
     background: linear-gradient(135deg, #444444 0%, #222222 100%);

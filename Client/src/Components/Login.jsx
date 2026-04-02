@@ -9,6 +9,8 @@ const API_URL =
     ? `${window.location.protocol}//${window.location.hostname}:5000`
     : 'https://cs-capstone-491b8f4e8664.herokuapp.com');
 
+const DEV_MOBILE_BYPASS = import.meta.env.DEV && window.location.hostname !== 'localhost';
+
 const Login = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState('');
@@ -21,6 +23,11 @@ const Login = () => {
 
   const { login, register } = useAuth();
   const navigate = useNavigate();
+
+  // On mobile/LAN in dev mode, skip login entirely
+  useEffect(() => {
+    if (DEV_MOBILE_BYPASS) navigate('/home');
+  }, []);
 
   useEffect(() => {
     let isMounted = true;

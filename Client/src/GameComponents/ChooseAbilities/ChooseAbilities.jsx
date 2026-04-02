@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { FaFistRaised } from 'react-icons/fa';
+import { IoLogoElectron } from 'react-icons/io5';
+import { LuCirclePlus } from 'react-icons/lu';
 import { useGameContext } from '../../Components/Context';
 import { ABILITIES } from '../Main/AbilityStore';
 import './ChooseAbilities.css';
 
-
 function ChooseAbilities(){
-    const {players, playerCharacters, setPlayerCharacters, playerName, room, socket, getAbilityScaler } = useGameContext();
+    const { players, playerCharacters, setPlayerCharacters, playerName, room, socket, getAbilityScaler, getIsBonusAction } = useGameContext();
     const [isReady, setIsReady] = useState(false);
     const [hasSubmittedReady, setHasSubmittedReady] = useState(false);
     const [readyPlayers, setReadyPlayers] = useState([]);
@@ -118,7 +120,7 @@ function ChooseAbilities(){
                             {Array.isArray(currentCharacter?.abilities) && currentCharacter.abilities.map((ability, index) => (
                                 ability ? (
                                     <div key={index} className="current-ability-item">
-                                        <div className='damage-scaling-list'>{getAbilityScaler(ability)}</div>
+                                        <div className='damage-scaling-list'>{getAbilityScaler(ability)}{getIsBonusAction(ability)}</div>
                                         <span className="ability-level">Level {[1, 3, 5][index]}</span>
                                         <div className="ability-details">
                                             <span className="ability-name">{ability.name || 'Empty'}</span>
@@ -189,7 +191,7 @@ function ChooseAbilities(){
                                                             setExpandedCategory(null);
                                                         }}
                                                     >
-                                                        {ability.name} - <span className="ability-description">{ability.description} {getAbilityScaler(ability)}</span>
+                                                        <span className='ability-description-drop'><span className='ability-name-drop'>{ability.name}</span> - {ability.description} {getAbilityScaler(ability)}{getIsBonusAction(ability)}</span>
                                                     </button>
                                                 ))}
                                             </div>
@@ -221,7 +223,7 @@ function ChooseAbilities(){
                                                             setExpandedCategory(null);
                                                         }}
                                                     >
-                                                        {ability.name} - <span className="ability-description">{ability.description} {getAbilityScaler(ability)}</span>
+                                                        <span className="ability-description-drop"><span className='ability-name-drop'>{ability.name}</span> - {ability.description} {getAbilityScaler(ability)}{getIsBonusAction(ability)}</span>
                                                     </button>
                                                 ))}
                                             </div>
@@ -253,7 +255,7 @@ function ChooseAbilities(){
                                                             setExpandedCategory(null);
                                                         }}
                                                     >
-                                                        {ability.name} - <span className="ability-description">{ability.description} {getAbilityScaler(ability)}</span>
+                                                        <span className="ability-description-drop"><span className='ability-name-drop'>{ability.name}</span> - {ability.description} {getAbilityScaler(ability)}{getIsBonusAction(ability)}</span>
                                                     </button>
                                                 ))}
                                             </div>
@@ -285,7 +287,7 @@ function ChooseAbilities(){
                                                             setExpandedCategory(null);
                                                         }}
                                                     >
-                                                       {ability.name} - <span className="ability-description">{ability.description} {getAbilityScaler(ability)}</span>
+                                                       <span className="ability-description-drop"><span className='ability-name-drop'>{ability.name}</span> - {ability.description} {getAbilityScaler(ability)}{getIsBonusAction(ability)}</span>
                                                     </button>
                                                 ))}
                                             </div>
@@ -295,6 +297,23 @@ function ChooseAbilities(){
                             </>
                         );
                     })()}
+                </div>
+            </div>
+
+            <div className="ability-legend" aria-label="Ability icon legend">
+                <div className="ability-legend-list">
+                    <div className="ability-legend-item">
+                        <span className="ability-legend-icon"><FaFistRaised /></span>
+                        <span>Ability scales with strength</span>
+                    </div>
+                    <div className="ability-legend-item">
+                        <span className="ability-legend-icon"><IoLogoElectron /></span>
+                        <span>Ability scales with TA</span>
+                    </div>
+                    <div className="ability-legend-item">
+                        <span className="ability-legend-icon"><LuCirclePlus /></span>
+                        <span>Bonus action</span>
+                    </div>
                 </div>
             </div>
 

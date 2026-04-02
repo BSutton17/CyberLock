@@ -2,11 +2,11 @@
     background-image: url('/CyberpunkCity.jpg');
     background-size: cover;
     background-position: center;
-    background-attachment: fixed;
+    background-attachment: scroll;
     display: flex;
     flex-direction: column;
     min-height: 100vh;
-    min-width: 100vw;
+    width: 100%;
     padding: 2rem;
     box-sizing: border-box;
     font-family: 'Arial', sans-serif;
@@ -18,18 +18,6 @@
     margin-top: -20vmin;
     image-rendering: pixelated;
 }
-
-.waiting-room-container::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: linear-gradient(135deg, rgba(10, 10, 30, 0.5) 0%, rgba(5, 5, 15, 0.2) 100%);
-    z-index: 0;
-}
-
 .waiting-room-container > * {
     position: relative;
     z-index: 1;
@@ -139,4 +127,17 @@
     background: #333;
     color: #666;
     box-shadow: none;
+}
+
+@media (max-width: 1080px) {
+    .waiting-room-container {
+		width: 375vmin;
+		height: 158vmin;
+		transform: scale(0.5);
+		transform-origin: top left;
+        position: relative;
+        top: auto;
+        margin-top: 60vmin;
+        border: none;
+    }
 }

@@ -24,7 +24,6 @@ from app.model import ModelLoader, ConversationManager
 from app.memory import MemoryStore, ContextBuilder
 from app.prompts import build_system_prompt, build_event_instructions
 from app.schemas import (
-    ChatRequest, ChatResponse,
     GameEventRequest, GameEventResponse,
     AddMemoryRequest, AddMemoryResponse,
     RetrieveMemoriesRequest, RetrieveMemoriesResponse,
@@ -218,100 +217,6 @@ async def health_check():
     )
 
 
-@app.post("/chat", response_model=ChatResponse, tags=["AI"])
-async def chat(
-    request: ChatRequest,
-    authenticated: bool = Depends(verify_api_key)
-):
-    """
-    Main chat endpoint - send a message and get AI response
-    """
-    
-    if not model_loader or not model_loader.model:
-        raise HTTPException(status_code=503, detail="Model not loaded")
-    
-    start_time = time.time()
-    
-    try:
-        # Get or create session
-        if request.session_id not in sessions:
-            sessions[request.session_id] = {
-                "messages": [],
-                "created_at": time.time()
-            }
-        
-        session = sessions[request.session_id]
-        
-        # Add user message to history
-        user_message = {"role": "user", "content": request.message}
-        session["messages"].append(user_message)
-        
-        # Keep only recent messages (sliding window)
-        recent_messages = session["messages"][-settings.MEMORY_CONTEXT_SIZE:]
-        
-        # Build system prompt
-        system_prompt = build_system_prompt(
-            scenario_type=request.scenario_type
-        )
-        
-        # Use RAG to enhance context
-        context = None
-        if request.use_memory and memory_store:
-            context = context_builder.build_context(
-                system_prompt=system_prompt,
-                recent_messages=recent_messages[:-1],  # Exclude current message
-                current_query=request.message,
-                session_id=request.session_id,
-                max_rag_results=settings.RAG_TOP_K
-            )
-            system_prompt = context["system_prompt"]
-        
-        # Format conversation
-        formatted_prompt = conversation_manager.format_conversation(
-            system_prompt=system_prompt,
-            messages=recent_messages
-        )
-        
-        # Generate response
-        temperature = request.temperature or settings.TEMPERATURE
-        max_tokens = request.max_tokens or settings.MAX_NEW_TOKENS
-        
-        response_text = model_loader.generate(
-            prompt=formatted_prompt,
-            temperature=temperature,
-            top_p=settings.TOP_P,
-            max_new_tokens=max_tokens,
-            repetition_penalty=GAME_CONFIG["model"]["generation"]["repetition_penalty"]
-        )
-        
-        # Add assistant message to history
-        assistant_message = {"role": "assistant", "content": response_text}
-        session["messages"].append(assistant_message)
-        
-        # Auto-save important information to memory
-        if memory_store and request.use_memory:
-            # Extract and save key information (NPCs, locations, etc.)
-            await _auto_save_memories(
-                request.message,
-                response_text,
-                request.session_id,
-                request.character_name
-            )
-        
-        processing_time = time.time() - start_time
-        
-        return ChatResponse(
-            response=response_text,
-            session_id=request.session_id,
-            memories_used=len(context["retrieved_memories"]) if context else 0,
-            processing_time=processing_time
-        )
-        
-    except Exception as e:
-        logger.error(f"Chat error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @app.get("/game/event", response_model=ErrorResponse, tags=["AI"])
 async def game_event_get():
     """
@@ -342,10 +247,13 @@ async def game_event(
         if request.session_id not in sessions:
             sessions[request.session_id] = {
                 "messages": [],
-                "created_at": time.time()
+                "created_at": time.time(),
+                "used_locations": set()
             }
         
         session = sessions[request.session_id]
+        if "used_locations" not in session:
+            session["used_locations"] = set()
 
         # Build event summary for the user message
         event_summary = request.message or f"Event type: {request.event_type}."
@@ -361,11 +269,16 @@ async def game_event(
         include_lore = False if is_turn_action else True
         minimal_prompt = True if is_turn_action else False
 
+        # Compute available locations (exclude already-used ones)
+        all_locations = ["city_square", "warehouse", "club", "hospital", "office", "sewer", "street"]
+        available_locations = [loc for loc in all_locations if loc not in session["used_locations"]]
+
         # Build event instructions and system prompt
         event_instructions = build_event_instructions(
             event_type=request.event_type,
             data=request.data,
-            message=request.message
+            message=request.message,
+            available_locations=available_locations if request.event_type in ("game_start", "choice_made", "next_encounter") else None
         )
         system_prompt = build_system_prompt(
             scenario_type=request.scenario_type,
@@ -418,10 +331,25 @@ async def game_event(
         start_combat = bool(parsed.get("start_combat", False))
         options = parsed.get("options") or None
 
+        # Hard override for turn_action: never change location, start combat, or show options
+        if is_turn_action:
+            location = None
+            start_combat = False
+            options = None
+
         # Validate location against known scenes
         valid_locations = {"city_square", "warehouse", "club", "hospital", "office", "sewer", "shop", "boss", "street"}
         if location and location not in valid_locations:
             location = None
+
+        # Enforce no location reuse (shop/boss exempt) and track used locations
+        if location and location not in ("shop", "boss"):
+            if location in session["used_locations"]:
+                # AI picked an already-used location — override with first available one
+                remaining = [loc for loc in all_locations if loc not in session["used_locations"]]
+                location = remaining[0] if remaining else None
+            if location:
+                session["used_locations"].add(location)
 
         # Validate attribute against known attributes
         valid_attributes = {"politician", "intimidation", "scholar", "spy", "detective", "medic", "banker", "crook", "electrician", "navigator"}

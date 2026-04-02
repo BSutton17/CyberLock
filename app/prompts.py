@@ -313,26 +313,7 @@ ALWAYS respond with valid JSON. Never include text outside the JSON block.
 
 """
 
-SYSTEM_PROMPT_MINIMAL = """You are a concise Dungeon Master for a cyberpunk RPG.
 
-## Rules:
-- Stay in character.
-- Write 1-2 short sentences max.
-- Focus on the immediate action and consequence.
-
-## RESPONSE FORMAT (MANDATORY):
-Respond with valid JSON only:
-```json
-{
-  "response": "<1-2 sentence narration>",
-  "location": null,
-  "attribute": null,
-  "start_combat": false,
-  "options": null
-}
-```
-Never include text outside the JSON.
-"""
 
 
 CYBERPUNK_LORE = """
@@ -538,6 +519,8 @@ NPC_TEMPLATES = {
         "traits": "Elite planner, years of experience, best of the rebellion, custom mods",
         "combat": "Exceptional combat prowess, custom abilities, strategic mind"
     }
+}
+
 EVENT_INSTRUCTIONS = {
     "game_start": (
         "This is the OPENING SCENE. Write a rich, immersive introduction to the story — "
@@ -547,12 +530,12 @@ EVENT_INSTRUCTIONS = {
         "Then end with a direct question to the party that naturally leads to one of the provided options. "
         "For example: ask them whose side they take, who they want to help, or what they do next. "
         "The question should feel like a real in-world decision, not a menu. "
-        "Set location to 'street'. Set attribute to 'politician'. Set start_combat to false. "
+        "Set location to 'city_square'. Set attribute to 'politician'. Set start_combat to false. "
         "Set options to [\"Fight with the Enforcers\", \"Fight with the People of the City\"]."
     ),
     "choice_made": (
         "Acknowledge the chosen side in 1-2 sentences. Set start_combat to true. "
-        "Set a location appropriate for the first fight (e.g. 'warehouse' or 'street'). "
+        "Set location to null — the first fight happens at the current location (city_square). "
         "Set options to null."
     ),
     "turn_action": (
@@ -573,12 +556,8 @@ EVENT_INSTRUCTIONS = {
     ),
     "next_encounter": (
         "Set the scene for the next encounter in 1-2 sentences. "
-        "Set start_combat to true. Pick an appropriate location. "
-        "Set options to null."
-    ),
-    "chat": (
-        "Answer the player's question in-character. Keep it concise. "
-        "Set start_combat to false. Set options to null. Set location to null."
+        "Set start_combat to true. You MUST set location to one of the available locations listed below. "
+        "Never reuse a location that has already been visited. Set options to null."
     )
 }
 
@@ -607,7 +586,9 @@ def build_system_prompt(
     encounter_index: Optional[int] = None,
     faction: str = 'enforcers',
     scenario_type: Optional[str] = None,
-    custom_instructions: Optional[str] = None
+    custom_instructions: Optional[str] = None,
+    include_lore: bool = True,
+    minimal: bool = False
 ) -> str:
     """
     Build a complete system prompt for combat narration.
@@ -617,13 +598,15 @@ def build_system_prompt(
         faction: Player's chosen faction
         scenario_type: Key from SCENARIO_STARTERS to add scenario context
         custom_instructions: Additional custom instructions
+        include_lore: Whether to include full world lore
+        minimal: Use minimal system prompt for fast responses
     
     Returns:
         Complete system prompt
     """
     from app.combat import format_combat_context
     
-    prompt = SYSTEM_PROMPT_BASE + "\n\n" + CYBERPUNK_LORE
+    prompt = SYSTEM_PROMPT_BASE + ("\n\n" + CYBERPUNK_LORE if include_lore else "")
     
     # Add encounter-specific context
     if encounter_index is not None:
@@ -648,7 +631,8 @@ def build_system_prompt(
 def build_event_instructions(
     event_type: str,
     data: Optional[Dict[str, Any]] = None,
-    message: Optional[str] = None
+    message: Optional[str] = None,
+    available_locations: Optional[list] = None
 ) -> str:
     """
     Build event-specific instructions for the DM.
@@ -657,13 +641,19 @@ def build_event_instructions(
         event_type: Type of event
         data: Optional structured event data
         message: Optional player message
+        available_locations: Locations not yet used in this session
 
     Returns:
         Event instructions string
     """
 
-    base = "Handle the event in-character and keep it concise."
+    # Use the specific event instructions if available, otherwise generic fallback
+    base = EVENT_INSTRUCTIONS.get(event_type, "Handle the event in-character and keep it concise.")
     parts = [base]
+
+    if available_locations is not None:
+        parts.append(f"Available locations (pick ONLY from this list): {', '.join(available_locations)}")
+        parts.append("Do NOT use any location not in this list — those have already been visited.")
 
     if message:
         parts.append(f"Player input: {message}")

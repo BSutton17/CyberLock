@@ -1,14 +1,22 @@
 """
-Main FastAPI application
+uvicorn main:app --host 0.0.0.0 --port 8000 --workers 1 --access-log --log-level info
+Main FastAPI application with security and rate limiting
 """
 
-from fastapi import FastAPI, HTTPException, Depends, Header
+from fastapi import FastAPI, HTTPException, Depends, Header, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from typing import Optional
 import time
+import json
+import re
 import torch
+import hashlib
+import secrets
+from collections import defaultdict
+from datetime import datetime, timedelta
 from loguru import logger
 
 from app.config import settings, GAME_CONFIG
@@ -32,6 +40,9 @@ conversation_manager: Optional[ConversationManager] = None
 
 # Session storage (in production we will use a database)
 sessions = {}
+
+# Rate limiting storage (in production use Redis)
+rate_limit_data = defaultdict(list)
 
 
 @asynccontextmanager
@@ -78,8 +89,59 @@ app = FastAPI(
     title="Capstone DM AI API",
     description="AI powered Dungeon Master using Mistral and PyTorch",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    docs_url="/docs" if settings.ENVIRONMENT == "development" else None,  # Disable docs in production
+    redoc_url="/redoc" if settings.ENVIRONMENT == "development" else None,  # Disable redoc in production
 )
+
+# Rate limiting functions
+def get_client_ip(request: Request) -> str:
+    """Get the real client IP address"""
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    real_ip = request.headers.get("X-Real-IP") 
+    if real_ip:
+        return real_ip
+    return request.client.host if request.client else "unknown"
+
+def is_rate_limited(client_ip: str) -> bool:
+    """Check if client is rate limited"""
+    now = datetime.now()
+    cutoff = now - timedelta(seconds=settings.RATE_LIMIT_WINDOW)
+    
+    # Clean old entries
+    rate_limit_data[client_ip] = [
+        timestamp for timestamp in rate_limit_data[client_ip] 
+        if timestamp > cutoff
+    ]
+    
+    # Check if over limit
+    if len(rate_limit_data[client_ip]) >= settings.RATE_LIMIT_REQUESTS:
+        return True
+    
+    # Add current request
+    rate_limit_data[client_ip].append(now)
+    return False
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    """Rate limiting middleware"""
+    client_ip = get_client_ip(request)
+    
+    if is_rate_limited(client_ip):
+        logger.warning(f"Rate limit exceeded for IP: {client_ip}")
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content={"detail": "Rate limit exceeded. Please try again later."}
+        )
+    
+    return await call_next(request)
+
+# Trusted host middleware
+if settings.ENVIRONMENT == "production":
+    trusted_hosts = [host.strip() for host in settings.TRUSTED_HOSTS.split(",")]
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=trusted_hosts)
 
 # CORS middleware
 app.add_middleware(
@@ -91,12 +153,36 @@ app.add_middleware(
 )
 
 
-# Security dependency (optional)
-async def verify_api_key(x_api_key: Optional[str] = Header(None)):
-    """Verify API key if enabled"""
+# Enhanced security dependency 
+async def verify_api_key(request: Request, x_api_key: Optional[str] = Header(None)):
+    """Enhanced API key verification with logging"""
+    client_ip = get_client_ip(request)
+    
     if settings.ENABLE_API_KEY:
-        if not x_api_key or x_api_key != settings.API_KEY:
-            raise HTTPException(status_code=401, detail="Invalid API key")
+        if not x_api_key:
+            logger.warning(f"Missing API key from IP: {client_ip}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, 
+                detail="API key required"
+            )
+        
+        if not settings.API_KEY:
+            logger.error("API_KEY not configured in environment")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Server configuration error"
+            )
+            
+        # Use constant-time comparison to prevent timing attacks
+        if not secrets.compare_digest(x_api_key, settings.API_KEY):
+            logger.warning(f"Invalid API key from IP: {client_ip}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, 
+                detail="Invalid API key"
+            )
+        
+        logger.info(f"Authenticated request from IP: {client_ip}")
+    
     return True
 
 
@@ -226,6 +312,17 @@ async def chat(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/game/event", response_model=ErrorResponse, tags=["AI"])
+async def game_event_get():
+    """
+    GET requests to /game/event are not allowed - returns JSON error instead of HTML
+    """
+    raise HTTPException(
+        status_code=405, 
+        detail="Method not allowed. Use POST to submit game events. This endpoint only accepts POST requests with a JSON payload."
+    )
+
+
 @app.post("/game/event", response_model=GameEventResponse, tags=["AI"])
 async def game_event(
     request: GameEventRequest,
@@ -313,16 +410,43 @@ async def game_event(
             repetition_penalty=GAME_CONFIG["model"]["generation"]["repetition_penalty"]
         )
 
+        # Parse structured JSON from model output
+        parsed = _parse_structured_response(response_text)
+        narration = parsed.get("response", response_text)
+        location = parsed.get("location") or None
+        attribute = parsed.get("attribute") or None
+        start_combat = bool(parsed.get("start_combat", False))
+        options = parsed.get("options") or None
+
+        # Validate location against known scenes
+        valid_locations = {"city_square", "warehouse", "club", "hospital", "office", "sewer", "shop", "boss", "street"}
+        if location and location not in valid_locations:
+            location = None
+
+        # Validate attribute against known attributes
+        valid_attributes = {"politician", "intimidation", "scholar", "spy", "detective", "medic", "banker", "crook", "electrician", "navigator"}
+        if attribute and attribute not in valid_attributes:
+            attribute = None
+
+        # Ensure options is a list of strings if present
+        if options is not None:
+            if not isinstance(options, list):
+                options = None
+            else:
+                options = [str(o) for o in options if o]
+                if len(options) == 0:
+                    options = None
+
         # Add assistant message to history (skip for turn_action to reduce growth)
         if not is_turn_action:
-            assistant_message = {"role": "assistant", "content": response_text}
+            assistant_message = {"role": "assistant", "content": narration}
             session["messages"].append(assistant_message)
 
         # Auto-save important information to memory (skip for turn_action)
         if memory_store and use_memory:
             await _auto_save_memories(
                 event_summary,
-                response_text,
+                narration,
                 request.session_id,
                 request.character_name
             )
@@ -330,9 +454,13 @@ async def game_event(
         processing_time = time.time() - start_time
 
         return GameEventResponse(
-            response=response_text,
+            response=narration,
             session_id=request.session_id,
             event_type=request.event_type,
+            location=location,
+            attribute=attribute,
+            start_combat=start_combat,
+            options=options,
             memories_used=len(context["retrieved_memories"]) if context else 0,
             processing_time=processing_time
         )
@@ -340,6 +468,54 @@ async def game_event(
     except Exception as e:
         logger.error(f"Game event error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+def _parse_structured_response(raw_text: str) -> dict:
+    """
+    Parse structured JSON from the model's response text.
+    Handles cases where the model wraps JSON in markdown code blocks or
+    includes extra text around the JSON.
+    """
+    if not raw_text or not raw_text.strip():
+        return {"response": raw_text}
+
+    text = raw_text.strip()
+
+    # Try direct JSON parse first
+    try:
+        parsed = json.loads(text)
+        if isinstance(parsed, dict) and "response" in parsed:
+            return parsed
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # Try extracting JSON from markdown code blocks
+    code_block_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', text, re.DOTALL)
+    if code_block_match:
+        try:
+            parsed = json.loads(code_block_match.group(1))
+            if isinstance(parsed, dict) and "response" in parsed:
+                return parsed
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    # Try finding a JSON object anywhere in the text
+    brace_match = re.search(r'\{[^{}]*"response"[^{}]*\}', text, re.DOTALL)
+    if not brace_match:
+        # Try nested braces
+        brace_match = re.search(r'\{.*"response".*\}', text, re.DOTALL)
+
+    if brace_match:
+        try:
+            parsed = json.loads(brace_match.group(0))
+            if isinstance(parsed, dict) and "response" in parsed:
+                return parsed
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    # Fallback: return raw text as the response
+    logger.warning(f"Could not parse structured JSON from AI response, using raw text")
+    return {"response": text}
 
 
 async def _auto_save_memories(

@@ -37,7 +37,13 @@ class Settings(BaseSettings):
     
     # Security
     API_KEY: Optional[str] = None
-    ENABLE_API_KEY: bool = False
+    ENABLE_API_KEY: bool = True  # Enable by default for security
+    RATE_LIMIT_REQUESTS: int = 60  # Requests per minute per IP
+    RATE_LIMIT_WINDOW: int = 60  # Time window in seconds
+    
+    # Production settings
+    MAX_CONTENT_LENGTH: int = 1024 * 1024  # 1MB max request size
+    TRUSTED_HOSTS: str = "localhost,127.0.0.1"  # Comma-separated trusted hosts
     
     # Logging
     LOG_LEVEL: str = "INFO"

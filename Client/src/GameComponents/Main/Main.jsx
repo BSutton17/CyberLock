@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { useState, useEffect, useRef } from 'react';
 import { useGameContext } from '../../Components/Context';
 import EnemiesData from '../../Components/Enemies.json';
@@ -383,6 +383,27 @@ function Main() {
         const resolvedAbility = typeof ability === 'string' ? getAbility(ability) : ability;
         return resolvedAbility?.consumesAction !== false;
     };
+
+    const withEffectiveResistance = (unit, unitId, effects = activeEffects) => {
+        if (!unit || !unit.stats || !unitId) return unit;
+
+        return {
+            ...unit,
+            stats: {
+                ...unit.stats,
+                resistance: calculateTotalStat(unit, unitId, 'resistance', effects)
+            }
+        };
+    };
+
+    const getEffectivePlayerCharacters = (characters = playerCharacters, effects = activeEffects) =>
+        Object.entries(characters || {}).reduce((accumulator, [id, character]) => {
+            accumulator[id] = withEffectiveResistance(character, id, effects);
+            return accumulator;
+        }, {});
+
+    const getEffectiveEnemies = (enemyList = enemies, effects = activeEffects) =>
+        (enemyList || []).map(enemy => withEffectiveResistance(enemy, enemy.id, effects));
 
     const arePositionsEqual = (firstPosition, secondPosition) => {
         if (!firstPosition || !secondPosition) return false;
@@ -2388,20 +2409,20 @@ function Main() {
                 console.log(`[ENEMY ABILITY] ${enemy.name} using ability: ${turnAction.abilityToUse.name}`);
 
                 const enemyAbilityTargets = Object.entries(latestPlayerCharacters).map(([id, character]) => ({
-                    ...character,
+                    ...withEffectiveResistance(character, id, latestActiveEffects),
                     id
                 }));
                 const enemyAllyCharacters = latestEnemies
                     .filter(aliveEnemy => !isEnemyDeadBody(aliveEnemy))
                     .reduce((accumulator, aliveEnemy) => {
-                        accumulator[aliveEnemy.id] = aliveEnemy;
+                        accumulator[aliveEnemy.id] = withEffectiveResistance(aliveEnemy, aliveEnemy.id, latestActiveEffects);
                         return accumulator;
                     }, {});
                 const enemyAbilityDef = getAbility(turnAction.abilityToUse.id);
                 const enemyTargetPosition = turnAction.target ? characterPositions[turnAction.target] : null;
 
                 const enemyAbilityParams = {
-                    caster: enemy,
+                    caster: withEffectiveResistance(enemy, enemy.id, latestActiveEffects),
                     playerName: enemy.id,
                     target: turnAction.target,
                     enemies: enemyAbilityTargets,
@@ -2539,7 +2560,8 @@ function Main() {
 
                 if (target) {
                     const hasReflection = hasDamageReflection(activeEffects, turnAction.target);
-                    let damageAmount = Math.max(1, (enemy.stats.strength / 10) * enemy.weapon.damage - (target.stats.resistance / 10));
+                    const effectiveTarget = withEffectiveResistance(target, turnAction.target, activeEffects);
+                    let damageAmount = Math.max(1, (enemy.stats.strength / 10) * enemy.weapon.damage - (effectiveTarget.stats.resistance / 10));
                     damageAmount = applyDamageKeywords(damageAmount, activeEffects, turnAction.target, { minimumDamage: 0 });
                     const targetNameForNarration = target?.name || turnAction.target;
                     const targetMaxHp = Math.max(1, target?.stats?.maxHealth || target?.stats?.max_health || target?.stats?.health || 1);
@@ -2573,7 +2595,8 @@ function Main() {
                     if (target) {
                         const hasImmunity = hasDamageImmunity(activeEffects, turnAction.target);
                         const hasReflection = hasDamageReflection(activeEffects, turnAction.target);
-                        let damageAmount = Math.max(1, (enemy.stats.strength / 10) * enemy.weapon.damage - (target.stats.resistance / 10));
+                        const effectiveTarget = withEffectiveResistance(target, turnAction.target, activeEffects);
+                        let damageAmount = Math.max(1, (enemy.stats.strength / 10) * enemy.weapon.damage - (effectiveTarget.stats.resistance / 10));
                         damageAmount = applyDamageKeywords(damageAmount, activeEffects, turnAction.target, { minimumDamage: 0 });
                         console.log(`[WEAPON ATTACK] ${enemy.name} attacks ${turnAction.target} for ${damageAmount.toFixed(1)} damage!`);
                         if (hasImmunity) {
@@ -3262,7 +3285,8 @@ function Main() {
                     return;
                 }
 
-                const baseDamage = Math.max(1, (currentPlayerCharacter.stats.strength / 10) * currentPlayerCharacter.weapon.damage - (enemy.stats.resistance / 10));
+                const effectiveEnemy = withEffectiveResistance(enemy, enemyId, activeEffects);
+                const baseDamage = Math.max(1, (currentPlayerCharacter.stats.strength / 10) * currentPlayerCharacter.weapon.damage - (effectiveEnemy.stats.resistance / 10));
                 const totalMultiplier = getDamageTakenMultiplier(activeEffects, enemyId);
                 const damage = applyDamageKeywords(baseDamage, activeEffects, enemyId, { minimumDamage: 1 });
                 const newHealth = enemy.stats.health - damage;
@@ -3746,12 +3770,12 @@ function Main() {
 
     const executeRelocateAbility = (abilityId, target, targetPosition) => {
         const result = executeAbility(abilityId, {
-            caster: currentPlayerCharacter,
+            caster: withEffectiveResistance(currentPlayerCharacter, playerName),
             playerName,
             target,
             targetPosition,
-            enemies,
-            playerCharacters,
+            enemies: getEffectiveEnemies(),
+            playerCharacters: getEffectivePlayerCharacters(),
             characterPositions,
             cooldowns
         });
@@ -3882,12 +3906,12 @@ function Main() {
         });
 
         const result = executeAbility(abilityId, {
-            caster: currentPlayerCharacter,
+            caster: withEffectiveResistance(currentPlayerCharacter, playerName),
             playerName: playerName,
             target: target,
             targets: target ? [target] : undefined, // For multi-target abilities
-            enemies: enemies,
-            playerCharacters: playerCharacters,
+            enemies: getEffectiveEnemies(),
+            playerCharacters: getEffectivePlayerCharacters(),
             characterPositions: characterPositions,
             cooldowns: cooldowns
         });
@@ -4074,11 +4098,11 @@ function Main() {
 
     const executeAbilityMultiTarget = (abilityId, targets) => {
         const result = executeAbility(abilityId, {
-            caster: currentPlayerCharacter,
+            caster: withEffectiveResistance(currentPlayerCharacter, playerName),
             playerName: playerName,
             targets: targets,
-            enemies: enemies,
-            playerCharacters: playerCharacters,
+            enemies: getEffectiveEnemies(),
+            playerCharacters: getEffectivePlayerCharacters(),
             cooldowns: cooldowns
         });
 
@@ -4193,12 +4217,12 @@ function Main() {
         });
 
         const result = executeAbility(abilityId, {
-            caster: currentPlayerCharacter,
+            caster: withEffectiveResistance(currentPlayerCharacter, playerName),
             playerName: playerName,
             targetPosition: targetPosition,
             characterPositions: characterPositions,
-            enemies: enemies,
-            playerCharacters: playerCharacters,
+            enemies: getEffectiveEnemies(),
+            playerCharacters: getEffectivePlayerCharacters(),
             cooldowns: cooldowns
         });
 

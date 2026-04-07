@@ -16,6 +16,7 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(!DEV_MOBILE_BYPASS);
   const [accessToken, setAccessToken] = useState(null);
   const [refreshToken, setRefreshToken] = useState(null);
+  const [securityQuestionSet, setSecurityQuestionSet] = useState(true);
 
   // Check if user is already logged in on mount
   useEffect(() => {
@@ -79,7 +80,7 @@ export const AuthProvider = ({ children }) => {
         password,
       });
 
-      const { user, accessToken, refreshToken } = response.data;
+      const { user, accessToken, refreshToken, securityQuestionSet } = response.data;
 
       // Store tokens and user info
       localStorage.setItem('accessToken', accessToken);
@@ -90,10 +91,25 @@ export const AuthProvider = ({ children }) => {
       setRefreshToken(refreshToken);
       setUser(user);
       setIsAuthenticated(true);
+      setSecurityQuestionSet(!!securityQuestionSet);
 
-      return { success: true, user };
+      return { success: true, user, securityQuestionSet: !!securityQuestionSet };
     } catch (error) {
       const message = error.response?.data?.message || 'Login failed';
+      return { success: false, message };
+    }
+  };
+
+  const setSecurityQuestion = async (securityQuestion, securityAnswer) => {
+    try {
+      await axios.post(`${API_URL}/api/auth/set-security-question`, {
+        securityQuestion,
+        securityAnswer,
+      });
+      setSecurityQuestionSet(true);
+      return { success: true };
+    } catch (error) {
+      const message = error.response?.data?.message || 'Failed to set security question';
       return { success: false, message };
     }
   };
@@ -153,6 +169,8 @@ export const AuthProvider = ({ children }) => {
     logout,
     refreshAccessToken,
     accessToken,
+    securityQuestionSet,
+    setSecurityQuestion,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

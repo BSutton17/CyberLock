@@ -250,6 +250,7 @@ function Main() {
     const [turnStartPosition, setTurnStartPosition] = useState(null);
     const [movementUsed, setMovementUsed] = useState(0);
     const [actionUsed, setActionUsed] = useState(false);
+    const [bonusActionUsed, setBonusActionUsed] = useState(false);
     const [extraWeaponAttacksRemaining, setExtraWeaponAttacksRemaining] = useState(0);
     const [turnTimeLeft, setTurnTimeLeft] = useState(null);
     const [isTurnActionLocked, setIsTurnActionLocked] = useState(false);
@@ -277,9 +278,13 @@ function Main() {
     const pendingAiRequestResolversRef = useRef(new Map());
     const completedAiRequestIdsRef = useRef(new Set());
     const aiTypingCompletionByRequestIdRef = useRef(new Map());
+    const turnNarrationRequestContextByIdRef = useRef(new Map());
+    const activeTurnNarrationByPhaseRef = useRef(new Map());
     const pendingPostCombatActionRef = useRef(null);
     const pendingPostCombatNarrationRequestIdRef = useRef(null);
     const pendingStartCombatNarrationRequestIdRef = useRef(null);
+    const introNarrationRequestIdRef = useRef(null);
+    const introNarrationGateSettledRef = useRef(false);
     const pendingPostCombatFallbackTimeoutRef = useRef(null);
     const postCombatOverlayTimeoutRef = useRef(null);
     const preCombatPlayerPositionsRef = useRef(null);
@@ -289,6 +294,8 @@ function Main() {
     const isQuietLogs = debugLogLevel === 'quiet';
     const isVerboseLogs = debugLogLevel === 'verbose';
     const [isStoryStateHydrated, setIsStoryStateHydrated] = useState(false);
+    const [isIntroNarrationGateActive, setIsIntroNarrationGateActive] = useState(false);
+    const isIntroNarrationGateActiveRef = useRef(false);
 
     const logImportant = (...args) => {
         if (isQuietLogs) return;
@@ -298,6 +305,11 @@ function Main() {
     const logVerbose = (...args) => {
         if (!isVerboseLogs) return;
         console.log(...args);
+    };
+
+    const setIntroNarrationGate = (isActive) => {
+        isIntroNarrationGateActiveRef.current = Boolean(isActive);
+        setIsIntroNarrationGateActive(Boolean(isActive));
     };
 
     useEffect(() => {
@@ -384,6 +396,26 @@ function Main() {
         return resolvedAbility?.consumesAction !== false;
     };
 
+    const isBonusActionAbility = (ability) => {
+        const resolvedAbility = typeof ability === 'string' ? getAbility(ability) : ability;
+        return Boolean(resolvedAbility && getIsBonusAction(resolvedAbility));
+    };
+
+    const canUseAbilityThisTurn = (ability) => {
+        const resolvedAbility = typeof ability === 'string' ? getAbility(ability) : ability;
+        if (!resolvedAbility) return false;
+
+        if (isBonusActionAbility(resolvedAbility)) {
+            return !bonusActionUsed;
+        }
+
+        if (abilityConsumesAction(resolvedAbility)) {
+            return !actionUsed && !bonusActionUsed;
+        }
+
+        return true;
+    };
+
     const withEffectiveResistance = (unit, unitId, effects = activeEffects) => {
         if (!unit || !unit.stats || !unitId) return unit;
 
@@ -405,6 +437,14 @@ function Main() {
     const getEffectiveEnemies = (enemyList = enemies, effects = activeEffects) =>
         (enemyList || []).map(enemy => withEffectiveResistance(enemy, enemy.id, effects));
 
+    const removeEffectsOwnedByUnits = (effects = [], ownerIds = []) => {
+        if (!Array.isArray(effects) || effects.length === 0) return effects;
+        if (!Array.isArray(ownerIds) || ownerIds.length === 0) return effects;
+
+        const removedOwners = new Set(ownerIds.filter(Boolean));
+        return effects.filter(effect => !removedOwners.has(effect?.ownerTurnId));
+    };
+
     const arePositionsEqual = (firstPosition, secondPosition) => {
         if (!firstPosition || !secondPosition) return false;
         return firstPosition.row === secondPosition.row && firstPosition.col === secondPosition.col;
@@ -425,6 +465,7 @@ function Main() {
         hasFallbackPostEncounterChoices ||
         hasFallbackNextEncounterChoices;
     const shouldShowMobileAiOverlay = !isMyTurn && (
+        isIntroNarrationGateActive ||
         aiBusy ||
         Boolean(displayText?.trim()) ||
         hasAnyVisibleAiChoices
@@ -444,7 +485,9 @@ function Main() {
     const actionUsedRef = useRef(actionUsed);
     const currentTurnRef = useRef(currentTurn);
     const currentTurnCycleRef = useRef(0);
+    const processingEnemyTurnCyclesRef = useRef(new Set());
     const completedEnemyTurnCyclesRef = useRef(new Set());
+    const enemyMovementConsumedCyclesRef = useRef(new Set());
     const completedAllyTurnCyclesRef = useRef(new Set());
     const wasCombatTurnOrderActiveRef = useRef(false);
     const lastEndTurnAttemptRef = useRef({ cycle: -1, timestamp: 0 });
@@ -453,6 +496,7 @@ function Main() {
     const turnStartLockIntervalRef = useRef(null);
     const turnTimerAutoEndedRef = useRef(false);
     const playerCorpseRemovalTurnRef = useRef({});
+    const previousPlayerHealthRef = useRef({});
 
     const isEnemyDeadBody = (enemy) => {
         return !!enemy && (enemy.isDeadBody || (enemy.stats?.health || 0) <= 0);
@@ -510,6 +554,35 @@ function Main() {
     }, [gameOver]);
 
     useEffect(() => {
+        const nextHealthByPlayer = players.reduce((accumulator, playerId) => {
+            accumulator[playerId] = playerCharacters?.[playerId]?.stats?.health ?? 0;
+            return accumulator;
+        }, {});
+
+        const newlyDeadPlayers = players.filter(playerId => {
+            const previousHealth = previousPlayerHealthRef.current[playerId] ?? 0;
+            const currentHealth = nextHealthByPlayer[playerId] ?? 0;
+            return previousHealth > 0 && currentHealth <= 0;
+        });
+
+        previousPlayerHealthRef.current = nextHealthByPlayer;
+
+        if (newlyDeadPlayers.length === 0) return;
+
+        const cleanedEffects = removeEffectsOwnedByUnits(activeEffects, newlyDeadPlayers);
+        if (cleanedEffects.length === activeEffects.length) return;
+
+        setActiveEffects(cleanedEffects);
+        if (isStoryController) {
+            socket.emit('ability_used', {
+                room,
+                playerName,
+                updatedActiveEffects: cleanedEffects
+            });
+        }
+    }, [players, playerCharacters, activeEffects, isStoryController, socket, room, playerName]);
+
+    useEffect(() => {
         if (!selectedAbility) {
             setPendingRelocateTarget(null);
         }
@@ -540,13 +613,17 @@ function Main() {
 
         if (hasTurnOrder && !wasCombatTurnOrderActiveRef.current) {
             currentTurnCycleRef.current += 1;
+            processingEnemyTurnCyclesRef.current.clear();
             completedAllyTurnCyclesRef.current.clear();
             completedEnemyTurnCyclesRef.current.clear();
+            enemyMovementConsumedCyclesRef.current.clear();
         }
 
         if (!hasTurnOrder && wasCombatTurnOrderActiveRef.current) {
+            processingEnemyTurnCyclesRef.current.clear();
             completedAllyTurnCyclesRef.current.clear();
             completedEnemyTurnCyclesRef.current.clear();
+            enemyMovementConsumedCyclesRef.current.clear();
         }
 
         wasCombatTurnOrderActiveRef.current = hasTurnOrder;
@@ -813,13 +890,22 @@ function Main() {
 
         const didDie = oldHealth > 0 && newHealth <= 0;
 
+        const updatedActiveEffects = didDie
+            ? removeEffectsOwnedByUnits(activeEffectsRef.current, [playerName])
+            : activeEffectsRef.current;
+
+        if (didDie && updatedActiveEffects !== activeEffectsRef.current) {
+            setActiveEffects(updatedActiveEffects);
+        }
+
         socket.emit('player_damaged', {
             room,
             playerName,
             damage: reflectedDamage,
             newHealth,
             reflected: true,
-            reflectedBy: reflectedByNames
+            reflectedBy: reflectedByNames,
+            updatedActiveEffects
         });
 
         if (didDie) {
@@ -856,10 +942,60 @@ function Main() {
 
     const emitAiEvent = (eventType, message, data = {}, options = {}) => {
         if (!room) return null;
+        const narrationContext = options.turnNarrationContext || null;
+        const narrationPhase = options.turnNarrationPhase || null;
+
+        let payloadData = data;
+        if (eventType === 'turn_action') {
+            const baseData = (data && typeof data === 'object' && !Array.isArray(data)) ? data : {};
+            const existingTurnContext = (baseData.turnContext && typeof baseData.turnContext === 'object') ? baseData.turnContext : {};
+            const effectiveTurnContext = (narrationContext && typeof narrationContext === 'object')
+                ? narrationContext
+                : existingTurnContext;
+
+            payloadData = {
+                ...baseData,
+                turnContext: {
+                    turnCycle: effectiveTurnContext.turnCycle ?? currentTurnCycleRef.current,
+                    turnType: effectiveTurnContext.turnType ?? currentTurnRef.current?.type ?? null,
+                    turnId: effectiveTurnContext.turnId ?? currentTurnRef.current?.id ?? null,
+                    actor: effectiveTurnContext.actor || existingTurnContext.actor || baseData.actor || playerName,
+                    narrationPhase: narrationPhase || effectiveTurnContext.narrationPhase || existingTurnContext.narrationPhase || null,
+                    ...existingTurnContext
+                }
+            };
+        }
+
+        if (eventType === 'turn_action' && narrationContext && narrationPhase) {
+            const phaseKey = `${narrationContext.turnCycle}:${narrationContext.turnType}:${narrationContext.turnId}:${narrationPhase}`;
+            const activeRequest = activeTurnNarrationByPhaseRef.current.get(phaseKey);
+            if (activeRequest?.requestId) {
+                return activeRequest.requestId;
+            }
+        }
+
         const requestId = options.requestId || `${eventType}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         setAiBusy(true);
         setAiOptions(null);
         setAiAttribute(null);
+
+        if (eventType === 'turn_action' && narrationContext && narrationPhase) {
+            const phaseKey = `${narrationContext.turnCycle}:${narrationContext.turnType}:${narrationContext.turnId}:${narrationPhase}`;
+            const trackedContext = {
+                turnCycle: narrationContext.turnCycle,
+                turnType: narrationContext.turnType,
+                turnId: narrationContext.turnId,
+                phase: narrationPhase,
+                phaseKey
+            };
+
+            turnNarrationRequestContextByIdRef.current.set(requestId, trackedContext);
+            activeTurnNarrationByPhaseRef.current.set(phaseKey, {
+                requestId,
+                context: trackedContext
+            });
+        }
+
         if (eventType === 'game_start') {
             setAllowFallbackFactionChoices(false);
         }
@@ -874,7 +1010,7 @@ function Main() {
             room,
             eventType,
             message,
-            data,
+            data: payloadData,
             scenarioType: options.scenarioType,
             characterName: currentPlayerCharacter?.name,
             playerName
@@ -889,31 +1025,31 @@ function Main() {
         const resolver = pendingAiRequestResolversRef.current.get(requestId);
         if (resolver) {
             pendingAiRequestResolversRef.current.delete(requestId);
-            resolver();
+            resolver(true);
             return;
         }
 
         completedAiRequestIdsRef.current.add(requestId);
     };
 
-    const waitForAiRequestCompletion = (requestId, timeoutMs = 10000) => {
-        if (!requestId) return Promise.resolve();
+    const waitForAiRequestCompletion = (requestId, timeoutMs = 20000) => {
+        if (!requestId) return Promise.resolve(false);
 
         if (completedAiRequestIdsRef.current.has(requestId)) {
             completedAiRequestIdsRef.current.delete(requestId);
-            return Promise.resolve();
+            return Promise.resolve(true);
         }
 
         return new Promise((resolve) => {
             const timeoutId = setTimeout(() => {
                 pendingAiRequestResolversRef.current.delete(requestId);
-                resolve();
+                resolve(false);
             }, timeoutMs);
 
-            pendingAiRequestResolversRef.current.set(requestId, () => {
+            pendingAiRequestResolversRef.current.set(requestId, (didComplete = true) => {
                 clearTimeout(timeoutId);
                 completedAiRequestIdsRef.current.delete(requestId);
-                resolve();
+                resolve(Boolean(didComplete));
             });
         });
     };
@@ -923,6 +1059,38 @@ function Main() {
 
         const estimatedTypingMs = estimateTypewriterDurationMs(responseText || '');
         aiTypingCompletionByRequestIdRef.current.set(requestId, Date.now() + estimatedTypingMs);
+    };
+
+    const releaseTurnNarrationTracking = (requestId) => {
+        if (!requestId) return null;
+
+        const context = turnNarrationRequestContextByIdRef.current.get(requestId) || null;
+        if (!context) return null;
+
+        turnNarrationRequestContextByIdRef.current.delete(requestId);
+
+        const activeRequest = context.phaseKey
+            ? activeTurnNarrationByPhaseRef.current.get(context.phaseKey)
+            : null;
+
+        if (activeRequest?.requestId === requestId && context.phaseKey) {
+            activeTurnNarrationByPhaseRef.current.delete(context.phaseKey);
+        }
+
+        return context;
+    };
+
+    const isTurnNarrationContextCurrent = (context) => {
+        if (!context) return true;
+
+        const liveTurn = currentTurnRef.current;
+        const liveCycle = currentTurnCycleRef.current;
+
+        return (
+            context.turnCycle === liveCycle &&
+            context.turnType === liveTurn?.type &&
+            context.turnId === liveTurn?.id
+        );
     };
 
     const waitForNarrationTypingCompletion = async (requestIds = [], extraDelayMs = TURN_ADVANCE_AFTER_TYPING_MS) => {
@@ -1221,17 +1389,21 @@ function Main() {
         if (players.length === 0) return;
 
         hasRequestedIntroRef.current = true;
+        introNarrationGateSettledRef.current = false;
         const partySummary = players.map(player => {
             const character = playerCharacters[player];
             return character ? `${player} (${character.name})` : player;
         });
 
-        emitAiEvent(
+        const requestId = emitAiEvent(
             'game_start',
             `Launch the story for party: ${partySummary.join(', ')}.`,
             { party: partySummary },
             { scenarioType: 'street_encounter' }
         );
+
+        introNarrationRequestIdRef.current = requestId;
+        setIntroNarrationGate(Boolean(requestId));
     }, [isStoryController, room, players, playerCharacters, isStoryStateHydrated]);
 
     useEffect(() => {
@@ -1271,6 +1443,39 @@ function Main() {
         };
 
         const handleAiMessage = ({ requestId, eventType, response, location, attribute, startCombat, options, fallback }) => {
+            const turnNarrationContext = releaseTurnNarrationTracking(requestId);
+
+            if (turnNarrationContext && !isTurnNarrationContextCurrent(turnNarrationContext)) {
+                markAiRequestCompleted(requestId);
+                const lateEnemyNarration =
+                    turnNarrationContext.turnType === 'enemy' &&
+                    typeof response === 'string' &&
+                    response.trim().length > 0;
+
+                // If enemy narration arrives late, render it to avoid a frozen narration panel.
+                markAiTypingExpectedCompletion(requestId, lateEnemyNarration ? response : '');
+                setAiBusy(false);
+
+                if (lateEnemyNarration) {
+                    appendAiLog({ role: 'ai', text: response, eventType });
+                    setAiText(response);
+                }
+
+                return;
+            }
+
+            const isIntroNarrationResponse =
+                eventType === 'game_start' ||
+                (requestId && requestId === introNarrationRequestIdRef.current);
+
+            if (isIntroNarrationResponse && !introNarrationGateSettledRef.current) {
+                introNarrationGateSettledRef.current = true;
+                void (async () => {
+                    await waitForNarrationTypingCompletion([requestId], 0);
+                    setIntroNarrationGate(false);
+                })();
+            }
+
             markAiRequestCompleted(requestId);
             markAiTypingExpectedCompletion(requestId, response || '');
             setAiBusy(false);
@@ -1373,6 +1578,23 @@ function Main() {
         };
 
         const handleAiError = ({ requestId, error }) => {
+            const turnNarrationContext = releaseTurnNarrationTracking(requestId);
+
+            if (turnNarrationContext && !isTurnNarrationContextCurrent(turnNarrationContext)) {
+                markAiRequestCompleted(requestId);
+                markAiTypingExpectedCompletion(requestId, '');
+                setAiBusy(false);
+                return;
+            }
+
+            const isIntroNarrationError = requestId && requestId === introNarrationRequestIdRef.current;
+            if (isIntroNarrationError && !introNarrationGateSettledRef.current) {
+                introNarrationGateSettledRef.current = true;
+                setPendingFactionChoice(true);
+                setAllowFallbackFactionChoices(true);
+                setIntroNarrationGate(false);
+            }
+
             markAiRequestCompleted(requestId);
             markAiTypingExpectedCompletion(requestId, '');
             setAiBusy(false);
@@ -1481,6 +1703,7 @@ function Main() {
 
             setActiveEffects([]);
             setActionUsed(false);
+            setBonusActionUsed(false);
             setMovementUsed(0);
             setExtraWeaponAttacksRemaining(0);
             setSelectedAbility(null);
@@ -1515,6 +1738,53 @@ function Main() {
                         col: savedPosition.col
                     };
                 }
+            });
+
+            const positionTaken = (row, col) =>
+                Object.values(restoredPlayerPositions).some(pos => pos.row === row && pos.col === col);
+
+            const claimFallbackPosition = (preferredRow, preferredCol) => {
+                for (let radius = 0; radius < 10; radius++) {
+                    const candidateCols = radius === 0
+                        ? [preferredCol]
+                        : [preferredCol - radius, preferredCol + radius];
+
+                    for (const candidateCol of candidateCols) {
+                        if (candidateCol < 0 || candidateCol > 9) continue;
+                        if (preferredRow < 0 || preferredRow > 6) continue;
+                        if (!positionTaken(preferredRow, candidateCol)) {
+                            return { row: preferredRow, col: candidateCol };
+                        }
+                    }
+                }
+
+                for (let row = 0; row < 7; row++) {
+                    for (let col = 0; col < 10; col++) {
+                        if (!positionTaken(row, col)) {
+                            return { row, col };
+                        }
+                    }
+                }
+
+                return { row: preferredRow, col: Math.max(0, Math.min(9, preferredCol)) };
+            };
+
+            const liveBoardPositions = characterPositionsRef.current || {};
+            players.forEach((playerId, index) => {
+                if (restoredPlayerPositions[playerId]) return;
+
+                const livePosition = liveBoardPositions[playerId];
+                if (livePosition && Number.isInteger(livePosition.row) && Number.isInteger(livePosition.col) && !positionTaken(livePosition.row, livePosition.col)) {
+                    restoredPlayerPositions[playerId] = {
+                        row: livePosition.row,
+                        col: livePosition.col
+                    };
+                    return;
+                }
+
+                const role = (restoredPlayerCharacters[playerId]?.role || '').toLowerCase();
+                const preferredRow = role === 'tank' ? 5 : 6;
+                restoredPlayerPositions[playerId] = claimFallbackPosition(preferredRow, index + 3);
             });
 
             setEnemies([]);
@@ -1589,8 +1859,16 @@ function Main() {
             pendingAiRequestResolversRef.current.clear();
             completedAiRequestIdsRef.current.clear();
             aiTypingCompletionByRequestIdRef.current.clear();
+            turnNarrationRequestContextByIdRef.current.clear();
+            activeTurnNarrationByPhaseRef.current.clear();
         };
     }, []);
+
+    useEffect(() => {
+        if (selectedFactionRef.current) {
+            setIntroNarrationGate(false);
+        }
+    }, [selectedFaction]);
 
     // Reset movement tracking when turn starts
     useEffect(() => {
@@ -1598,6 +1876,7 @@ function Main() {
             setTurnStartPosition(characterPositions[playerName]);
             setMovementUsed(0);
             setActionUsed(false);
+            setBonusActionUsed(false);
             setExtraWeaponAttacksRemaining(0);
             console.log('Turn started - movement reset');
             console.log('[TURN DEBUG] Player:', playerName);
@@ -2352,14 +2631,6 @@ function Main() {
             const latestActiveEffects = activeEffectsRef.current;
             const narrationRequestIdsForTurn = [];
 
-            const queueEnemyNarration = (message, data = {}) => {
-                const requestId = emitAiEvent('turn_action', message, data);
-                if (requestId) {
-                    narrationRequestIdsForTurn.push(requestId);
-                }
-                return requestId;
-            };
-
             // Check if game is over - don't execute enemy turns
             if (gameOverRef.current) {
                 logImportant('[ENEMY TURN] Game is over, skipping enemy turn');
@@ -2387,6 +2658,39 @@ function Main() {
                 logVerbose('[ENEMY TURN] Available enemies:', latestEnemies.map(e => e.id));
                 return;
             }
+
+            const turnCycleAtExecution = currentTurnCycleRef.current;
+            const executionKey = `${enemyId}:${turnCycleAtExecution}`;
+            if (
+                processingEnemyTurnCyclesRef.current.has(executionKey) ||
+                completedEnemyTurnCyclesRef.current.has(executionKey)
+            ) {
+                logImportant('[ENEMY TURN] Ignoring duplicate execute request for turn cycle:', {
+                    enemyId,
+                    turnCycleAtExecution,
+                    executionKey
+                });
+                return;
+            }
+            processingEnemyTurnCyclesRef.current.add(executionKey);
+
+            const narrationTurnContext = {
+                turnCycle: turnCycleAtExecution,
+                turnType: 'enemy',
+                turnId: enemyId
+            };
+
+            const queueEnemyNarration = (message, data = {}, phase = 'enemy_action') => {
+                const requestId = emitAiEvent('turn_action', message, data, {
+                    turnNarrationContext: narrationTurnContext,
+                    turnNarrationPhase: phase
+                });
+
+                if (requestId && !narrationRequestIdsForTurn.includes(requestId)) {
+                    narrationRequestIdsForTurn.push(requestId);
+                }
+                return requestId;
+            };
 
             logImportant('[ENEMY TURN] Executing AI turn for enemy:', enemy.name);
 
@@ -2521,7 +2825,8 @@ function Main() {
                             actionType: 'enemy_ability',
                             ability: turnAction.abilityToUse.name,
                             target: turnAction.target
-                        }
+                        },
+                        'enemy_ability'
                     );
                 } else {
                     console.log(`[ENEMY ABILITY] ${enemy.name} failed to use ${turnAction.abilityToUse.name}:`, abilityResult.message);
@@ -2530,18 +2835,34 @@ function Main() {
 
             let movementDelay = 0;
             let enemyFinalPositionForTurn = null;
-            if (turnAction.movement) {
+            const movementKey = `${enemyId}:${turnCycleAtExecution}`;
+            const canConsumeMovementThisAction = !enemyMovementConsumedCyclesRef.current.has(movementKey);
+            const plannedMovement = canConsumeMovementThisAction ? turnAction.movement : null;
+
+            if (turnAction.movement && !canConsumeMovementThisAction) {
+                logImportant('[ENEMY TURN] Suppressing extra movement for same turn cycle:', {
+                    enemyId,
+                    turnCycleAtExecution,
+                    movementKey
+                });
+            }
+
+            if (plannedMovement) {
                 const startPos = characterPositions[enemyId];
-                const endPos = { row: turnAction.movement.row, col: turnAction.movement.col };
+                const endPos = { row: plannedMovement.row, col: plannedMovement.col };
                 enemyFinalPositionForTurn = endPos;
                 const path = findShortestWalkablePath(startPos, endPos, characterPositions, enemyId) || calculatePath(startPos, endPos);
-                const stepDelay = 10000 / enemy.stats.speed;
+                const stepDelay = 10000 / Math.max(1, Number(enemy?.stats?.speed) || 0);
+
                 movementDelay = path.length * stepDelay;
+
+                console.log(`[ENEMY MOVEMENT] ${stepDelay}ms per step, total movement delay: ${movementDelay}ms for path:`, path);
 
                 if (!turnAction.target) {
                     queueEnemyNarration(
                         `${enemy.name} advances, closing in on their target.`,
-                        { actor: enemy.name, actionType: 'enemy_move', to: endPos }
+                        { actor: enemy.name, actionType: 'enemy_move', to: endPos },
+                        'enemy_move'
                     );
                 }
 
@@ -2552,6 +2873,8 @@ function Main() {
                     path: path,
                     stepDelay: stepDelay
                 });
+
+                enemyMovementConsumedCyclesRef.current.add(movementKey);
             }
 
             // Apply damage after movement delay
@@ -2575,7 +2898,8 @@ function Main() {
                                 target: turnAction.target,
                                 damage: Number(damageAmount.toFixed(1)),
                                 actionType: 'enemy_attack_reflected'
-                            }
+                            },
+                            'enemy_attack_reflected'
                         );
                     } else {
                         queueEnemyNarration(
@@ -2585,7 +2909,8 @@ function Main() {
                                 target: turnAction.target,
                                 damage: Number(damageAmount.toFixed(1)),
                                 actionType: 'enemy_attack'
-                            }
+                            },
+                            'enemy_attack'
                         );
                     }
                 }
@@ -2596,7 +2921,8 @@ function Main() {
                         const hasImmunity = hasDamageImmunity(activeEffects, turnAction.target);
                         const hasReflection = hasDamageReflection(activeEffects, turnAction.target);
                         const effectiveTarget = withEffectiveResistance(target, turnAction.target, activeEffects);
-                        let damageAmount = Math.max(1, (enemy.stats.strength / 10) * enemy.weapon.damage - (effectiveTarget.stats.resistance / 10));
+                        const rawDamage = (enemy.stats.strength / 10) * enemy.weapon.damage - (effectiveTarget.stats.resistance / 10);
+                        let damageAmount = Math.max(1, rawDamage);
                         damageAmount = applyDamageKeywords(damageAmount, activeEffects, turnAction.target, { minimumDamage: 0 });
                         console.log(`[WEAPON ATTACK] ${enemy.name} attacks ${turnAction.target} for ${damageAmount.toFixed(1)} damage!`);
                         if (hasImmunity) {
@@ -2662,7 +2988,7 @@ function Main() {
                             });
 
                             // Remove health buffs that have been completely consumed (value <= 0)
-                            const filteredEffects = updatedEffects.filter(effect => {
+                            let filteredEffects = updatedEffects.filter(effect => {
                                 if (effect.stat === 'health' && effect.type === 'stat_buff') {
                                     return effect.value > 0;
                                 }
@@ -2686,6 +3012,8 @@ function Main() {
                             if (newHealth <= 0) {
                                 console.log(`Player ${turnAction.target} has died! Removing from turn order.`);
                                 setTurnOrder(prevOrder => prevOrder.filter(turn => turn.id !== turnAction.target));
+                                filteredEffects = removeEffectsOwnedByUnits(filteredEffects, [turnAction.target]);
+                                setActiveEffects(filteredEffects);
 
                                 // Check if all players are dead
                                 const remainingPlayers = players.filter(p => p !== turnAction.target);
@@ -2735,6 +3063,7 @@ function Main() {
                         enemyId,
                         liveTurn
                     });
+                    processingEnemyTurnCyclesRef.current.delete(completionKey);
                     return;
                 }
 
@@ -2744,10 +3073,14 @@ function Main() {
                         turnCycleAtSchedule,
                         completionKey
                     });
+                    processingEnemyTurnCyclesRef.current.delete(completionKey);
                     return;
                 }
 
-                await waitForNarrationTypingCompletion(narrationRequestIdsForTurn, TURN_ADVANCE_AFTER_TYPING_MS);
+                await waitForNarrationTypingCompletion(
+                    narrationRequestIdsForTurn,
+                    TURN_ADVANCE_AFTER_TYPING_MS
+                );
 
                 const refreshedLiveTurn = currentTurnRef.current;
                 if (!refreshedLiveTurn || refreshedLiveTurn.type !== 'enemy' || refreshedLiveTurn.id !== enemyId) {
@@ -2755,6 +3088,7 @@ function Main() {
                         enemyId,
                         liveTurn: refreshedLiveTurn
                     });
+                    processingEnemyTurnCyclesRef.current.delete(completionKey);
                     return;
                 }
 
@@ -2802,6 +3136,7 @@ function Main() {
                     updatedActiveEffects: tickResult.updatedEffects,
                     enemyFinalPosition: enemyFinalPositionForTurn
                 });
+                processingEnemyTurnCyclesRef.current.delete(completionKey);
             }, baseActionDelay);
         };
 
@@ -2874,6 +3209,10 @@ function Main() {
         const handleEnemyMoved = ({ enemyId, path, stepDelay }) => {
             if (!path || path.length === 0) return;
 
+            const normalizedStepDelay = Number.isFinite(stepDelay) && stepDelay > 0
+                ? Math.max(60, Math.min(1200, stepDelay))
+                : 250;
+
             setActiveEffects(prevEffects => prevEffects.filter(effect => {
                 if (effect.type === 'gtg_target_marker' && effect.target === enemyId) {
                     return false;
@@ -2889,21 +3228,6 @@ function Main() {
             const startingPosition = characterPositions[enemyId] || null;
             const finalPosition = path[path.length - 1] || null;
 
-            console.log('[TELEPORT DEBUG] Enemy movement received:', {
-                enemyId,
-                from: startingPosition,
-                to: finalPosition,
-                path,
-                stepDelay
-            });
-
-            console.log('[BLACK HOLE TELEPORT] Before enemy_moved apply:', {
-                enemyId,
-                from: startingPosition,
-                path,
-                to: finalPosition
-            });
-
             // Animate through each step in the path
             path.forEach((position, index) => {
                 setTimeout(() => {
@@ -2911,7 +3235,7 @@ function Main() {
                         ...prev,
                         [enemyId]: position
                     }));
-                }, stepDelay * index);
+                }, normalizedStepDelay * index);
             });
 
             if (finalPosition) {
@@ -2946,7 +3270,7 @@ function Main() {
                     from: startingPosition,
                     to: finalPosition
                 });
-            }, stepDelay * path.length + 50); // Small delay after final position update
+            }, normalizedStepDelay * path.length + 50); // Small delay after final position update
         };
 
         const handlePlayerMoved = ({ playerName: movedPlayer, position }) => {
@@ -3086,6 +3410,16 @@ function Main() {
 
         if (isTurnActionLocked) {
             console.log('[GRID CLICK] Blocked - turn action lock active');
+            return;
+        }
+
+        if (isIntroNarrationGateActiveRef.current) {
+            console.log('[GRID CLICK] Blocked - intro narration gate active');
+            return;
+        }
+
+        if (aiBusy) {
+            console.log('[GRID CLICK] Blocked - AI narration in progress');
             return;
         }
 
@@ -3643,6 +3977,7 @@ function Main() {
 
         setActiveEffects([]);
         setActionUsed(false);
+        setBonusActionUsed(false);
         setMovementUsed(0);
         setExtraWeaponAttacksRemaining(0);
         setSelectedAbility(null);
@@ -3707,6 +4042,15 @@ function Main() {
 
         sessionStorage.removeItem(`enemyPositions_${room}`);
         sessionStorage.removeItem(`playerPositions_${room}`);
+        setCharacterPositions(prev => {
+            const next = {};
+            players.forEach((playerId) => {
+                if (prev[playerId]) {
+                    next[playerId] = prev[playerId];
+                }
+            });
+            return next;
+        });
         setGamePhase('combat');
         socket.emit('start_combat', {
             room,
@@ -3723,6 +4067,10 @@ function Main() {
 
     const handleAbilityClick = (ability) => {
         if (isTurnActionLocked) {
+            return;
+        }
+
+        if (isIntroNarrationGateActiveRef.current) {
             return;
         }
 
@@ -3743,7 +4091,7 @@ function Main() {
             return;
         }
 
-        if (actionUsed && abilityConsumesAction(abilityData)) {
+        if (!canUseAbilityThisTurn(abilityData)) {
             return;
         }
 
@@ -3886,6 +4234,7 @@ function Main() {
         setSelectedTargets([]);
         setPendingRelocateTarget(null);
         setActionUsed(abilityConsumesAction(abilityId));
+        setBonusActionUsed(isBonusActionAbility(abilityId));
 
         setTimeout(() => {
             if (isMyTurn && shouldAutoEndTurn()) {
@@ -4081,8 +4430,10 @@ function Main() {
         if (noLimitsEffect) {
             setExtraWeaponAttacksRemaining(noLimitsEffect.value || 0);
             setActionUsed(false);
+            setBonusActionUsed(false);
         } else {
             setActionUsed(abilityConsumesAction(abilityData));
+            setBonusActionUsed(isBonusActionAbility(abilityData));
         }
 
         // Auto-end only if movement is exhausted
@@ -4195,6 +4546,7 @@ function Main() {
         setSelectedAbility(null);
         setSelectedTargets([]);
         setActionUsed(abilityConsumesAction(abilityId));
+        setBonusActionUsed(isBonusActionAbility(abilityId));
 
         // Auto-end only if movement is exhausted
         setTimeout(() => {
@@ -4322,6 +4674,7 @@ function Main() {
 
         setSelectedAbility(null);
         setActionUsed(abilityConsumesAction(abilityData));
+        setBonusActionUsed(isBonusActionAbility(abilityData));
 
         // Auto-end only if movement is exhausted
         setTimeout(() => {
@@ -4337,6 +4690,11 @@ function Main() {
     const handleEndTurn = () => {
         if (isTurnActionLocked) {
             console.log('[END TURN] Blocked - turn action lock active');
+            return;
+        }
+
+        if (isIntroNarrationGateActiveRef.current) {
+            console.log('[END TURN] Blocked - intro narration gate active');
             return;
         }
 
@@ -4900,7 +5258,7 @@ function Main() {
                                             className={`ability-card ${isOnCooldown ? 'ability-on-cooldown' : ''
                                                 } ${isSelected ? 'ability-selected' : ''
                                                 }`}
-                                            disabled={!isMyTurn || isTurnActionLocked || isOnCooldown || (actionUsed && abilityConsumesAction(resolvedAbility)) || !isPlayerAlive}
+                                            disabled={!isMyTurn || isTurnActionLocked || isOnCooldown || !canUseAbilityThisTurn(resolvedAbility) || !isPlayerAlive}
                                         >
                                             <div className='damage-scaling'>{scalerIcon}{bonusIcon}</div>
                                             <div className="ability-header">
@@ -4942,7 +5300,7 @@ function Main() {
                                         className={`ultimate-card ${isOnCooldown ? 'ultimate-on-cooldown' : ''
                                             } ${isSelected ? 'ultimate-selected' : ''
                                             }`}
-                                        disabled={!isMyTurn || isTurnActionLocked || isOnCooldown || (actionUsed && hasUltimate && abilityConsumesAction(resolvedUltimate)) || !isPlayerAlive || !hasUltimate}
+                                        disabled={!isMyTurn || isTurnActionLocked || isOnCooldown || (hasUltimate && !canUseAbilityThisTurn(resolvedUltimate)) || !isPlayerAlive || !hasUltimate}
                                         onClick={() => {
                                             if (!hasUltimate) {
                                                 console.warn('[ABILITY DEBUG] Ultimate click blocked - invalid or missing ultimate:', rawUltimate);

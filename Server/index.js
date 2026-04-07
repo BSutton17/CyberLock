@@ -428,26 +428,15 @@ function getEnemySpawnColumnOrder(preferredRow, totalCols = 10) {
     return firstCol - secondCol;
   };
 
-  const scriptedSlots = preferredRow === 0
-    ? [[5], [4, 3], [6, 7], [2, 1], [8, 9]]
+  // Keep early spawns near center lanes to avoid edge-heavy openings.
+  const centerFirstOrder = preferredRow === 0
+    ? [5, 4, 6, 3, 7, 2, 8, 1, 9, 0]
     : preferredRow === 1
-      ? [[4], [3, 2], [5, 6], [1, 0], [7, 8]]
-      : [];
+      ? [4, 5, 3, 6, 2, 7, 1, 8, 0, 9]
+      : [4, 5, 3, 6, 2, 7, 1, 8, 0, 9];
 
-  const orderedColumns = [];
-  const usedColumns = new Set();
-
-  scriptedSlots.forEach((slot) => {
-    const validColumns = slot.filter(col => col >= 0 && col < totalCols && !usedColumns.has(col));
-    if (validColumns.length === 0) return;
-
-    const selectedColumn = validColumns.length === 1
-      ? validColumns[0]
-      : chooseWeightedSpawnColumn(validColumns[0], validColumns[1]);
-
-    orderedColumns.push(selectedColumn);
-    usedColumns.add(selectedColumn);
-  });
+  const orderedColumns = centerFirstOrder.filter(col => col >= 0 && col < totalCols);
+  const usedColumns = new Set(orderedColumns);
 
   const remainingColumns = Array.from({ length: totalCols }, (_, col) => col)
     .filter(col => !usedColumns.has(col))
@@ -1235,6 +1224,9 @@ io.on('connection', (socket) => {
         if (shouldApplyEnemyUpdateForEncounter(combatSessions[room], updatedEnemies)) {
           combatSessions[room].enemies = normalizeEnemiesForCombat(updatedEnemies, combatSessions[room].enemies || []);
           removeDeadEnemiesFromTurnOrder(combatSessions[room]);
+          if (emitEnemyDefeatVictoryIfNeeded(io, room, combatSessions[room])) {
+            return;
+          }
         } else {
           console.log('[TURN_ORDER] Ignored stale ability_used enemy payload', {
             room,

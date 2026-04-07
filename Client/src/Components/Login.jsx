@@ -21,7 +21,22 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [isServerConnected, setIsServerConnected] = useState(true);
 
-  const { login, register } = useAuth();
+  // Forgot password state
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotStep, setForgotStep] = useState(1); // 1 = enter username, 2 = answer question
+  const [forgotUsername, setForgotUsername] = useState('');
+  const [securityQuestion, setSecurityQuestion] = useState('');
+  const [securityAnswer, setSecurityAnswer] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [forgotSuccess, setForgotSuccess] = useState('');
+
+  // Security question setup state (shown after login for existing users)
+  const [showSecuritySetup, setShowSecuritySetup] = useState(false);
+  const [setupQuestion, setSetupQuestion] = useState('');
+  const [setupAnswer, setSetupAnswer] = useState('');
+
+  const { login, register, setSecurityQuestion: saveSecurityQuestion } = useAuth();
   const navigate = useNavigate();
 
   // On mobile/LAN in dev mode, skip login entirely
@@ -74,7 +89,11 @@ const Login = () => {
 
         const result = await login(username, password);
         if (result.success) {
-          navigate('/home');
+          if (!result.securityQuestionSet) {
+            setShowSecuritySetup(true);
+          } else {
+            navigate('/home');
+          }
         } else {
           setError(result.message);
         }
@@ -100,7 +119,7 @@ const Login = () => {
 
         const result = await register(username, email, password);
         if (result.success) {
-          navigate('/home');
+          setShowSecuritySetup(true);
         } else {
           setError(result.message);
         }
@@ -111,6 +130,265 @@ const Login = () => {
       setLoading(false);
     }
   };
+
+  const SECURITY_QUESTIONS = [
+    'What was the name of your first pet?',
+    'What city were you born in?',
+    'What is your favorite movie?',
+    'What was your childhood nickname?',
+    'What is the name of your favorite teacher?',
+  ];
+
+  const handleForgotStep1 = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/api/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: forgotUsername }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setSecurityQuestion(data.securityQuestion);
+        setForgotStep(2);
+      } else {
+        setError(data.message);
+      }
+    } catch {
+      setError('An unexpected error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotStep2 = async (e) => {
+    e.preventDefault();
+    setError('');
+
+    if (newPassword !== confirmNewPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+    if (newPassword.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/api/auth/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: forgotUsername,
+          securityAnswer,
+          newPassword,
+        }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setForgotSuccess(data.message);
+        setShowForgotPassword(false);
+        setForgotStep(1);
+        setForgotUsername('');
+        setSecurityAnswer('');
+        setNewPassword('');
+        setConfirmNewPassword('');
+      } else {
+        setError(data.message);
+      }
+    } catch {
+      setError('An unexpected error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSecuritySetup = async (e) => {
+    e.preventDefault();
+    setError('');
+
+    if (!setupQuestion || !setupAnswer) {
+      setError('Please select a question and provide an answer');
+      return;
+    }
+    if (setupAnswer.trim().length < 2) {
+      setError('Answer must be at least 2 characters');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const result = await saveSecurityQuestion(setupQuestion, setupAnswer);
+      if (result.success) {
+        navigate('/home');
+      } else {
+        setError(result.message);
+      }
+    } catch {
+      setError('An unexpected error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Security question setup modal (shown after login for existing users without one)
+  if (showSecuritySetup) {
+    return (
+      <div className="login-container">
+        <div className="login-card">
+          <h1>Set Up Security Question</h1>
+          <p className="setup-description">
+            Please set a security question so you can reset your password if you forget it.
+          </p>
+
+          {error && <div className="error-message">{error}</div>}
+
+          <form onSubmit={handleSecuritySetup}>
+            <div className="form-group">
+              <label htmlFor="setupQuestion">Security Question</label>
+              <select
+                id="setupQuestion"
+                value={setupQuestion}
+                onChange={(e) => setSetupQuestion(e.target.value)}
+                className="form-select"
+                required
+              >
+                <option value="">Select a question...</option>
+                {SECURITY_QUESTIONS.map((q) => (
+                  <option key={q} value={q}>{q}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="setupAnswer">Your Answer</label>
+              <input
+                id="setupAnswer"
+                type="text"
+                value={setupAnswer}
+                onChange={(e) => setSetupAnswer(e.target.value)}
+                placeholder="Enter your answer"
+                required
+              />
+            </div>
+
+            <button type="submit" className="btn btn-primary" disabled={loading}>
+              {loading ? 'Saving...' : 'Save & Continue'}
+            </button>
+          </form>
+
+          <div className="toggle-mode">
+            <button
+              type="button"
+              onClick={() => navigate('/home')}
+              className="link-button"
+            >
+              Skip for now
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Forgot password flow
+  if (showForgotPassword) {
+    return (
+      <div className="login-container">
+        <div className="login-card">
+          <h1>Reset Password</h1>
+
+          {error && <div className="error-message">{error}</div>}
+
+          {forgotStep === 1 && (
+            <form onSubmit={handleForgotStep1}>
+              <div className="form-group">
+                <label htmlFor="forgotUsername">Username</label>
+                <input
+                  id="forgotUsername"
+                  type="text"
+                  value={forgotUsername}
+                  onChange={(e) => setForgotUsername(e.target.value)}
+                  placeholder="Enter your username"
+                  required
+                />
+              </div>
+              <button type="submit" className="btn btn-primary" disabled={loading}>
+                {loading ? 'Loading...' : 'Next'}
+              </button>
+            </form>
+          )}
+
+          {forgotStep === 2 && (
+            <form onSubmit={handleForgotStep2}>
+              <p className="security-question-display">{securityQuestion}</p>
+
+              <div className="form-group">
+                <label htmlFor="securityAnswer">Your Answer</label>
+                <input
+                  id="securityAnswer"
+                  type="text"
+                  value={securityAnswer}
+                  onChange={(e) => setSecurityAnswer(e.target.value)}
+                  placeholder="Enter your answer"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="newPassword">New Password</label>
+                <input
+                  id="newPassword"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Enter new password"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="confirmNewPassword">Confirm New Password</label>
+                <input
+                  id="confirmNewPassword"
+                  type="password"
+                  value={confirmNewPassword}
+                  onChange={(e) => setConfirmNewPassword(e.target.value)}
+                  placeholder="Confirm new password"
+                  required
+                />
+              </div>
+
+              <button type="submit" className="btn btn-primary" disabled={loading}>
+                {loading ? 'Resetting...' : 'Reset Password'}
+              </button>
+            </form>
+          )}
+
+          <div className="toggle-mode">
+            <button
+              type="button"
+              onClick={() => {
+                setShowForgotPassword(false);
+                setForgotStep(1);
+                setError('');
+                setForgotUsername('');
+                setSecurityAnswer('');
+                setNewPassword('');
+                setConfirmNewPassword('');
+              }}
+              className="link-button"
+            >
+              Back to Login
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="login-container">
@@ -124,6 +402,7 @@ const Login = () => {
         )}
 
         {error && <div className="error-message">{error}</div>}
+        {forgotSuccess && <div className="success-message">{forgotSuccess}</div>}
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
@@ -186,6 +465,22 @@ const Login = () => {
             {loading ? 'Loading...' : isLogin ? 'Login' : 'Create Account'}
           </button>
         </form>
+
+        {isLogin && (
+          <div className="forgot-password-link">
+            <button
+              type="button"
+              onClick={() => {
+                setShowForgotPassword(true);
+                setError('');
+                setForgotSuccess('');
+              }}
+              className="link-button"
+            >
+              Forgot Password?
+            </button>
+          </div>
+        )}
 
         <div className="toggle-mode">
           <p>

@@ -142,3 +142,56 @@
   color: #764ba2;
   text-decoration: underline;
 }
+
+.forgot-password-link {
+  text-align: center;
+  margin-top: 12px;
+}
+
+.success-message {
+  background-color: #e6f9ee;
+  color: #1a7a3a;
+  padding: 12px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+  border-left: 4px solid #1a7a3a;
+  font-size: max(16px, 14px);
+}
+
+.setup-description {
+  text-align: center;
+  color: #666;
+  margin-bottom: 24px;
+  font-size: max(16px, 14px);
+  line-height: 1.5;
+}
+
+.form-select {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: max(16px, 14px);
+  transition: border-color 0.3s, box-shadow 0.3s;
+  box-sizing: border-box;
+  background-color: inherit;
+  /* color: inherit; */
+  appearance: auto;
+}
+
+.form-select:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.security-question-display {
+  background-color: #f0f0ff;
+  padding: 14px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+  font-weight: 600;
+  color: #444;
+  border-left: 4px solid #667eea;
+  font-size: max(16px, 14px);
+}

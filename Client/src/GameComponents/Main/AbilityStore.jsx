@@ -651,13 +651,14 @@ export const ABILITIES = {
     cursed: {
         id: 'cursed',
         name: 'Cursed',
-        description: 'Mark an enemy as cursed. Enemy takes extra 30% damage from all sources for 2 turns',
+        description: 'Mark an enemy as cursed. Enemy takes extra 35% damage from all sources for 2 turns',
         role: "Tank",
         level: 3,
         cooldown: 2,
         targetType: 'single-enemy',
         type: 'debuff',
         range: 3,
+        consumesAction: false,
 
         /**
          * @param {Object} params
@@ -678,7 +679,7 @@ export const ABILITIES = {
                 effects: [{
                     type: 'damage_taken_multiplier',
                     target: enemy.id,
-                    value: 1.3,
+                    value: 1.35,
                     duration: 2,
                     stackable: false
                 }],
@@ -2124,7 +2125,7 @@ export const ABILITIES = {
                     target: target,
                     amount: finalHealing
                 }],
-                message: `${caster.name} casts The Show Must Go On! ${ally.name} is healed for 10 HP!`
+                message: `${caster.name} casts The Show Must Go On! ${ally.name} is healed for ${finalHealing} HP!`
             };
         }
     },

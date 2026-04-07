@@ -45,6 +45,7 @@ export const GameProvider = ({ children }) => {
     const [combatRewards, setCombatRewards] = useState(null);
     const [attributeAllocations, setAttributeAllocations] = useState({});
     const [attributePoints, setAttributePoints] = useState({});
+    const [allPlayerAttributes, setAllPlayerAttributes] = useState({});
     const [chat, setChat] = useState(false);
 
     const characterImageMap = {
@@ -118,6 +119,7 @@ export const GameProvider = ({ children }) => {
         chat, setChat,
         enemies, setEnemies,
         attributeAllocations, setAttributeAllocations,
+        allPlayerAttributes, setAllPlayerAttributes,
         attributePoints, setAttributePoints,
         debugLogLevel,
         characterImageMap,

@@ -993,8 +993,9 @@ io.on('connection', (socket) => {
       rooms[room].abilitySelections = {};
       rooms[room].abilityReadyPlayers = [];
       rooms[room].levelUpReadyPlayers = [];
-      rooms[room].attributes = {};
+      rooms[room].attributePoints = {};
       rooms[room].attributeReadyPlayers = [];
+      rooms[room].sortedAttributeAllocations = {};
       rooms[room].selectedFaction = null;
       
       // Clear combat session
@@ -1055,7 +1056,7 @@ io.on('connection', (socket) => {
       // if (allReady) {
       //   io.to(room).emit("start_main_game");
       // }
-      if (allReady) {
+       if (allReady) {
         io.to(room).emit("character_customization");
       }
     }
@@ -1092,17 +1093,17 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on("update_attributes", ({ room, playerName, newAttributes }) => {
+  socket.on("update_attribute_points", ({ room, playerName, points }) => {
     if (rooms[room]) {
-      if (!rooms[room].attributes) {
-        rooms[room].attributes = {};
+      if (!rooms[room].attributePoints) {
+        rooms[room].attributePoints = {};
       }
-      rooms[room].attributes[playerName] = newAttributes;
-       io.to(room).emit("attributes_updated", rooms[room].attributes);
+      rooms[room].attributePoints[playerName] = points;
+      io.to(room).emit("attribute_points_updated", rooms[room].attributePoints);
     }
   });
 
-  socket.on("attribute_part1_ready", ({ room, playerName}) => {
+  socket.on("attribute_ready", ({ room, playerName, sortedAttributes }) => {
     if (rooms[room]) {
       if (!rooms[room].attributeReadyPlayers) {
         rooms[room].attributeReadyPlayers = [];
@@ -1111,39 +1112,20 @@ io.on('connection', (socket) => {
         rooms[room].attributeReadyPlayers.push(playerName);
       }
       
+      // Store sorted attributes
+      if (!rooms[room].sortedAttributeAllocations) {
+        rooms[room].sortedAttributeAllocations = {};
+      }
+      rooms[room].sortedAttributeAllocations[playerName] = sortedAttributes;
+      
       io.to(room).emit("attribute_ready_status", rooms[room].attributeReadyPlayers);
+      io.to(room).emit("attribute_allocations_updated", rooms[room].sortedAttributeAllocations);
       
       const allAttributeReady = rooms[room].players.length > 0 && 
                                 rooms[room].players.every(player => 
-                                rooms[room].attributeReadyPlayers.includes(player)
+                                  rooms[room].attributeReadyPlayers.includes(player)
                                 );
       
-      if (allAttributeReady) {
-        rooms[room].attributeReadyPlayers = [];
-        rooms[room].abilityReadyPlayers = [];
-        io.to(room).emit("attribute_ready_status", []);
-        io.to(room).emit("attribute_part1_complete");
-        io.to(room).emit("attributes_updated", rooms[room].attributes);
-      }
-    }
-  });
-
-  socket.on("attributes_part2_ready", ({ room, playerName}) => {
-    if (rooms[room]) {
-      if (!rooms[room].attributeReadyPlayers) {
-        rooms[room].attributeReadyPlayers = [];
-      }
-      if (!rooms[room].attributeReadyPlayers.includes(playerName)) {
-        rooms[room].attributeReadyPlayers.push(playerName);
-      }
-      
-      io.to(room).emit("attribute_ready_status", rooms[room].attributeReadyPlayers);
-
-      const allAttributeReady = rooms[room].players.length > 0 && 
-                              rooms[room].players.every(player => 
-                              rooms[room].attributeReadyPlayers.includes(player)
-                              );
-
       if (allAttributeReady) {
         rooms[room].abilityReadyPlayers = [];
         io.to(room).emit("ability_ready_status", []);

@@ -18,7 +18,7 @@ function Events(){
       setReadyPlayers, setGamePhase, setStoryText, characterPositions,
       setCombatRewards, room, setEnemies, 
       setTurnOrder, setCurrentTurn, 
-      setIsMyTurn, playerName, setAttributeAllocations, setAttributePoints, playerCharacters, debugLogLevel } = useGameContext();
+      setIsMyTurn, playerName, playerCharacters, debugLogLevel, setAllPlayerAttributes } = useGameContext();
 
     const isQuiet = debugLogLevel === 'quiet';
     const isVerbose = debugLogLevel === 'verbose';
@@ -139,6 +139,10 @@ function Events(){
           setScreen("characterBuilder");
         });
 
+        socket.on("attribute_part1_complete", () => {
+          setScreen("characterBuilderPart2");
+        });
+
         socket.on("start_main_game", () => {
           setScreen("chooseAbilities");
         });
@@ -240,12 +244,8 @@ function Events(){
           }
         });
 
-        socket.on("attribute_allocations_updated", (allocations) => {
-          setAttributeAllocations(allocations);
-        });
-
-        socket.on("attribute_points_updated", (points) => {
-          setAttributePoints(points || {});
+        socket.on("attributes_updated", (attributes) => {
+          setAllPlayerAttributes(attributes);
         });
 
         socket.on("player_health_updated", ({ playerName: damagedPlayer, newHealth }) => {

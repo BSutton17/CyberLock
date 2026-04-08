@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { useState, useEffect, useRef } from 'react';
 import { useGameContext } from '../../Components/Context';
 import EnemiesData from '../../Components/Enemies.json';
@@ -4976,6 +4976,14 @@ function Main() {
             </div>
 
             <div className="AI-script">
+                <div className="ai-header">
+                    <span className={`ai-status ${aiBusy ? '' : ''}`}>
+                        {aiBusy ? '' : 'Ready'}
+                    </span>
+                </div>
+                <span className="ai-text">
+                    {displayText}
+                </span>
                 <div className='Response'>
                     {aiBusy && (
                         <div className="ai-thinking-overlay">
@@ -5031,14 +5039,6 @@ function Main() {
                     )}
                     {/* <button style={{ width: '150px' }} onClick={handleLevelUp}>Level Up</button> */}
                     {/* <button style={{ width: '150px' }} onClick={() => handleStoryComplete()}>Combat</button> */}
-                </div>
-                <span className="ai-text">
-                    {displayText}
-                </span>
-                <div className="ai-header">
-                    <span className={`ai-status ${aiBusy ? '' : ''}`}>
-                        {aiBusy ? '' : 'Ready'}
-                    </span>
                 </div>
             </div>
             <div className={`inventory ${shouldShowMobileAiOverlay ? 'mobile-ai-active' : ''}`}>

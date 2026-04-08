@@ -5215,8 +5215,8 @@ function Main() {
                                 style={{ cursor: (isMyTurn && !isTurnActionLocked && (!actionUsed || extraWeaponAttacksRemaining > 0) && isPlayerAlive) ? 'pointer' : 'not-allowed' }}
                             >
                                 <div className="weapon-info">
-                                    <div className="weapon-name">{currentPlayerCharacter.weapon.name}</div>
-                                    <div className="weapon-range">{currentPlayerCharacter.weapon.range == 1 ? "Melee" : "Range: " + currentPlayerCharacter.weapon.range}</div>
+                                    <div className="weapon-name" style={currentPlayerCharacter.weapon.name === 'Shotgun' ? { color: 'var(--neon-pink)', textShadow: '0 0 8px rgba(var(--neon-pink-rgb), 0.6)' } : {}}>{currentPlayerCharacter.weapon.name}</div>
+                                    <div className="weapon-range" style={currentPlayerCharacter.weapon.name === 'Shotgun' ? { color: '#9a9aaa', fontWeight: 400, lineHeight: 1.3 } : {}}>{currentPlayerCharacter.weapon.range == 1 ? "Melee" : "Range: " + currentPlayerCharacter.weapon.range}</div>
                                 </div>
                             </div>
                         </div>

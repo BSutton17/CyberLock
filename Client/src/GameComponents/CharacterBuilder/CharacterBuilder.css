@@ -44,10 +44,10 @@
 
 .builder-header h1 {
     margin: 0;
-    font-size: clamp(18px, 3.342vmin, 26px);
-    font-weight: 900;
+    font-size: 3.342vmin;
+    font-weight: 800;
     text-transform: uppercase;
-    letter-spacing: 0.418vmin;
+    letter-spacing: 0.1em;
     background: linear-gradient(90deg, #a78bfa 0%, #60a5fa 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -58,9 +58,9 @@
 .builder-header p {
     margin: 0.928vmin 0 0 0;
     color: #d1d5db;
-    font-size: clamp(12px, 1.485vmin, 20px);
+    font-size: 1.485vmin;
     text-transform: uppercase;
-    letter-spacing: 0.279vmin;
+    letter-spacing: 0.1em;
     text-shadow: 0 0.279vmin 0.557vmin rgba(0, 0, 0, 0.8);
 }
 
@@ -75,11 +75,11 @@
 }
 
 .points-remaining {
-    font-size: clamp(14px, 2.599vmin, 26px);
-    font-weight: 900;
+    font-size: 2.599vmin;
+    font-weight: 800;
     color: #c4b5fd;
     text-transform: uppercase;
-    letter-spacing: 0.279vmin;
+    letter-spacing: 0.1em;
     text-shadow: 0 0 2.089vmin rgba(139, 92, 246, 0.8);
 }
 
@@ -105,11 +105,11 @@
 
 .attribute-allocation h3 {
     margin: 0 0 1.393vmin 0;
-    font-size: clamp(12px, 1.764vmin, 20px);
+    font-size: 1.764vmin;
     text-transform: uppercase;
-    letter-spacing: 0.279vmin;
+    letter-spacing: 0.1em;
     color: #c4b5fd;
-    font-weight: 900;
+    font-weight: 800;
     border-bottom: 0.279vmin solid rgba(139, 92, 246, 0.5);
     padding-bottom: 0.928vmin;
     text-shadow: 0 0.279vmin 1.114vmin rgba(139, 92, 246, 0.6);
@@ -209,17 +209,17 @@
 
 .attribute-info h4 {
     margin: 0;
-    font-size: clamp(12px, 1.949vmin, 20px);
+    font-size: 1.949vmin;
     text-transform: uppercase;
-    letter-spacing: 0.141vmin;
+    letter-spacing: 0.1em;
     color: #f3f4f6;
-    font-weight: 700;
+    font-weight: 600;
     text-shadow: 0 0.279vmin 0.557vmin rgba(0, 0, 0, 0.8);
 }
 
 .attribute-info p {
     margin: 0.372vmin 0 0 0;
-    font-size: clamp(12px, 1.393vmin, 20px);
+    font-size: 1.393vmin;
     color: #d1d5db;
     line-height: 1.3;
     text-shadow: 0 0.141vmin 0.279vmin rgba(0, 0, 0, 0.6);
@@ -247,10 +247,10 @@
     border: none;
     outline: none;
     border-radius: 0.836vmin;
-    font-size: clamp(12px, 1.579vmin, 20px);
+    font-size: 1.579vmin;
     cursor: pointer;
     transition: all 0.3s ease;
-    font-weight: 900;
+    font-weight: 800;
     box-shadow: 0 0.557vmin 1.671vmin rgba(139, 92, 246, 0.4);
     user-select: none;
 }
@@ -278,8 +278,8 @@
 }
 
 .attribute-value {
-    font-size: clamp(14px, 2.228vmin, 26px);
-    font-weight: 900;
+    font-size: 2.228vmin;
+    font-weight: 800;
     color: #c4b5fd;
     min-width: 3.713vmin;
     text-align: center;
@@ -299,11 +299,11 @@
 
 .player-allocations h3 {
     margin: 0 0 1.393vmin 0;
-    font-size: clamp(12px, 1.764vmin, 20px);
+    font-size: 1.764vmin;
     text-transform: uppercase;
-    letter-spacing: 0.279vmin;
+    letter-spacing: 0.1em;
     color: #c4b5fd;
-    font-weight: 900;
+    font-weight: 800;
     border-bottom: 0.279vmin solid rgba(139, 92, 246, 0.5);
     padding-bottom: 0.928vmin;
     text-shadow: 0 0.279vmin 1.114vmin rgba(139, 92, 246, 0.6);
@@ -334,11 +334,11 @@
 
 .player-stats-card h4 {
     margin: 0 0 1.114vmin 0;
-    font-size: clamp(12px, 1.579vmin, 20px);
+    font-size: 1.579vmin;
     text-transform: uppercase;
-    letter-spacing: 0.141vmin;
+    letter-spacing: 0.1em;
     color: #f3f4f6;
-    font-weight: 700;
+    font-weight: 600;
     text-shadow: 0 0.279vmin 0.557vmin rgba(0, 0, 0, 0.8);
 }
 
@@ -349,25 +349,25 @@
 }
 
 .primary-ability {
-    font-size: clamp(12px, 1.764vmin, 20px);
-    font-weight: 900;
+    font-size: 1.764vmin;
+    font-weight: 800;
     color: #c4b5fd;
     text-transform: uppercase;
-    letter-spacing: 0.141vmin;
+    letter-spacing: 0.1em;
     text-shadow: 0 0 1.393vmin rgba(139, 92, 246, 0.8);
 }
 
 .secondary-ability {
-    font-size: clamp(12px, 1.393vmin, 20px);
+    font-size: 1.393vmin;
     font-weight: 600;
     color: #93c5fd;
     text-transform: uppercase;
-    letter-spacing: 0.072vmin;
+    letter-spacing: 0.1em;
     text-shadow: 0 0 1.114vmin rgba(59, 130, 246, 0.6);
 }
 
 .no-allocation {
-    font-size: clamp(12px, 1.299vmin, 20px);
+    font-size: 1.299vmin;
     color: #9ca3af;
     font-style: italic;
 }
@@ -383,10 +383,10 @@
     padding: 1.114vmin;
     border-radius: 0.836vmin;
     text-align: center;
-    font-weight: 700;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.141vmin;
-    font-size: clamp(12px, 1.393vmin, 20px);
+    letter-spacing: 0.1em;
+    font-size: 1.393vmin;
     z-index: 100;
 }
 
@@ -426,12 +426,12 @@
     border: none;
     padding: 1.393vmin 4.641vmin;
     border-radius: 1.114vmin;
-    font-size: clamp(12px, 1.857vmin, 20px);
-    font-weight: 900;
+    font-size: 1.857vmin;
+    font-weight: 800;
     cursor: pointer;
     transition: all 0.3s ease;
     text-transform: uppercase;
-    letter-spacing: 0.279vmin;
+    letter-spacing: 0.1em;
     box-shadow: 0 0.557vmin 2.228vmin rgba(139, 92, 246, 0.5);
     text-shadow: 0 0.279vmin 0.557vmin rgba(0, 0, 0, 0.5);
 }
@@ -456,7 +456,7 @@
 .ready-status {
     margin: 0.928vmin 0 0 0;
     color: #aaa;
-    font-size: clamp(12px, 1.299vmin, 20px);
+    font-size: 1.299vmin;
     text-transform: uppercase;
     
 }

@@ -54,12 +54,12 @@
 .welcome-text {
   color: #c4b5fd;
   font-size: 1.634vmin;
-  font-weight: 500;
+  font-weight: 400;
   text-shadow: 0 0 1.485vmin rgba(139, 92, 246, 0.5);
 }
 
 .welcome-text strong {
-  font-weight: 700;
+  font-weight: 600;
   color: #fff;
   margin-left: 0.743vmin;
   text-shadow: 0 0 1.485vmin rgba(139, 92, 246, 0.8);
@@ -76,7 +76,7 @@
   font-weight: 600;
   transition: all 0.3s ease;
   text-transform: uppercase;
-  letter-spacing: 0.075vmin;
+  letter-spacing: 0.1em;
   backdrop-filter: blur(0.594vmin);
 }
 
@@ -142,7 +142,7 @@
     border: none;
   border-radius: 1.188vmin;
     text-transform: uppercase;
-  letter-spacing: 0.223vmin;
+  letter-spacing: 0.1em;
   box-shadow: 0 0.594vmin 1.782vmin rgba(139, 92, 246, 0.4);
     transition: all 0.3s ease;
   text-shadow: 0 0.297vmin 0.594vmin rgba(0, 0, 0, 0.3);
@@ -194,14 +194,14 @@
 }
 
 .rotate-device-icon {
-    font-size: clamp(42px, 10vmin, 72px);
+    font-size: 10vmin;
     color: #c4b5fd;
     filter: drop-shadow(0 0 14px rgba(139, 92, 246, 0.45));
 }
 
 .rotate-device-card p {
     margin: 0;
-    font-size: clamp(18px, 4.5vmin, 28px);
+    font-size: 4.5vmin;
     font-weight: 800;
     color: #f8fafc;
     text-transform: uppercase;
@@ -238,7 +238,7 @@
 
   .user-info {
     text-align: center;
-    font-size: clamp(14px, 2vmin, 28px);
+    font-size: 2vmin;
   }
 
   .logout-btn {

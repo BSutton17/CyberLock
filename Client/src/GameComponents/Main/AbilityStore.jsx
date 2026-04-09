@@ -2208,7 +2208,7 @@ export const ABILITIES = {
         type: 'damage',
         damageType: 'physical',
         damageScaling: 'ta',
-        abilityDamage: 8, 
+        abilityDamage: 10, 
         range: 2,
         
         /**
@@ -2272,7 +2272,7 @@ export const ABILITIES = {
             
             // Calculate total damage (1.25x) and divide equally
             const baseDamage = Math.max(1, Math.round(
-                (caster.stats.ta / 10) * 8 - (Math.max(...affectedEnemies.map(e => e.stats.resistance)) / 10)
+                (caster.stats.ta / 10) * 10 - (Math.max(...affectedEnemies.map(e => e.stats.resistance)) / 10)
             ));
             const damagePerEnemy = Math.floor(baseDamage / affectedEnemies.length);
             

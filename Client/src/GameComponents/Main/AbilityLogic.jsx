@@ -1,4 +1,4 @@
-
+﻿
 import { ABILITIES } from './AbilityStore';
 
 // ============================================================================
@@ -317,7 +317,7 @@ export function tickActiveEffects(activeEffects, playerCharacters, enemies, endi
     const updatedCharacters = { ...playerCharacters };
     const updatedEnemies = enemies ? [...enemies] : [];
 
-    console.log('[TICK EFFECTS] Starting tick with', activeEffects.length, 'active effects');
+    console.log(' Starting tick with', activeEffects.length, 'active effects');
 
     activeEffects.forEach((effect, index) => {
         // Create new effect object to avoid mutation
@@ -334,17 +334,6 @@ export function tickActiveEffects(activeEffects, playerCharacters, enemies, endi
                 endingTurnOwnerId
             });
         }
-
-        console.log(`[TICK EFFECTS] Processing effect ${index}:`, {
-            type: effect.type,
-            target: effect.target,
-            stat: effect.stat,
-            value: effect.value,
-            turnsRemaining: effect.turnsRemaining,
-            appliedThisTurn: effect.appliedThisTurn,
-            ownerTurnId: effect.ownerTurnId,
-            endingTurnOwnerId
-        });
 
         const shouldTickThisTurn = !endingTurnOwnerId || !effect.ownerTurnId || effect.ownerTurnId === endingTurnOwnerId;
         if (!shouldTickThisTurn) {
@@ -525,7 +514,6 @@ export function tickActiveEffects(activeEffects, playerCharacters, enemies, endi
                 endingTurnOwnerId
             });
         }
-        console.log(`[TICK EFFECTS] Ticked down to ${updatedEffect.turnsRemaining} turns remaining`);
 
         // If effect expires, bonuses are automatically removed (they were never added to base stats)
         if (updatedEffect.turnsRemaining <= 0) {
@@ -536,7 +524,6 @@ export function tickActiveEffects(activeEffects, playerCharacters, enemies, endi
                     endingTurnOwnerId
                 });
             }
-            console.log(`[TICK EFFECTS] Effect expired - removing from activeEffects`);
             // Player stat buffs don't need to be removed from stats since they were never added to base stats
             // Enemy stat buffs/debuffs DO need to be removed since they modify enemy stats directly
             if ((effect.type === 'stat_debuff' || (effect.type === 'stat_buff' && effect.stat !== 'health')) && enemies) {
@@ -565,17 +552,9 @@ export function tickActiveEffects(activeEffects, playerCharacters, enemies, endi
             // Effect expired - don't add to updatedEffects
         } else {
             // Keep effect active
-            console.log(`[TICK EFFECTS] Keeping effect active with ${updatedEffect.turnsRemaining} turns remaining`);
             updatedEffects.push(updatedEffect);
         }
     });
-
-    console.log('[TICK EFFECTS] Finished tick:', {
-        startedWith: activeEffects.length,
-        endedWith: updatedEffects.length,
-        removed: activeEffects.length - updatedEffects.length
-    });
-
     return { updatedEffects, updatedCharacters, updatedEnemies };
 }
 

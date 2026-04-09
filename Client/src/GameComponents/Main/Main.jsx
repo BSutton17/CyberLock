@@ -487,6 +487,8 @@ function Main() {
     const currentTurnCycleRef = useRef(0);
     const processingEnemyTurnCyclesRef = useRef(new Set());
     const completedEnemyTurnCyclesRef = useRef(new Set());
+    const processingEnemyExecutionIdsRef = useRef(new Set());
+    const completedEnemyExecutionIdsRef = useRef(new Set());
     const enemyMovementConsumedCyclesRef = useRef(new Set());
     const completedAllyTurnCyclesRef = useRef(new Set());
     const wasCombatTurnOrderActiveRef = useRef(false);
@@ -616,6 +618,8 @@ function Main() {
             processingEnemyTurnCyclesRef.current.clear();
             completedAllyTurnCyclesRef.current.clear();
             completedEnemyTurnCyclesRef.current.clear();
+            processingEnemyExecutionIdsRef.current.clear();
+            completedEnemyExecutionIdsRef.current.clear();
             enemyMovementConsumedCyclesRef.current.clear();
         }
 
@@ -623,6 +627,8 @@ function Main() {
             processingEnemyTurnCyclesRef.current.clear();
             completedAllyTurnCyclesRef.current.clear();
             completedEnemyTurnCyclesRef.current.clear();
+            processingEnemyExecutionIdsRef.current.clear();
+            completedEnemyExecutionIdsRef.current.clear();
             enemyMovementConsumedCyclesRef.current.clear();
         }
 
@@ -1527,6 +1533,17 @@ function Main() {
                 return;
             }
 
+            // Sync decision state for all clients so decision UI renders for everyone.
+            if (eventType === 'encounter_end') {
+                setPendingPostEncounterChoice(true);
+                setPendingNextEncounterChoice(false);
+            }
+
+            if (eventType === 'shop_intro') {
+                setPendingPostEncounterChoice(false);
+                setPendingNextEncounterChoice(true);
+            }
+
             // Display options from AI only when a decision state is active
             const hasIncomingOptions = Array.isArray(options) && options.length > 0;
             const normalizedIncomingAttribute = normalizeDecisionAttribute(attribute || '');
@@ -1534,6 +1551,8 @@ function Main() {
                 pendingFactionChoice ||
                 pendingPostEncounterChoice ||
                 pendingNextEncounterChoice ||
+                eventType === 'encounter_end' ||
+                eventType === 'shop_intro' ||
                 (!selectedFactionRef.current && (eventType === 'game_start' || normalizedIncomingAttribute === 'politician'));
 
             if (hasIncomingOptions && shouldAcceptAiOptions) {
@@ -2625,7 +2644,7 @@ function Main() {
 
     // Listen for enemy turn execution
     useEffect(() => {
-        const handleExecuteEnemyTurn = ({ enemyId, allies, alliedEnemies }) => {
+        const handleExecuteEnemyTurn = ({ enemyId, allies, alliedEnemies, executionId }) => {
             const latestEnemies = enemiesRef.current;
             const latestPlayerCharacters = playerCharactersRef.current;
             const latestActiveEffects = activeEffectsRef.current;
@@ -2659,6 +2678,21 @@ function Main() {
                 return;
             }
 
+            const normalizedExecutionId = typeof executionId === 'string' ? executionId : null;
+            if (
+                normalizedExecutionId &&
+                (
+                    processingEnemyExecutionIdsRef.current.has(normalizedExecutionId) ||
+                    completedEnemyExecutionIdsRef.current.has(normalizedExecutionId)
+                )
+            ) {
+                logImportant('[ENEMY TURN] Ignoring duplicate execute request by executionId:', {
+                    enemyId,
+                    executionId: normalizedExecutionId
+                });
+                return;
+            }
+
             const turnCycleAtExecution = currentTurnCycleRef.current;
             const executionKey = `${enemyId}:${turnCycleAtExecution}`;
             if (
@@ -2672,7 +2706,23 @@ function Main() {
                 });
                 return;
             }
+
             processingEnemyTurnCyclesRef.current.add(executionKey);
+            if (normalizedExecutionId) {
+                processingEnemyExecutionIdsRef.current.add(normalizedExecutionId);
+            }
+
+            const markExecutionHandled = () => {
+                if (!normalizedExecutionId) return;
+
+                processingEnemyExecutionIdsRef.current.delete(normalizedExecutionId);
+                completedEnemyExecutionIdsRef.current.add(normalizedExecutionId);
+
+                while (completedEnemyExecutionIdsRef.current.size > 200) {
+                    const oldestExecutionId = completedEnemyExecutionIdsRef.current.values().next().value;
+                    completedEnemyExecutionIdsRef.current.delete(oldestExecutionId);
+                }
+            };
 
             const narrationTurnContext = {
                 turnCycle: turnCycleAtExecution,
@@ -2855,8 +2905,6 @@ function Main() {
                 const stepDelay = 10000 / Math.max(1, Number(enemy?.stats?.speed) || 0);
 
                 movementDelay = path.length * stepDelay;
-
-                console.log(`[ENEMY MOVEMENT] ${stepDelay}ms per step, total movement delay: ${movementDelay}ms for path:`, path);
 
                 if (!turnAction.target) {
                     queueEnemyNarration(
@@ -3064,6 +3112,7 @@ function Main() {
                         liveTurn
                     });
                     processingEnemyTurnCyclesRef.current.delete(completionKey);
+                    markExecutionHandled();
                     return;
                 }
 
@@ -3074,6 +3123,7 @@ function Main() {
                         completionKey
                     });
                     processingEnemyTurnCyclesRef.current.delete(completionKey);
+                    markExecutionHandled();
                     return;
                 }
 
@@ -3089,6 +3139,7 @@ function Main() {
                         liveTurn: refreshedLiveTurn
                     });
                     processingEnemyTurnCyclesRef.current.delete(completionKey);
+                    markExecutionHandled();
                     return;
                 }
 
@@ -3131,12 +3182,14 @@ function Main() {
                 socket.emit('enemy_turn_complete', {
                     room,
                     enemyId,
+                    executionId: normalizedExecutionId,
                     updatedEnemies: tickResult.updatedEnemies,
                     updatedPlayerCharacters: tickResult.updatedCharacters,
                     updatedActiveEffects: tickResult.updatedEffects,
                     enemyFinalPosition: enemyFinalPositionForTurn
                 });
                 processingEnemyTurnCyclesRef.current.delete(completionKey);
+                markExecutionHandled();
             }, baseActionDelay);
         };
 
@@ -3265,11 +3318,6 @@ function Main() {
                     socket.emit('enemies_updated', { room, enemies: updatedEnemies });
                 }
 
-                console.log('[BLACK HOLE TELEPORT] After enemy_moved apply:', {
-                    enemyId,
-                    from: startingPosition,
-                    to: finalPosition
-                });
             }, normalizedStepDelay * path.length + 50); // Small delay after final position update
         };
 
@@ -4495,7 +4543,9 @@ function Main() {
             reflectedMultiTargetCharacters = reflectionResult.updatedCharacters;
         }
 
-        setEnemies(normalizeEnemiesState(updates.enemies));
+        const normalizedMultiTargetEnemies = normalizeEnemiesState(updates.enemies);
+
+        setEnemies(normalizedMultiTargetEnemies);
         setPlayerCharacters(reflectedMultiTargetCharacters);
         setActiveEffects(updates.activeEffects);
 
@@ -4504,11 +4554,6 @@ function Main() {
                 const movementPath = path && path.length > 0 ? path : (to ? [to] : []);
                 if (movementPath.length === 0) return;
 
-                console.log('[BLACK HOLE TELEPORT] Emitting enemy_moved (multi-target path):', {
-                    enemyId,
-                    from: characterPositions[enemyId] || null,
-                    to: movementPath[movementPath.length - 1]
-                });
 
                 socket.emit('enemy_moved', {
                     room,
@@ -4538,10 +4583,12 @@ function Main() {
             playerName,
             abilityId,
             result,
-            updatedPlayerCharacters: reflectedMultiTargetCharacters
+            updatedPlayerCharacters: reflectedMultiTargetCharacters,
+            updatedEnemies: normalizedMultiTargetEnemies,
+            updatedActiveEffects: updates.activeEffects
         });
 
-        console.log('[ABILITY SYNC] Emitting updated playerCharacters to server (multi-target)');
+        console.log('[ABILITY SYNC] Emitting updated playerCharacters/enemies/effects to server (multi-target)');
 
         setSelectedAbility(null);
         setSelectedTargets([]);
@@ -4627,11 +4674,6 @@ function Main() {
                 const movementPath = path && path.length > 0 ? path : (to ? [to] : []);
                 if (movementPath.length === 0) return;
 
-                console.log('[BLACK HOLE TELEPORT] Emitting enemy_moved (ground-target path):', {
-                    enemyId,
-                    from: characterPositions[enemyId] || null,
-                    to: movementPath[movementPath.length - 1]
-                });
 
                 socket.emit('enemy_moved', {
                     room,

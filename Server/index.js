@@ -339,11 +339,16 @@ function dispatchEnemyTurn(io, room, combat, enemyId) {
   const previousRetries = (typeof existingWatchdog === 'object' && existingWatchdog.enemyId === enemyId)
     ? existingWatchdog.retries
     : 0;
+  const executionId =
+    (typeof existingWatchdog === 'object' && existingWatchdog.enemyId === enemyId && typeof existingWatchdog.executionId === 'string')
+      ? existingWatchdog.executionId
+      : `${room}:${enemyId}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
 
   io.to(room).emit('execute_enemy_turn', {
     enemyId,
     allies,
-    alliedEnemies: getAlliedEnemyIds(combat, enemyId)
+    alliedEnemies: getAlliedEnemyIds(combat, enemyId),
+    executionId
   });
 
   clearEnemyTurnWatchdog(room);
@@ -367,7 +372,8 @@ function dispatchEnemyTurn(io, room, combat, enemyId) {
       enemyTurnWatchdogs[room] = {
         timeoutId: null,
         enemyId,
-        retries: retries + 1
+        retries: retries + 1,
+        executionId
       };
       emitCurrentTurn(io, room, latestCombat);
       return;
@@ -379,7 +385,8 @@ function dispatchEnemyTurn(io, room, combat, enemyId) {
   enemyTurnWatchdogs[room] = {
     timeoutId,
     enemyId,
-    retries: previousRetries
+    retries: previousRetries,
+    executionId
   };
 }
 
@@ -635,7 +642,7 @@ function buildAiFallbackResponse(eventType, message, data) {
   }
 
   if (eventType === 'game_start') {
-    return 'The neon lights of the city pulse overhead as you stand on a crowded street corner, the hum of hover cars and flickering billboards filling your ears. The imposing silhouettes of towering corporate buildings loom behind you, casting long shadows across the asphalt. The air smells of ozone and burning oil. Suddenly, a commotion breaks out nearby, drawing the eyes of everyone present. A group of civilians, led by a charismatic figure, are confronting a squad of Enforcers. They shout demands for fair wages, better living conditions, and the end of corporate oppression. As you watch, a lone Enforcer steps forward, raising its weapon.';
+    return 'The neon lights of the city pulse overhead as you stand on a crowded street corner.';
   }
 
   if (eventType === 'choice_made') {
@@ -1381,12 +1388,32 @@ io.on('connection', (socket) => {
     }, ALLY_TURN_ADVANCE_DELAY_MS);
   });
 
-  socket.on("enemy_turn_complete", ({ room, enemyId, updatedEnemies, updatedPlayerCharacters, updatedActiveEffects, enemyFinalPosition }) => {
+  socket.on("enemy_turn_complete", ({ room, enemyId, executionId, updatedEnemies, updatedPlayerCharacters, updatedActiveEffects, enemyFinalPosition }) => {
     const combat = combatSessions[room];
     if (!combat) return;
 
     const activeTurn = combat.turnOrder?.[combat.currentTurnIndex];
     if (!activeTurn || activeTurn.type !== 'enemy' || activeTurn.id !== enemyId) {
+      return;
+    }
+
+    const activeWatchdog = enemyTurnWatchdogs[room];
+    const expectedExecutionId =
+      typeof activeWatchdog === 'object' && activeWatchdog.enemyId === enemyId
+        ? activeWatchdog.executionId
+        : null;
+
+    if (
+      typeof expectedExecutionId === 'string' &&
+      typeof executionId === 'string' &&
+      executionId !== expectedExecutionId
+    ) {
+      console.log('[TURN_ORDER] Ignored stale enemy_turn_complete execution', {
+        room,
+        enemyId,
+        expectedExecutionId,
+        receivedExecutionId: executionId
+      });
       return;
     }
 

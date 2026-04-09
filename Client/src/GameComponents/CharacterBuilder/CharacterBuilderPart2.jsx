@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, use } from 'react';
 import { useGameContext } from '../../Components/Context';
 import './CharacterBuilder.css';
 
@@ -15,123 +15,71 @@ const NON_COMBAT_ATTRIBUTES = [
     { id: 'electrician', name: 'Electrician', description: 'Electricians are experts in power systems and circuitry. They thrive when repairing, sabotaging, or rerouting electrical systems and technology.' }
 ];
 
-function CharacterBuilder() {
+function CharacterBuilderPart2() {
     const { players, playerName, room, socket, playerCharacters, getCharacterImage, allPlayerAttributes, setAllPlayerAttributes } = useGameContext();
-    const [playerAttributes, setPlayerAttributes] = useState(Array(10).fill(null));
+    const [playerAttributes, setPlayerAttributes] = useState(allPlayerAttributes[playerName] || Array(10).fill(null));
     const [isReady, setIsReady] = useState(false);
     const [readyPlayers, setReadyPlayers] = useState([]);
     const [showDescription, setShowDescription] = useState(null);
     const character = playerCharacters[playerName]; 
-    const [count, setCount] = useState(0);
 
     useEffect(() => {
         socket.on('attributes_updated', (attrs) => {
             setAllPlayerAttributes(attrs);
         });
-    
+
         socket.on('attribute_ready_status', (ready) => {
             setReadyPlayers(ready);
         });
-    
+
         return () => {
             socket.off('attributes_updated');
             socket.off('attribute_ready_status');
         };
-    }, [socket]);
+    }, [socket, playerName]);
 
     const setAttribute = (attr) => {
-        if(playerAttributes[0] === null || count === 0 && playerAttributes[1] !== null){
-            // setPrimaryAttribute(attr.name);
-            setPlayerAttributes(prevAttributes => {
-                const newAttributes = [...prevAttributes];
-                newAttributes[0] = attr.name;
-                socket.emit('update_attributes', { room, playerName, newAttributes});
-                return newAttributes;
-            });
-        }else if (playerAttributes[1] === null || count === 1 && playerAttributes[0] !== null){
-            // setSecondaryAttribute(attr.name);
-            setPlayerAttributes(prevAttributes => {
-                const newAttributes = [...prevAttributes];
-                newAttributes[1] = attr.name;
-                socket.emit('update_attributes', { room, playerName, newAttributes });
-                return newAttributes;
-            });
-        }
-        setCount(count? 0 : 1);
+        setPlayerAttributes((prev) => {
+            const newAttributes = [...prev];
+            // Find the next available slot starting from index 2
+            for (let i = 2; i < 10; i++) {
+                if (newAttributes[i] === null) {
+                    newAttributes[i] = attr.name;
+                    break;
+                }
+            }
+            socket.emit('update_attributes', { room, playerName, newAttributes});
+            return newAttributes;
+        });
     }
 
     const clearAttribute = (index) => {
-        setPlayerAttributes(prevAttributes => {
-            const newAttributes = [...prevAttributes];
-            newAttributes[index] = null;
-            socket.emit('update_attributes', { room, playerName, newAttributes });
+        setPlayerAttributes((prev) => {
+            const newAttrributes = [...prev];
+            newAttrributes[index] = null;
+            socket.emit('update_attributes', { room, playerName, newAttributes});
             return newAttributes;
         });
     }
 
     const hasTeamConflict = () => {
-        const myPrimary = playerAttributes[0];
-
-        if (!myPrimary) return false;
-
-        if (players.length === 6) {
-            for (const [player, theirAttributes] of Object.entries(allPlayerAttributes)) {
-                if (player === playerName) continue;
-
-                const theirPrimary = theirAttributes[0];
-                if (theirPrimary  === myPrimary) return true;
-            }
-
-            return false;
-        }
-
-        const mySecondary = playerAttributes[1];
-        if (!mySecondary) return false;
-
-        for (const [player, theirAttributes] of Object.entries(allPlayerAttributes)) {
-            if (player === playerName || !Array.isArray(theirAttributes)) continue;
-
-            const theirPrimary = theirAttributes[0] || null;
-            const theirSecondary = theirAttributes[1] || null;
-
-            if (theirPrimary === myPrimary) return true;
-
-            if (players.length !== 6 && mySecondary) {
-                if (theirPrimary === mySecondary || theirSecondary === myPrimary || theirSecondary === mySecondary) {
-                    return true;
-                }
-            }
-        }
-        return false;
+        return false; // No conflicts in part 2
     }
 
     const handleReady = () => {
         setIsReady(true);
-        socket.emit('attribute_part1_ready', { room, playerName});
+        socket.emit('attributes_part2_ready', { room, playerName});
     }
 
     const isDisabled = (attr) => {
-        if(players.length === 6){
-            const primaryAttributes = Object.values(allPlayerAttributes).map(attrs => Array.isArray(attrs) ? attrs[0] : null);
-            return primaryAttributes.includes(attr);
-        }
-        for (const [player, theirAttributes] of Object.entries(allPlayerAttributes)) {
-            if (theirAttributes.includes(attr)) {
-                return true;
-            }
-        }
-        return false;
+        return playerAttributes.includes(attr.name);
     }
 
     return(
         <div className="character-builder-container">
             <div className="builder-header">
                 <h1>Character Feats</h1>
-                {players.length === 6 ? (
-                    <p>Since you have a full team, you must choose a unique primary attribute. Your secondary is optional.</p>
-                ) : (
-                    <p>You must choose a unique primary and secondary attribute.</p>
-                )}
+                    <p>Choose the order of your other Attributes</p>
             </div>
 
             <div className="builder-content">
@@ -151,31 +99,91 @@ function CharacterBuilder() {
                         </div>
 
                         <div className="allocation-column">
-                                <div className="attribute-box">
-                                    <h4>Primary Attribute</h4>
+                            <div className="attribute-box">
+                                    <h4></h4>
                                 <input
                                     type="text"
                                     readOnly
-                                    value={playerAttributes[0] || ''}
-                                    placeholder="Primary Attribute"
-                                    onClick={() => clearAttribute(0)}
+                                    value={playerAttributes[2] || ''}
+                                    placeholder="3rd"
+                                    onClick={() => clearAttribute(2)}
                                 />
                             </div>
                             <div className="attribute-box">
-                                <h4>Secondary Attribute</h4>
+                                <h4></h4>
                                 <input
                                     type="text"
                                     readOnly
-                                    value={playerAttributes[1] || ''}
-                                    placeholder="Secondary Attribute"
-                                    onClick={() => clearAttribute(1)}
+                                    value={playerAttributes[3] || ''}
+                                    placeholder="4th"
+                                    onClick={() => clearAttribute(3)}
+                                />
+                            </div>
+                            <div className="attribute-box">
+                                <h4></h4>
+                                <input
+                                    type="text"
+                                    readOnly
+                                    value={playerAttributes[4] || ''}
+                                    placeholder="5th"
+                                    onClick={() => clearAttribute(4)}
+                                />
+                            </div>
+                            <div className="attribute-box">
+                                <h4></h4>
+                                <input
+                                    type="text"
+                                    readOnly
+                                    value={playerAttributes[5] || ''}
+                                    placeholder="6th"
+                                    onClick={() => clearAttribute(5)}
+                                />
+                            </div>
+                            <div className="attribute-box">
+                                <h4></h4>
+                                <input
+                                    type="text"
+                                    readOnly
+                                    value={playerAttributes[6] || ''}
+                                    placeholder="7th"
+                                    onClick={() => clearAttribute(6)}
+                                />
+                            </div>
+                            <div className="attribute-box">
+                                <h4></h4>
+                                <input
+                                    type="text"
+                                    readOnly
+                                    value={playerAttributes[7] || ''}
+                                    placeholder="8th"
+                                    onClick={() => clearAttribute(7)}
+                                />
+                            </div>
+                            <div className="attribute-box">
+                                <h4></h4>
+                                <input
+                                    type="text"
+                                    readOnly
+                                    value={playerAttributes[8] || ''}
+                                    placeholder="9th"
+                                    onClick={() => clearAttribute(8)}
+                                />
+                            </div>
+                            <div className="attribute-box">
+                                <h4></h4>
+                                <input
+                                    type="text"
+                                    readOnly
+                                    value={playerAttributes[9] || ''}
+                                    placeholder="10th"
+                                    onClick={() => clearAttribute(9)}
                                 />
                             </div>
                         </div>
 
                         <div className="allocation-column allocation-attributes">
                             <div className="attributes-list">
-                                {NON_COMBAT_ATTRIBUTES.map((attr) => (
+                                {NON_COMBAT_ATTRIBUTES.filter(attr => !(allPlayerAttributes[playerName]?.slice(0, 2) || []).includes(attr.name)).map((attr) => (
                                     <div className="attribute-info" key={attr.id}>
                                         <div
                                             onMouseEnter={() => setShowDescription(attr.id)}
@@ -186,7 +194,7 @@ function CharacterBuilder() {
                                             <button onClick={() => {
                                                 setAttribute(attr);
                                             }}
-                                            disabled ={playerAttributes[0] === attr.name || playerAttributes[1] === attr.name || isDisabled(attr.name)}
+                                            disabled ={playerAttributes.includes(attr.name)}
                                             >{attr.name}</button>
                                         </div>
                                     </div>
@@ -198,15 +206,15 @@ function CharacterBuilder() {
                 <div className="player-allocations">
                     <h3>Team Allocations</h3>
                     {players.map((player) => {
-                        const teamAttributes =
+                        const attributes =
                             player === playerName
                                 ? playerAttributes
                                 : Array.isArray(allPlayerAttributes[player])
                                 ? allPlayerAttributes[player]
                                 : [null, null];
 
-                        const primary = teamAttributes?.[0] || null;
-                        const secondary = teamAttributes?.[1] || null;
+                        const primary = attributes?.[0] || null;
+                        const secondary = attributes?.[1] || null;
                         const character = playerCharacters[player];
 
                         return (
@@ -247,7 +255,7 @@ function CharacterBuilder() {
                 <button 
                     className="ready-button" 
                     onClick={handleReady}
-                    disabled={hasTeamConflict() || !playerAttributes[0] || !playerAttributes[1]}
+                    disabled={hasTeamConflict() || playerAttributes.slice(2).some(attr => attr === null)}
                 >
                     {isReady ? 'Waiting for others...' : 'Ready'}
                 </button>
@@ -257,4 +265,4 @@ function CharacterBuilder() {
     );
 };
 
-export default CharacterBuilder;
+export default CharacterBuilderPart2;

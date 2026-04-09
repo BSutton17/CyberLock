@@ -19,7 +19,7 @@
     min-width: 3vmin;
     min-height: 1.5vmin;
     border: 2px solid rgba(0, 255, 255, 0.35); /* Match --glass-border */
-    font-size: clamp(12px, 1.5vmin, 20px);
+    font-size: 1.5vmin;
     padding: 0.5rem 1rem;
     border-radius: 0.5rem;
     background: rgba(16, 16, 25, 0.75); /* Match --glass-bg */
@@ -29,7 +29,7 @@
     cursor: pointer;
     box-shadow: 0 0 10px rgba(0, 255, 255, 0.05); /* Subtle glow */
     text-transform: uppercase;
-    font-weight: 700;
+    font-weight: 600;
     letter-spacing: 0.1em;
     transition: all 0.2s ease;
 }

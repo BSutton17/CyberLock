@@ -39,10 +39,10 @@
 
 .abilities-header h1 {
 	margin: 0;
-	font-size: clamp(18px, 3.564vmin, 36px);
-	font-weight: 900;
+	font-size: 3.564vmin;
+	font-weight: 800;
 	text-transform: uppercase;
-	letter-spacing: 0.372vmin;
+	letter-spacing: 0.1em;
 	background: linear-gradient(90deg, #a78bfa 0%, #60a5fa 100%);
 	-webkit-background-clip: text;
 	background-clip: text;
@@ -52,9 +52,9 @@
 .abilities-header p {
 	margin: 0.99vmin 0 0;
 	color: #d1d5db;
-	font-size: clamp(12px, 1.584vmin, 20px);
+	font-size: 1.584vmin;
 	text-transform: uppercase;
-	letter-spacing: 0.248vmin;
+	letter-spacing: 0.1em;
 }
 
 
@@ -77,7 +77,7 @@
 }
 
 .ability-description{
-	font-size: clamp(10px, 0.9vmin, 20px);
+	font-size: 0.9vmin;
 	gap: 1vmin;
 }
 
@@ -99,11 +99,11 @@
 .character-section h3,
 .current-abilities-section h3 {
 	margin: 0 0 1.584vmin 0;
-	font-size: clamp(12px, 1.881vmin, 20px);
+	font-size: 1.881vmin;
 	text-transform: uppercase;
-	letter-spacing: 0.248vmin;
+	letter-spacing: 0.1em;
 	color: #c4b5fd;
-	font-weight: 900;
+	font-weight: 800;
 	border-bottom: 0.248vmin solid rgba(139, 92, 246, 0.45);
 	padding-bottom: 0.891vmin;
 }
@@ -116,23 +116,23 @@
 
 .character-name {
 	margin: 0;
-	font-size: clamp(14px, 2.178vmin, 26px);
-	font-weight: 900;
+	font-size: 2.178vmin;
+	font-weight: 800;
 	color: #f3f4f6;
 	text-transform: uppercase;
-	letter-spacing: 0.124vmin;
+	letter-spacing: 0.1em;
 }
 
 .character-level {
 	margin: 0;
-	font-size: clamp(12px, 1.782vmin, 20px);
+	font-size: 1.782vmin;
 	color: #a78bfa;
-	font-weight: 700;
+	font-weight: 600;
 }
 
 .character-role {
 	margin: 0;
-	font-size: clamp(12px, 1.683vmin, 20px);
+	font-size: 1.683vmin;
 	color: #d1d5db;
 }
 
@@ -174,19 +174,19 @@
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	font-size: clamp(14px, 2vmin, 26px);
+	font-size: 2vmin;
 	color: #9ca3af;
 	pointer-events: none;
 }
 
 .ability-level {
-	font-size: clamp(12px, 1.75vmin, 20px);
+	font-size: 1.75vmin;
 	text-transform: uppercase;
-	letter-spacing: 0.062vmin;
+	letter-spacing: 0.1em;
 	color: #9ca3af;
 	width: 10vmin;
 	flex-shrink: 0;
-	font-weight: 700;
+	font-weight: 600;
 }
 
 .ability-details {
@@ -198,7 +198,7 @@
 }
 
 .ability-name {
-	font-size: clamp(14px, 2vmin, 26px);
+	font-size: 2vmin;
 	color: #f3f4f6;
 	font-weight: 600;
 	text-align: left;
@@ -207,7 +207,7 @@
 
 .ability-description{
     margin: 0;
-    font-size: clamp(12px, 1.5vmin, 20px);
+    font-size: 1.5vmin;
     color: #d1d5db;
     font-weight: 400;
     text-align: left;
@@ -233,11 +233,11 @@
 }
 .ability-category h4 {
 	margin: 0 0 1.485vmin 0;
-	font-size: clamp(12px, 1.683vmin, 20px);
+	font-size: 1.683vmin;
 	text-transform: uppercase;
-	letter-spacing: 0.186vmin;
+	letter-spacing: 0.1em;
 	color: #c4b5fd;
-	font-weight: 900;
+	font-weight: 800;
 	padding-bottom: 0.99vmin;
 	border-bottom: 0.248vmin solid rgba(139, 92, 246, 0.45);
 }
@@ -253,10 +253,10 @@
 	padding: 1.683vmin 1.98vmin;
 	border: none;
 	border-radius: 0.99vmin;
-	font-size: clamp(12px, 1.782vmin, 20px);
-	font-weight: 700;
+	font-size: 1.782vmin;
+	font-weight: 600;
 	text-transform: uppercase;
-	letter-spacing: 0.062vmin;
+	letter-spacing: 0.1em;
 	color: #ffffff;
 	cursor: pointer;
 	transition: all 0.3s ease;
@@ -282,15 +282,15 @@
 }
 
 .dropdown-title {
-	font-weight: 900;
+	font-weight: 800;
 	text-transform: uppercase;
-	letter-spacing: 0.124vmin;
+	letter-spacing: 0.1em;
 }
 
 .dropdown-selected {
 	flex: 1;
 	text-align: right;
-	font-size: clamp(12px, 1.683vmin, 20px);
+	font-size: 1.683vmin;
 	color: #d1d5db;
 	font-weight: 600;
 }
@@ -298,7 +298,7 @@
 .dropdown-arrow {
 	transition: transform 0.3s ease;
 	display: inline-block;
-	font-size: clamp(12px, 1.485vmin, 20px);
+	font-size: 1.485vmin;
 }
 
 .dropdown-arrow.open {
@@ -329,12 +329,12 @@
 	border: none;
 	color: #f3f4f6;
 	text-align: left;
-	font-size: clamp(12px, 1.683vmin, 20px);
+	font-size: 1.683vmin;
 	font-weight: 600;
 	cursor: pointer;
 	transition: all 0.2s ease;
 	text-transform: uppercase;
-	letter-spacing: 0.062vmin;
+	letter-spacing: 0.1em;
 	border-bottom: 0.124vmin solid rgba(139, 92, 246, 0.1);
 }
 
@@ -441,7 +441,7 @@
 	display: flex;
 	align-items: center;
 	gap: 0.8vmin;
-	font-size: clamp(12px, 1.25vmin, 2vmin);
+	font-size: 1.25vmin;
 	color: #e5e7eb;
 	line-height: 1.25;
 }
@@ -451,7 +451,7 @@
 	align-items: center;
 	justify-content: center;
 	min-width: 2.1vmin;
-	font-size: clamp(14px, 1.9vmin, 2.5vmin);
+	font-size: 1.9vmin;
 	color: #9ca3af;
 }
 
@@ -459,10 +459,10 @@
 	border: none;
 	border-radius: 0.99vmin;
 	padding: 1.346vmin 2.772vmin;
-	font-size: clamp(12px, 1.881vmin, 20px);
-	font-weight: 900;
+	font-size: 1.881vmin;
+	font-weight: 800;
 	text-transform: uppercase;
-	letter-spacing: 0.124vmin;
+	letter-spacing: 0.1em;
 	color: #ffffff;
 	background: linear-gradient(135deg, #7c3aed 0%, #2563eb 100%);
 	cursor: pointer;
@@ -485,9 +485,9 @@
 .ready-status {
 	margin: 0;
 	color: #d1d5db;
-	font-size: clamp(12px, 1.624vmin, 20px);
+	font-size: 1.624vmin;
 	text-transform: uppercase;
-	letter-spacing: 0.124vmin;
+	letter-spacing: 0.1em;
 }
 .character-panel::-webkit-scrollbar,
 .abilities-panel::-webkit-scrollbar,
@@ -527,25 +527,25 @@
 	}
 
 	.character-name{
-		font-size: clamp(14px, 2.178vmin, 26px);
+		font-size: 2.178vmin;
 	}
 
 	.character-level{
-		font-size: clamp(8px, 1.782vmin, 20px);
+		font-size: 1.782vmin;
 	}
 	.ability-description{
-		font-size: clamp(14px, 0.9vmin, 20px);
+		font-size: 0.9vmin;
 		gap: 1vmin;
 	}
 
 	.ability-description-drop{
-		font-size: clamp(8px, 0.9vmin, 20px);
+		font-size: 0.9vmin;
 		gap: 1vmin;
 		font-weight: 100;
 	}
 
 	.ability-name{
-		font-size: clamp(20px, 0.5vmin, 20px);
+		font-size: 0.5vmin;
 	}
 	.current-ability-item{
 		height: 15vmin;
@@ -559,7 +559,7 @@
 	}
 
 	.ability-name-drop{
-		font-size: clamp(10px, 2vmin, 26px);
+		font-size: 2vmin;
 		font-weight: 600;
 	}
 
@@ -570,7 +570,7 @@
 
 	.ability-level{
 		width: auto;
-		font-size: clamp(14px, 1.75vmin, 20px);
+		font-size: 1.75vmin;
 		margin-right: 5vmin;
 	}
 

@@ -35,10 +35,10 @@
 
 .header h1 {
     margin: 0;
-    font-size: clamp(12px, 3.7vmin, 26px);
-    font-weight: 900;
+    font-size: 3.7vmin;
+    font-weight: 800;
     text-transform: uppercase;
-    letter-spacing: 0.281vmin;
+    letter-spacing: 0.1em;
     background: linear-gradient(90deg, #a78bfa 0%, #60a5fa 100%);
     background-clip: text;
     -webkit-background-clip: text;
@@ -50,9 +50,9 @@
 .header h2 {
     margin: 0.75vmin 0 0 0;
     color: #d1d5db;
-    font-size: clamp(12px, 1.2vmin, 20px);
+    font-size: 1.2vmin;
     text-transform: uppercase;
-    letter-spacing: 0.188vmin;
+    letter-spacing: 0.1em;
     text-shadow: 0 0.188vmin 0.375vmin rgba(0, 0, 0, 0.8);
 }
 
@@ -96,7 +96,7 @@
 
 .player-list li {
     padding: 0.75vmin;
-    font-size: clamp(12px, 1.35vmin, 20px);
+    font-size: 1.35vmin;
     color: #d1d5db;
     text-shadow: 0 0.094vmin 0.188vmin rgba(0, 0, 0, 0.6);
 }
@@ -115,9 +115,9 @@
 
 .selected-team h3 {
     margin: 0 0 1.125vmin 0;
-    font-size: clamp(14px, 1.5vmin, 26px);
+    font-size: 1.5vmin;
     text-transform: uppercase;
-    letter-spacing: 0.188vmin;
+    letter-spacing: 0.1em;
     color: #c4b5fd;
     border-bottom: 0.15vmin solid rgba(139, 92, 246, 0.4);
     padding-bottom: 0.9vmin;
@@ -154,13 +154,13 @@
 
 .team-character span {
     color: #a78bfa;
-    font-weight: 700;
-    font-size: clamp(12px, 1.32vmin, 20px);
+    font-weight: 600;
+    font-size: 1.32vmin;
     text-shadow: 0 0 0.6vmin rgba(167, 139, 250, 0.6);
 }
 
 .empty-slot {
-    font-size: clamp(12px, 1.08vmin, 20px);
+    font-size: 1.08vmin;
     color: #9ca3af;
     font-style: italic;
     text-shadow: 0 0.075vmin 0.15vmin rgba(0,0,0,0.5);
@@ -182,7 +182,7 @@
     transition: all 0.2s;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.075vmin;
+    letter-spacing: 0.1em;
 }
 
 .team-controls button:hover:not(:disabled),
@@ -200,9 +200,9 @@
 
 .characters-grid h3 {
     margin: 0 0 1.5vmin 0;
-    font-size: clamp(12px, 1.32vmin, 20px);
+    font-size: 1.32vmin;
     text-transform: uppercase;
-    letter-spacing: 0.188vmin;
+    letter-spacing: 0.1em;
     color: #c4b5fd;
     border-bottom: 0.15vmin solid rgba(139, 92, 246, 0.4);
     padding-bottom: 0.9vmin;
@@ -278,19 +278,19 @@
 
 .character-card h4 {
     margin: 0;
-    font-size: clamp(12px, 1.89vmin, 20px);
+    font-size: 1.89vmin;
     color: #f3f4f6;
-    font-weight: 700;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.094vmin;
+    letter-spacing: 0.1em;
     text-shadow: 0 0.188vmin 0.375vmin rgba(0, 0, 0, 0.8);
 }
 
 .character-card .role {
-    font-size: clamp(12px, 1.25vmin, 20px);
+    font-size: 1.25vmin;
     color: #93c5fd;
     text-transform: uppercase;
-    letter-spacing: 0.075vmin;
+    letter-spacing: 0.1em;
     font-weight: 600;
     text-shadow: 0 0 0.6vmin rgba(59, 130, 246, 0.5);
 }
@@ -317,7 +317,7 @@
     background: rgba(139, 92, 246, 0.25);
     padding: 0.48vmin 1.1vmin;
     border-radius: 1.1vmin;
-    font-size: clamp(12px, 1.08vmin, 20px);
+    font-size: 1.08vmin;
     font-weight: 600;
     color: #c4b5fd;
     border: 0.075vmin solid rgba(139, 92, 246, 0.3);
@@ -337,7 +337,7 @@
     background: rgba(15, 23, 42, 0.55);
     border: 0.075vmin solid rgba(139, 92, 246, 0.35);
     box-shadow: inset 0 0 0.35vmin rgba(59, 130, 246, 0.2);
-    font-size: clamp(12px, 1.35vmin, 20px);
+    font-size: 1.35vmin;
 }
 
 .weapon-stats-grid {
@@ -347,8 +347,8 @@
 
 .weapon-stat-label {
     color: #cbd5e1;
-    font-weight: 700;
-    letter-spacing: 0.05vmin;
+    font-weight: 600;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
 }
 
@@ -365,7 +365,7 @@
     height: 100%;
     color: #6b7280;
     font-style: italic;
-    font-size: clamp(12px, 1.82vmin, 20px);
+    font-size: 1.82vmin;
     text-shadow: 0 0.575vmin 0.65vmin rgba(0,0,0,0.5);
 }
 
@@ -379,26 +379,26 @@
 }
 
 .character-details h4 {
-    font-size: clamp(14px, 2.66vmin, 26px); 
+    font-size: 2.66vmin; 
     margin: 0 0 1.1vmin 0;
     background: linear-gradient(90deg, #a78bfa, #c4b5fd);
     background-clip: text;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     text-transform: uppercase;
-    font-weight: 900;
+    font-weight: 800;
     filter: drop-shadow(0 0 1.1vmin rgba(167, 139, 250, 0.5));
 }
 
 .detail-role {
     color: #93c5fd;
-    font-size: clamp(12px, 1.7vmin, 20px);
+    font-size: 1.7vmin;
     margin-bottom: 1.1vmin;
     text-shadow: 0 0 1.25vmin rgba(59, 130, 246, 0.4);
 }
 
 .detail-desc {
-    font-size: clamp(12px, 1.58vmin, 20px);
+    font-size: 1.58vmin;
     color: #d1d5db;
     margin-bottom: 2.3vmin;
     line-height: 1.5;
@@ -421,10 +421,10 @@
 
 .stats-detail h5, .weapon-detail h5, .abilities-detail h5, .ultimate-detail h5 {
     margin: 0 0 1.7vmin 0;
-    font-size: clamp(12px, 1.58vmin, 20px);
+    font-size: 1.58vmin;
     text-transform: uppercase;
     color: #a78bfa;
-    letter-spacing: 0.613vmin;
+    letter-spacing: 0.1em;
     font-weight: 800;
     text-shadow: 0 0 1.25vmin rgba(167, 139, 250, 0.4);
     border-bottom: 0.575vmin solid rgba(139, 92, 246, 0.3);
@@ -436,7 +436,7 @@
     justify-content: space-between;
     padding: 0.98vmin 0;
     border-bottom: 0.575vmin solid rgba(255, 255, 255, 0.05);
-    font-size: clamp(12px, 1.64vmin, 20px);
+    font-size: 1.64vmin;
 }
 
 .stat-row span:first-child {
@@ -445,7 +445,7 @@
 
 .stat-row span:last-child {
     color: #fff;
-    font-weight: 700;
+    font-weight: 600;
     text-shadow: 0 0 0.875vmin rgba(255,255,255,0.3);
 }
 
@@ -470,12 +470,12 @@
 
 .ability-header strong {
     color: #e9d5ff;
-    font-size: clamp(12px, 1.7vmin, 20px);
+    font-size: 1.7vmin;
     text-shadow: 0 0 1.1vmin rgba(167, 139, 250, 0.5);
 }
 
 .cooldown {
-    font-size: clamp(12px, 1.4vmin, 20px);
+    font-size: 1.4vmin;
     color: #bfdbfe;
     background: rgba(59, 130, 246, 0.3);
     padding: 0.74vmin 1.22vmin;
@@ -484,7 +484,7 @@
 }
 
 .ability p {
-    font-size: clamp(12px, 1.52vmin, 20px);
+    font-size: 1.52vmin;
     color: #e2e8f0;
     margin: 0;
     line-height: 1.5;
@@ -500,12 +500,12 @@
     display: block;
     color: #d8b4fe;
     margin-bottom: 1.1vmin;
-    font-size: clamp(12px, 1.82vmin, 20px);
+    font-size: 1.82vmin;
     text-shadow: 0 0 1.4vmin rgba(167, 139, 250, 0.8);
 }
 
 .ultimate-detail p {
-    font-size: clamp(12px, 1.58vmin, 20px);
+    font-size: 1.58vmin;
     color: #f1f5f9;
     line-height: 1.5;
 }
@@ -525,10 +525,10 @@
     position: fixed;
     min-width: 44px;
     min-height: 44px;
-    font-size: clamp(12px, 1.44vmin, 20px);
-    font-weight: 900;
+    font-size: 1.44vmin;
+    font-weight: 800;
     text-transform: uppercase;
-    letter-spacing: 0.225vmin;
+    letter-spacing: 0.1em;
     background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
     /* border: 0.15vmin solid rgba(167, 139, 250, 0.5); */
     border-radius: 0.9vmin;
@@ -558,7 +558,7 @@
 .ready-status {
     margin-top: 0.9vmin;
     color: #9ca3af;
-    font-size: clamp(12px, 1.2vmin, 20px);
+    font-size: 1.2vmin;
     text-shadow: 0 0.075vmin 0.15vmin rgba(0,0,0,0.8);
 }
 
@@ -630,7 +630,7 @@
     }
 
     .header h1 {
-        font-size: clamp(28px, 4.8vmin, 42px);
+        font-size: 4.8vmin;
     }
 
     .header h2,
@@ -645,7 +645,7 @@
     .detail-role,
     .stat-row,
     .weapon-stats {
-        font-size: clamp(16px, 2.2vmin, 26px);
+        font-size: 2.2vmin;
     }
 
     .selected-team h3,
@@ -658,7 +658,7 @@
     .ultimate-detail h5,
     .ability-header strong,
     .ultimate-detail strong {
-        font-size: clamp(20px, 3vmin, 30px);
+        font-size: 3vmin;
     }
 
     .footer-controls {
@@ -684,10 +684,10 @@
         border-radius: 0.9vmin;
         background: linear-gradient(135deg, #2563eb 0%, #06b6d4 100%);
         color: #ffffff;
-        font-size: clamp(18px, 2.6vmin, 28px);
-        font-weight: 900;
+        font-size: 2.6vmin;
+        font-weight: 800;
         text-transform: uppercase;
-        letter-spacing: 0.18vmin;
+        letter-spacing: 0.1em;
         box-shadow: 0 0.3vmin 1.5vmin rgba(37, 99, 235, 0.45);
         text-shadow: 0 0.15vmin 0.3vmin rgba(0, 0, 0, 0.3);
         cursor: pointer;
@@ -719,7 +719,7 @@
         transform: translateX(-50%);
         z-index: 20;
         padding: 1.2vmin 4.8vmin;
-        font-size: clamp(18px, 2.6vmin, 28px);
+        font-size: 2.6vmin;
     }
 
     .ready-button-select:hover:not(:disabled),

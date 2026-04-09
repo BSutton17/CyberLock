@@ -9,6 +9,7 @@ import Main from "./Main/Main";
 import Events from "../Components/Events";
 import { useGameContext } from "../Components/Context";
 import CharacterBuilder from "./CharacterBuilder/CharacterBuilder";
+import CharacterBuilderPart2 from "./CharacterBuilder/CharacterBuilderPart2";
 import LevelUp from "./LevelUp/LevelUp.jsx"
 import ChooseAbilities from "./ChooseAbilities/ChooseAbilities.jsx"
 import ChatBot from "./ChatBot/ChatBot.jsx";
@@ -202,6 +203,7 @@ function HomeScreen() {
           {screen === "waiting" && <WaitingRoom />}
           {screen === "characterSelect" && <CharacterSelect />}
           {screen === "characterBuilder" && <CharacterBuilder />}
+          {screen === "characterBuilderPart2" && <CharacterBuilderPart2 />}
           {screen === "main" && <Main />}
           {screen !== "main" && <button className="leave" onClick={leaveGame}>Leave Game</button>}
           {screen === "levelup" && <LevelUp />}

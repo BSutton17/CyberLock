@@ -18,7 +18,7 @@ function Events(){
       setReadyPlayers, setGamePhase, setStoryText, characterPositions,
       setCombatRewards, room, setEnemies, 
       setTurnOrder, setCurrentTurn, 
-      setIsMyTurn, playerName, setAttributeAllocations, setAttributePoints, playerCharacters, debugLogLevel } = useGameContext();
+      setIsMyTurn, playerName, playerCharacters, debugLogLevel, setAllPlayerAttributes } = useGameContext();
 
     const isQuiet = debugLogLevel === 'quiet';
     const isVerbose = debugLogLevel === 'verbose';
@@ -139,6 +139,10 @@ function Events(){
           setScreen("characterBuilder");
         });
 
+        socket.on("attribute_part1_complete", () => {
+          setScreen("characterBuilderPart2");
+        });
+
         socket.on("start_main_game", () => {
           setScreen("chooseAbilities");
         });
@@ -240,14 +244,6 @@ function Events(){
           }
         });
 
-        socket.on("attribute_allocations_updated", (allocations) => {
-          setAttributeAllocations(allocations);
-        });
-
-        socket.on("attribute_points_updated", (points) => {
-          setAttributePoints(points || {});
-        });
-
         socket.on("player_health_updated", ({ playerName: damagedPlayer, newHealth }) => {
           setPlayerCharacters(prev => ({
             ...prev,
@@ -294,8 +290,7 @@ function Events(){
           setReadyPlayers([]);
           setEnemies([]);
           setTurnOrder([]);
-          setAttributeAllocations({});
-          setAttributePoints({});
+          setAllPlayerAttributes({});
           setScreen("waiting");
         });
 
@@ -311,8 +306,6 @@ function Events(){
           socket.off("phase_changed_combat");
           socket.off("turn_changed");
           socket.off("turn_order_updated");
-          socket.off("attribute_allocations_updated");
-          socket.off("attribute_points_updated");
           socket.off("player_health_updated");
           socket.off("level_up");
           socket.off("level_up_complete");

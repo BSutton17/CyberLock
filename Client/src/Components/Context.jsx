@@ -43,8 +43,7 @@ export const GameProvider = ({ children }) => {
     const [gamePhase, setGamePhase] = useState('story');
     const [storyText, setStoryText] = useState('The adventure begins...');
     const [combatRewards, setCombatRewards] = useState(null);
-    const [attributeAllocations, setAttributeAllocations] = useState({});
-    const [attributePoints, setAttributePoints] = useState({});
+    const [allPlayerAttributes, setAllPlayerAttributes] = useState({});
     const [chat, setChat] = useState(false);
 
     const characterImageMap = {
@@ -117,8 +116,7 @@ export const GameProvider = ({ children }) => {
         isMyTurn, setIsMyTurn,
         chat, setChat,
         enemies, setEnemies,
-        attributeAllocations, setAttributeAllocations,
-        attributePoints, setAttributePoints,
+        allPlayerAttributes, setAllPlayerAttributes,
         debugLogLevel,
         characterImageMap,
         enemyImageMap,

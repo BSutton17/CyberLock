@@ -111,7 +111,7 @@ function CharacterBuilder() {
     }
 
     const isDisabled = (attr) => {
-        if(players.length === 2){
+        if(players.length === 6){
             const primaryAttributes = Object.values(allPlayerAttributes).map(attrs => Array.isArray(attrs) ? attrs[0] : null);
             return primaryAttributes.includes(attr);
         }

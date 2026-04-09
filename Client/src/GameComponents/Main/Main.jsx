@@ -218,8 +218,6 @@ function Main() {
         room,
         socket,
         getAbilityScaler,
-        attributePoints,
-        attributeAllocations,
         setGamePhase,
         isMyTurn,
         currentTurn,
@@ -236,7 +234,8 @@ function Main() {
         debugLogLevel,
         chat,
         setChat,
-        getIsBonusAction
+        getIsBonusAction,
+        allPlayerAttributes
     } = useGameContext();
     const [currentPlayerCharacter, setCurrentPlayerCharacter] = useState(null);
     const [ultimateReady, setUltimateReady] = useState(false);
@@ -374,7 +373,7 @@ function Main() {
         let bestScore = -1;
 
         players.forEach((player) => {
-            const score = Number(attributePoints?.[player]?.[normalizedAttribute]);
+            const score = Number(allPlayerAttributes?.[player]?.[normalizedAttribute]);
             if (!Number.isFinite(score)) return;
 
             if (score > bestScore) {
@@ -387,7 +386,7 @@ function Main() {
             return bestOwner;
         }
 
-        const owner = players.find(player => attributeAllocations[player]?.[0] === normalizedAttribute);
+        const owner = players.find(player => allPlayerAttributes[player]?.[0] === normalizedAttribute);
         return owner || null;
     };
 
@@ -5153,17 +5152,17 @@ function Main() {
                                     <div className="char-role">{currentPlayerCharacter.role}</div>
 
                                     <div className='attributes'>
-                                        {attributeAllocations[playerName] && attributeAllocations[playerName].length > 0 ? (
+                                        {allPlayerAttributes[playerName] && allPlayerAttributes[playerName].length > 0 ? (
                                             <>
                                                 <div className="attribute-line">
                                                     <span className="primary-ability small">
-                                                        {attributeAllocations[playerName][0]?.charAt(0).toUpperCase() + attributeAllocations[playerName][0]?.slice(1)}
+                                                        {allPlayerAttributes[playerName][0]?.charAt(0).toUpperCase() + allPlayerAttributes[playerName][0]?.slice(1)}
                                                     </span>
                                                 </div>
                                                 /
                                                 <div className="attribute-line">
                                                     <span className="secondary-ability small">
-                                                        {attributeAllocations[playerName][1]?.charAt(0).toUpperCase() + attributeAllocations[playerName][1]?.slice(1)}
+                                                        {allPlayerAttributes[playerName][1]?.charAt(0).toUpperCase() + allPlayerAttributes[playerName][1]?.slice(1)}
                                                     </span>
                                                 </div>
                                             </>

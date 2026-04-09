@@ -868,14 +868,8 @@ function finalizeDisconnectedPlayer(io, room, playerName) {
   if (roomState.levelUpReadyPlayers) {
     roomState.levelUpReadyPlayers = roomState.levelUpReadyPlayers.filter(player => player !== playerName);
   }
-  if (roomState.attributePoints) {
-    delete roomState.attributePoints[playerName];
-  }
   if (roomState.attributeReadyPlayers) {
     roomState.attributeReadyPlayers = roomState.attributeReadyPlayers.filter(player => player !== playerName);
-  }
-  if (roomState.sortedAttributeAllocations) {
-    delete roomState.sortedAttributeAllocations[playerName];
   }
   if (roomState.playerScreens) {
     delete roomState.playerScreens[playerName];
@@ -904,8 +898,6 @@ function finalizeDisconnectedPlayer(io, room, playerName) {
   io.to(room).emit('updatePlayerList', roomState.players || []);
   io.to(room).emit('update_character_selections', roomState.characterSelections || {});
   emitReadyStateUpdates(io, room);
-  io.to(room).emit('attribute_points_updated', roomState.attributePoints || {});
-  io.to(room).emit('attribute_allocations_updated', roomState.sortedAttributeAllocations || {});
 
   if ((roomState.players || []).length === 0) {
     clearEnemyTurnWatchdog(room);
@@ -989,9 +981,8 @@ io.on('connection', (socket) => {
       rooms[room].abilitySelections = {};
       rooms[room].abilityReadyPlayers = [];
       rooms[room].levelUpReadyPlayers = [];
-      rooms[room].attributePoints = {};
+      rooms[room].attributes = {};
       rooms[room].attributeReadyPlayers = [];
-      rooms[room].sortedAttributeAllocations = {};
       rooms[room].selectedFaction = null;
       
       // Clear combat session
@@ -1052,7 +1043,7 @@ io.on('connection', (socket) => {
       // if (allReady) {
       //   io.to(room).emit("start_main_game");
       // }
-       if (allReady) {
+      if (allReady) {
         io.to(room).emit("character_customization");
       }
     }
@@ -1089,17 +1080,17 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on("update_attribute_points", ({ room, playerName, points }) => {
+  socket.on("update_attributes", ({ room, playerName, newAttributes }) => {
     if (rooms[room]) {
-      if (!rooms[room].attributePoints) {
-        rooms[room].attributePoints = {};
+      if (!rooms[room].attributes) {
+        rooms[room].attributes = {};
       }
-      rooms[room].attributePoints[playerName] = points;
-      io.to(room).emit("attribute_points_updated", rooms[room].attributePoints);
+      rooms[room].attributes[playerName] = newAttributes;
+       io.to(room).emit("attributes_updated", rooms[room].attributes);
     }
   });
 
-  socket.on("attribute_ready", ({ room, playerName, sortedAttributes }) => {
+  socket.on("attribute_part1_ready", ({ room, playerName}) => {
     if (rooms[room]) {
       if (!rooms[room].attributeReadyPlayers) {
         rooms[room].attributeReadyPlayers = [];
@@ -1108,20 +1099,39 @@ io.on('connection', (socket) => {
         rooms[room].attributeReadyPlayers.push(playerName);
       }
       
-      // Store sorted attributes
-      if (!rooms[room].sortedAttributeAllocations) {
-        rooms[room].sortedAttributeAllocations = {};
-      }
-      rooms[room].sortedAttributeAllocations[playerName] = sortedAttributes;
-      
       io.to(room).emit("attribute_ready_status", rooms[room].attributeReadyPlayers);
-      io.to(room).emit("attribute_allocations_updated", rooms[room].sortedAttributeAllocations);
       
       const allAttributeReady = rooms[room].players.length > 0 && 
                                 rooms[room].players.every(player => 
-                                  rooms[room].attributeReadyPlayers.includes(player)
+                                rooms[room].attributeReadyPlayers.includes(player)
                                 );
       
+      if (allAttributeReady) {
+        rooms[room].attributeReadyPlayers = [];
+        rooms[room].abilityReadyPlayers = [];
+        io.to(room).emit("attribute_ready_status", []);
+        io.to(room).emit("attribute_part1_complete");
+        io.to(room).emit("attributes_updated", rooms[room].attributes);
+      }
+    }
+  });
+
+  socket.on("attributes_part2_ready", ({ room, playerName}) => {
+    if (rooms[room]) {
+      if (!rooms[room].attributeReadyPlayers) {
+        rooms[room].attributeReadyPlayers = [];
+      }
+      if (!rooms[room].attributeReadyPlayers.includes(playerName)) {
+        rooms[room].attributeReadyPlayers.push(playerName);
+      }
+      
+      io.to(room).emit("attribute_ready_status", rooms[room].attributeReadyPlayers);
+
+      const allAttributeReady = rooms[room].players.length > 0 && 
+                              rooms[room].players.every(player => 
+                              rooms[room].attributeReadyPlayers.includes(player)
+                              );
+
       if (allAttributeReady) {
         rooms[room].abilityReadyPlayers = [];
         io.to(room).emit("ability_ready_status", []);
@@ -1704,14 +1714,6 @@ io.on('connection', (socket) => {
     // Send existing character selections to the newly joined player
     if (rooms[room].characterSelections) {
       socket.emit("update_character_selections", rooms[room].characterSelections);
-    }
-
-    if (rooms[room].attributePoints) {
-      socket.emit('attribute_points_updated', rooms[room].attributePoints);
-    }
-
-    if (rooms[room].sortedAttributeAllocations) {
-      socket.emit('attribute_allocations_updated', rooms[room].sortedAttributeAllocations);
     }
 
     socket.emit('restore_screen', { screen: rooms[room].playerScreens[name] || 'waiting' });

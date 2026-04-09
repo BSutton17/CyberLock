@@ -861,14 +861,8 @@ function finalizeDisconnectedPlayer(io, room, playerName) {
   if (roomState.levelUpReadyPlayers) {
     roomState.levelUpReadyPlayers = roomState.levelUpReadyPlayers.filter(player => player !== playerName);
   }
-  if (roomState.attributePoints) {
-    delete roomState.attributePoints[playerName];
-  }
   if (roomState.attributeReadyPlayers) {
     roomState.attributeReadyPlayers = roomState.attributeReadyPlayers.filter(player => player !== playerName);
-  }
-  if (roomState.sortedAttributeAllocations) {
-    delete roomState.sortedAttributeAllocations[playerName];
   }
   if (roomState.playerScreens) {
     delete roomState.playerScreens[playerName];
@@ -897,8 +891,6 @@ function finalizeDisconnectedPlayer(io, room, playerName) {
   io.to(room).emit('updatePlayerList', roomState.players || []);
   io.to(room).emit('update_character_selections', roomState.characterSelections || {});
   emitReadyStateUpdates(io, room);
-  io.to(room).emit('attribute_points_updated', roomState.attributePoints || {});
-  io.to(room).emit('attribute_allocations_updated', roomState.sortedAttributeAllocations || {});
 
   if ((roomState.players || []).length === 0) {
     clearEnemyTurnWatchdog(room);
@@ -1695,14 +1687,6 @@ io.on('connection', (socket) => {
     // Send existing character selections to the newly joined player
     if (rooms[room].characterSelections) {
       socket.emit("update_character_selections", rooms[room].characterSelections);
-    }
-
-    if (rooms[room].attributePoints) {
-      socket.emit('attribute_points_updated', rooms[room].attributePoints);
-    }
-
-    if (rooms[room].sortedAttributeAllocations) {
-      socket.emit('attribute_allocations_updated', rooms[room].sortedAttributeAllocations);
     }
 
     socket.emit('restore_screen', { screen: rooms[room].playerScreens[name] || 'waiting' });

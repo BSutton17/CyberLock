@@ -25,19 +25,18 @@ function CharacterBuilder() {
     const [count, setCount] = useState(0);
 
     useEffect(() => {
-            socket.on('attributes_updated', (array) => {
-                setAllPlayerAttributes(array);
-                console.log(array);
-            });
+        socket.on('attributes_updated', (attrs) => {
+            setAllPlayerAttributes(attrs);
+        });
     
-            socket.on('attribute_ready_status', (ready) => {
-                setReadyPlayers(ready);
-            });
+        socket.on('attribute_ready_status', (ready) => {
+            setReadyPlayers(ready);
+        });
     
-            return () => {
-                socket.off('attributes_updated');
-                socket.off('attribute_ready_status');
-            };
+        return () => {
+            socket.off('attributes_updated');
+            socket.off('attribute_ready_status');
+        };
     }, [socket]);
 
     const setAttribute = (attr) => {
@@ -49,7 +48,6 @@ function CharacterBuilder() {
                 socket.emit('update_attributes', { room, playerName, newAttributes});
                 return newAttributes;
             });
-            console.log("Player Attributes: " + playerAttributes);
         }else if (playerAttributes[1] === null || count === 1 && playerAttributes[0] !== null){
             // setSecondaryAttribute(attr.name);
             setPlayerAttributes(prevAttributes => {

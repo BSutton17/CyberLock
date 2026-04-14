@@ -15,10 +15,10 @@
 
 .title-chat{
     margin: 0;
-    font-size: clamp(18px, 3.7vmin, 36px);
-    font-weight: 900;
+    font-size: 3.7vmin;
+    font-weight: 800;
     text-transform: uppercase;
-    letter-spacing: 0.281vmin;
+    letter-spacing: 0.1em;
     background: linear-gradient(90deg, #a78bfa 0%, #60a5fa 100%);
     background-clip: text;
     -webkit-background-clip: text;
@@ -39,7 +39,7 @@
     background: rgba(20, 20, 40, 0.78);
     border-radius: 0.9vmin;
     padding: 0.5vmin 1vmin;
-    font-weight: 700;
+    font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;
     box-shadow: 0 0 1.2vmin rgba(139, 92, 246, 0.3);
@@ -119,7 +119,7 @@
     border-radius: 0.8vmin;
     color: #eef2ff;
     padding: 0.9vmin 1.2vmin;
-    font-size: max(16px, clamp(12px, 1.6vmin, 20px));
+    font-size: max(16px, 1.6vmin);
     outline: none;
     transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
@@ -143,7 +143,7 @@
     text-transform: uppercase;
     letter-spacing: 0.08em;
     padding: 0.9vmin 1.8vmin;
-    font-size: max(16px, clamp(12px, 1.35vmin, 20px));
+    font-size: max(16px, 1.35vmin);
     cursor: pointer;
     box-shadow: 0 0.55vmin 1.5vmin rgba(139, 92, 246, 0.35);
     transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;

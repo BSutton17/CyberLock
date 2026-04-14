@@ -46,7 +46,8 @@ const SCENE_ALIASES = {
     office: 'office',
     sewer: 'sewer',
     shop: 'shop',
-    boss: 'boss'
+    boss: 'boss',
+    street: 'street'
 };
 
 

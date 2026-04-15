@@ -262,12 +262,13 @@ async def game_event(
 
         # Event-specific performance tuning
         is_turn_action = request.event_type == "turn_action"
+        is_chat_message = request.event_type == "chat_message"
         context_limit = 6 if is_turn_action else settings.MEMORY_CONTEXT_SIZE
         use_memory = False if is_turn_action else request.use_memory
         temperature = request.temperature or (0.6 if is_turn_action else settings.TEMPERATURE)
         max_tokens = request.max_tokens or (160 if is_turn_action else settings.MAX_NEW_TOKENS)
-        include_lore = False if is_turn_action else True
-        minimal_prompt = True if is_turn_action else False
+        include_lore = False if (is_turn_action or is_chat_message) else True
+        minimal_prompt = True if (is_turn_action or is_chat_message) else False
 
         # Compute available locations (exclude already-used ones)
         all_locations = ["city_square", "warehouse", "club", "hospital", "office", "sewer", "street"]
@@ -334,6 +335,13 @@ async def game_event(
         # Hard override for turn_action: never change location, start combat, or show options
         if is_turn_action:
             location = None
+            start_combat = False
+            options = None
+
+        # Hard override for chat_message: keep chatbot outputs informational only
+        if is_chat_message:
+            location = None
+            attribute = None
             start_combat = False
             options = None
 

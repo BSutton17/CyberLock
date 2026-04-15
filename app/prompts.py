@@ -558,6 +558,21 @@ EVENT_INSTRUCTIONS = {
         "Set the scene for the next encounter in 1-2 sentences. "
         "Set start_combat to true. You MUST set location to one of the available locations listed below. "
         "Never reuse a location that has already been visited. Set options to null."
+    ),
+    "chat_message": (
+        "You are now acting as a rules helper and stuck-player assistant for this game. "
+        "Answer clearly and directly in plain language. "
+        "If a player is confused about the rules of the game, explain the relevant mechanics in a concise way. "
+        "Prioritize explaining mechanics, legal actions, and what to do next. "
+        "If the player seems stuck, do three things: "
+        "(1) briefly explain what is blocking progress, "
+        "(2) give 2-3 valid next actions, "
+        "(3) recommend the best next action with a short reason. "
+        "If important context is missing (position, cooldowns, target, turn, effects), ask one short follow-up question. "
+        "Do not narrate cinematic story scenes for this event. "
+        "Do not move location, start combat, or generate decision buttons. "
+        "Set location to null. Set attribute to null. Set start_combat to false. Set options to null. "
+        "Keep response concise and practical, usually 2-6 sentences."
     )
 }
 

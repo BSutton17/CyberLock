@@ -5,6 +5,7 @@ Custom setting with corporatocracy and rebellion themes
 
 from typing import Optional, Dict, Any
 import json
+import re
 
 # ============================================================================
 # GAME INTRO PROMPT - AI generates intro at game start
@@ -614,6 +615,7 @@ RULES_HELPER_PROMPT_BASE = """You are the gameplay help assistant for this game.
 - When asked how to use an attack or ability, explain the steps in order
 - Mention range, target type, and what the player needs to click
 - If the question is about a named ability, explain exactly what that ability targets and what it does
+- If authoritative rules context is provided, use it exactly and do not invent conflicting mechanics
 - If context is missing, ask one short follow-up question
 - If you are reasonably confident, answer directly instead of being vague
 
@@ -735,7 +737,132 @@ def build_event_instructions(
     if message:
         parts.append(f"Player input: {message}")
 
-    if data:
+    if data and event_type == "chat_message":
+        rules_context = data.get("rulesContext") if isinstance(data, dict) else None
+        if isinstance(rules_context, dict):
+            parts.extend(_build_rules_context_instructions(message=message, rules_context=rules_context))
+
+        remaining_data = {
+            key: value
+            for key, value in data.items()
+            if key != "rulesContext"
+        }
+        if remaining_data:
+            parts.append(f"Event data: {json.dumps(remaining_data, ensure_ascii=True)}")
+    elif data:
         parts.append(f"Event data: {json.dumps(data, ensure_ascii=True)}")
 
     return "\n".join(parts)
+
+
+def _normalize_rules_text(value: Optional[str]) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", (value or "").lower()).strip()
+
+
+def _message_mentions_entry(message: Optional[str], *candidates: Optional[str]) -> bool:
+    normalized_message = _normalize_rules_text(message)
+    if not normalized_message:
+        return False
+
+    for candidate in candidates:
+        normalized_candidate = _normalize_rules_text(candidate)
+        if normalized_candidate and normalized_candidate in normalized_message:
+            return True
+
+    return False
+
+
+def _format_ability_line(ability: Dict[str, Any]) -> str:
+    name = ability.get("name") or ability.get("id") or "Unknown ability"
+    description = ability.get("description") or "No description available"
+    extras = []
+
+    if ability.get("targetType"):
+        extras.append(f"target={ability['targetType']}")
+    if ability.get("range") is not None:
+        extras.append(f"range={ability['range']}")
+    if ability.get("cooldown") is not None:
+        extras.append(f"cooldown={ability['cooldown']}")
+    if ability.get("actionCost"):
+        extras.append(f"actionCost={ability['actionCost']}")
+    if ability.get("isUltimate"):
+        extras.append("ultimate=true")
+
+    suffix = f" [{', '.join(extras)}]" if extras else ""
+    suffix = suffix.replace("[ ", "[")
+    return f"- {name}: {description}{suffix}"
+
+
+def _format_attribute_line(attribute: Dict[str, Any]) -> str:
+    name = attribute.get("name") or attribute.get("id") or "Unknown attribute"
+    description = attribute.get("description") or "No description available"
+    return f"- {name}: {description}"
+
+
+def _build_rules_context_instructions(message: Optional[str], rules_context: Dict[str, Any]) -> list[str]:
+    parts = [
+        "Authoritative rules context from the client is provided below.",
+        "If any of it conflicts with your assumptions, trust the client rules context and do not invent extra mechanics."
+    ]
+
+    general_rules = rules_context.get("generalRules") if isinstance(rules_context.get("generalRules"), dict) else {}
+    current_character = rules_context.get("currentCharacter") if isinstance(rules_context.get("currentCharacter"), dict) else None
+    current_attributes = rules_context.get("currentAttributes") if isinstance(rules_context.get("currentAttributes"), list) else []
+    attribute_catalog = rules_context.get("attributeCatalog") if isinstance(rules_context.get("attributeCatalog"), list) else []
+    ability_catalog = rules_context.get("abilityCatalog") if isinstance(rules_context.get("abilityCatalog"), list) else []
+
+    if current_character:
+        character_lines = [
+            f"Current character: {current_character.get('name') or 'Unknown'}",
+            f"Role: {current_character.get('role') or 'Unknown'}",
+            f"Level: {current_character.get('level') if current_character.get('level') is not None else 'Unknown'}"
+        ]
+
+        weapon = current_character.get("weapon") if isinstance(current_character.get("weapon"), dict) else None
+        if weapon and weapon.get("name"):
+            weapon_bits = [weapon["name"]]
+            if weapon.get("damage") is not None:
+                weapon_bits.append(f"damage {weapon['damage']}")
+            if weapon.get("range") is not None:
+                weapon_bits.append(f"range {weapon['range']}")
+            character_lines.append("Weapon: " + ", ".join(weapon_bits))
+
+        parts.append("\n".join(character_lines))
+
+        equipped_abilities = current_character.get("abilities") if isinstance(current_character.get("abilities"), list) else []
+        if equipped_abilities:
+            parts.append("Equipped abilities:\n" + "\n".join(_format_ability_line(ability) for ability in equipped_abilities))
+
+        ultimate = current_character.get("ultimate") if isinstance(current_character.get("ultimate"), dict) else None
+        if ultimate and ultimate.get("name"):
+            parts.append("Current ultimate:\n" + _format_ability_line(ultimate))
+
+    relevant_general_rules = []
+    if _message_mentions_entry(message, "attack", "weapon") and general_rules.get("basicAttack"):
+        relevant_general_rules.append(f"- Basic attack: {general_rules['basicAttack']}")
+    if _message_mentions_entry(message, "ultimate", "ultimates") and general_rules.get("ultimates"):
+        relevant_general_rules.append(f"- Ultimates: {general_rules['ultimates']}")
+    if _message_mentions_entry(message, "bonus action", "bonus actions", "bonus") and general_rules.get("bonusActions"):
+        relevant_general_rules.append(f"- Bonus actions: {general_rules['bonusActions']}")
+    if _message_mentions_entry(message, "politician", "banker", "navigator", "attribute", "attributes") and general_rules.get("decisionAttributes"):
+        relevant_general_rules.append(f"- Non-combat attributes: {general_rules['decisionAttributes']}")
+    if relevant_general_rules:
+        parts.append("Relevant general rules:\n" + "\n".join(relevant_general_rules))
+
+    matched_abilities = [
+        ability for ability in ability_catalog
+        if isinstance(ability, dict) and _message_mentions_entry(message, ability.get("name"), ability.get("id"))
+    ]
+    if matched_abilities:
+        parts.append("Relevant ability definitions:\n" + "\n".join(_format_ability_line(ability) for ability in matched_abilities[:5]))
+
+    matched_attributes = [
+        attribute for attribute in attribute_catalog
+        if isinstance(attribute, dict) and _message_mentions_entry(message, attribute.get("name"), attribute.get("id"))
+    ]
+    if matched_attributes:
+        parts.append("Relevant attribute definitions:\n" + "\n".join(_format_attribute_line(attribute) for attribute in matched_attributes[:5]))
+    elif current_attributes and _message_mentions_entry(message, "attribute", "attributes"):
+        parts.append("Current player attributes:\n" + "\n".join(_format_attribute_line(attribute) for attribute in current_attributes))
+
+    return parts

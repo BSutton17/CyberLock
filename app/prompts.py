@@ -577,6 +577,62 @@ EVENT_INSTRUCTIONS = {
 }
 
 
+RULES_HELPER_PROMPT_BASE = """You are the gameplay help assistant for this game.
+
+## Your Role:
+- Explain game rules and controls in plain language
+- Help stuck players understand what button to click or what target to choose
+- Answer like a helpful guide, not like a storyteller
+
+## Tone & Style:
+- Be direct, practical, and easy to understand
+- Assume the player may have never played before
+- Prefer short paragraphs or short bullet-style explanations inside the response text
+- Do not use cinematic narration, roleplay, or dramatic scene writing
+
+## Core Combat Rules:
+- A basic weapon attack is done by selecting the weapon, then clicking an enemy in range
+- If an enemy is out of range, the player must move closer or use a longer-range action
+- Abilities usually work by selecting the ability first, then clicking the correct target
+- Target types matter:
+    - single-enemy: click one enemy
+    - ally: click one ally
+    - self: no target needed beyond using the ability
+    - ground-target: click a square on the grid
+    - multi-enemy: click multiple enemies up to the limit
+- Some abilities deal damage, some heal, and some apply buffs or debuffs
+
+## Important Game-Specific Facts:
+- Weapon range comes from the character's weapon stats
+- The support ability 'Feels Like Home' is a ground-target healing ability
+- 'Feels Like Home' has range 3 and affects a 3x3 area
+- 'Feels Like Home' heals allies in the area for 2 turns
+- 'Feels Like Home' healing is based on the caster's TA and is calculated as round(TA / 8), minimum 1
+- Basic attacks should be explained as UI actions first: select the weapon, then click a valid enemy target
+
+## Answering Rules Questions:
+- When asked how to use an attack or ability, explain the steps in order
+- Mention range, target type, and what the player needs to click
+- If the question is about a named ability, explain exactly what that ability targets and what it does
+- If context is missing, ask one short follow-up question
+- If you are reasonably confident, answer directly instead of being vague
+
+## RESPONSE FORMAT (MANDATORY):
+You MUST respond with valid JSON in this exact format:
+```json
+{
+    "response": "<plain-language gameplay help>",
+    "location": null,
+    "attribute": null,
+    "start_combat": false,
+    "options": null
+}
+```
+
+Always respond with valid JSON. Never include text outside the JSON block.
+"""
+
+
 # ============================================================================
 # PROMPT BUILDING FUNCTIONS
 # ============================================================================
@@ -603,7 +659,8 @@ def build_system_prompt(
     scenario_type: Optional[str] = None,
     custom_instructions: Optional[str] = None,
     include_lore: bool = True,
-    minimal: bool = False
+    minimal: bool = False,
+    assistant_mode: str = 'dm'
 ) -> str:
     """
     Build a complete system prompt for combat narration.
@@ -615,13 +672,17 @@ def build_system_prompt(
         custom_instructions: Additional custom instructions
         include_lore: Whether to include full world lore
         minimal: Use minimal system prompt for fast responses
+        assistant_mode: 'dm' for story/combat narration, 'rules_helper' for chatbot help
     
     Returns:
         Complete system prompt
     """
     from app.combat import format_combat_context
     
-    prompt = SYSTEM_PROMPT_BASE + ("\n\n" + CYBERPUNK_LORE if include_lore else "")
+    if assistant_mode == 'rules_helper':
+        prompt = RULES_HELPER_PROMPT_BASE
+    else:
+        prompt = SYSTEM_PROMPT_BASE + ("\n\n" + CYBERPUNK_LORE if include_lore else "")
     
     # Add encounter-specific context
     if encounter_index is not None:
@@ -634,11 +695,12 @@ def build_system_prompt(
     if custom_instructions:
         prompt += f"\n\n## Additional Instructions:\n{custom_instructions}"
     
-    prompt += "\n\n## Combat Narration Instructions:\n"
-    prompt += "- Keep narration concise (150-250 words)\n"
-    prompt += "- Describe action vividly and viscerally\n"
-    prompt += "- Reference player actions when provided\n"
-    prompt += "- Build tension and atmosphere\n"
+    if assistant_mode != 'rules_helper':
+        prompt += "\n\n## Combat Narration Instructions:\n"
+        prompt += "- Keep narration concise (150-250 words)\n"
+        prompt += "- Describe action vividly and viscerally\n"
+        prompt += "- Reference player actions when provided\n"
+        prompt += "- Build tension and atmosphere\n"
     
     return prompt
 

@@ -285,7 +285,8 @@ async def game_event(
             scenario_type=request.scenario_type,
             custom_instructions=event_instructions,
             include_lore=include_lore,
-            minimal=minimal_prompt
+            minimal=minimal_prompt,
+            assistant_mode="rules_helper" if is_chat_message else "dm"
         )
 
         # Prepare message history (avoid bloating session for turn_action)

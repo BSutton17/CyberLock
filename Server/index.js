@@ -339,11 +339,16 @@ function dispatchEnemyTurn(io, room, combat, enemyId) {
   const previousRetries = (typeof existingWatchdog === 'object' && existingWatchdog.enemyId === enemyId)
     ? existingWatchdog.retries
     : 0;
+  const executionId =
+    (typeof existingWatchdog === 'object' && existingWatchdog.enemyId === enemyId && typeof existingWatchdog.executionId === 'string')
+      ? existingWatchdog.executionId
+      : `${room}:${enemyId}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
 
   io.to(room).emit('execute_enemy_turn', {
     enemyId,
     allies,
-    alliedEnemies: getAlliedEnemyIds(combat, enemyId)
+    alliedEnemies: getAlliedEnemyIds(combat, enemyId),
+    executionId
   });
 
   clearEnemyTurnWatchdog(room);
@@ -367,7 +372,8 @@ function dispatchEnemyTurn(io, room, combat, enemyId) {
       enemyTurnWatchdogs[room] = {
         timeoutId: null,
         enemyId,
-        retries: retries + 1
+        retries: retries + 1,
+        executionId
       };
       emitCurrentTurn(io, room, latestCombat);
       return;
@@ -379,7 +385,8 @@ function dispatchEnemyTurn(io, room, combat, enemyId) {
   enemyTurnWatchdogs[room] = {
     timeoutId,
     enemyId,
-    retries: previousRetries
+    retries: previousRetries,
+    executionId
   };
 }
 
@@ -635,7 +642,7 @@ function buildAiFallbackResponse(eventType, message, data) {
   }
 
   if (eventType === 'game_start') {
-    return 'The neon lights of the city pulse overhead as you stand on a crowded street corner, the hum of hover cars and flickering billboards filling your ears. The imposing silhouettes of towering corporate buildings loom behind you, casting long shadows across the asphalt. The air smells of ozone and burning oil. Suddenly, a commotion breaks out nearby, drawing the eyes of everyone present. A group of civilians, led by a charismatic figure, are confronting a squad of Enforcers. They shout demands for fair wages, better living conditions, and the end of corporate oppression. As you watch, a lone Enforcer steps forward, raising its weapon.';
+    return 'The neon lights of the city pulse overhead as you stand on a crowded street corner.';
   }
 
   if (eventType === 'choice_made') {
@@ -652,6 +659,10 @@ function buildAiFallbackResponse(eventType, message, data) {
 
   if (eventType === 'next_encounter') {
     return 'The party advances toward the next engagement.';
+  }
+
+  if (eventType === 'chat_message') {
+    return 'I am having trouble reaching the rules assistant right now. Try again in a moment, or ask a shorter question.';
   }
 
   if (data && typeof data === 'object' && typeof data.actor === 'string' && data.actor.trim()) {
@@ -718,6 +729,33 @@ async function requestAiNarration(payload) {
       throw new Error(`Failed to connect to AI API at ${AI_API_URL}. Check if the service is running and the URL is correct. Original error: ${error.message}`);
     }
     throw error;
+  }
+}
+
+async function resetAiSession(room) {
+  if (!AI_API_URL || !room) return;
+
+  try {
+    const response = await fetch(`${AI_API_URL}/session/${encodeURIComponent(room)}`, {
+      method: 'DELETE',
+      headers: {
+        ...(AI_API_KEY ? { 'x-api-key': AI_API_KEY } : {}),
+        ...(CF_ACCESS_CLIENT_ID && CF_ACCESS_CLIENT_SECRET ? {
+          'CF-Access-Client-Id': CF_ACCESS_CLIENT_ID,
+          'CF-Access-Client-Secret': CF_ACCESS_CLIENT_SECRET
+        } : {})
+      }
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      console.warn(`[AI] Failed to reset session for room ${room}: ${response.status} ${response.statusText}`, body);
+      return;
+    }
+
+    console.log(`[AI] Session reset for room: ${room}`);
+  } catch (error) {
+    console.warn(`[AI] Session reset request failed for room ${room}:`, error.message);
   }
 }
 
@@ -966,7 +1004,7 @@ io.on('connection', (socket) => {
     io.to(room).emit("gameStarted", { room, players: rooms[room]?.players || [] });
   });
 
-  socket.on("reset_game", ({ room }) => {
+  socket.on("reset_game", async ({ room }) => {
     if (rooms[room]) {
       // Clear all game-related data but keep the room and players
       rooms[room].characterSelections = {};
@@ -983,6 +1021,8 @@ io.on('connection', (socket) => {
         clearEnemyTurnWatchdog(room);
         delete combatSessions[room];
       }
+
+      await resetAiSession(room);
       
       // Notify all clients to reset
       io.to(room).emit("game_reset");
@@ -1391,12 +1431,32 @@ io.on('connection', (socket) => {
     }, ALLY_TURN_ADVANCE_DELAY_MS);
   });
 
-  socket.on("enemy_turn_complete", ({ room, enemyId, updatedEnemies, updatedPlayerCharacters, updatedActiveEffects, enemyFinalPosition }) => {
+  socket.on("enemy_turn_complete", ({ room, enemyId, executionId, updatedEnemies, updatedPlayerCharacters, updatedActiveEffects, enemyFinalPosition }) => {
     const combat = combatSessions[room];
     if (!combat) return;
 
     const activeTurn = combat.turnOrder?.[combat.currentTurnIndex];
     if (!activeTurn || activeTurn.type !== 'enemy' || activeTurn.id !== enemyId) {
+      return;
+    }
+
+    const activeWatchdog = enemyTurnWatchdogs[room];
+    const expectedExecutionId =
+      typeof activeWatchdog === 'object' && activeWatchdog.enemyId === enemyId
+        ? activeWatchdog.executionId
+        : null;
+
+    if (
+      typeof expectedExecutionId === 'string' &&
+      typeof executionId === 'string' &&
+      executionId !== expectedExecutionId
+    ) {
+      console.log('[TURN_ORDER] Ignored stale enemy_turn_complete execution', {
+        room,
+        enemyId,
+        expectedExecutionId,
+        receivedExecutionId: executionId
+      });
       return;
     }
 
@@ -1627,11 +1687,17 @@ io.on('connection', (socket) => {
   socket.on("join_room", (room, name) => {
     const reconnectState = pendingDisconnects[room]?.[name] || null;
     if (reconnectState?.snapshot) {
-      if (reconnectState.snapshot.characterSelections && rooms[room]) {
+      // Only restore snapshot data when live state is missing.
+      // Never overwrite an active room/combat state with stale reconnect snapshots.
+      if (
+        reconnectState.snapshot.characterSelections &&
+        rooms[room] &&
+        (!rooms[room].characterSelections || Object.keys(rooms[room].characterSelections).length === 0)
+      ) {
         rooms[room].characterSelections = cloneDeep(reconnectState.snapshot.characterSelections);
       }
 
-      if (reconnectState.snapshot.combatState) {
+      if (!combatSessions[room] && reconnectState.snapshot.combatState) {
         combatSessions[room] = cloneDeep(reconnectState.snapshot.combatState);
       }
     }

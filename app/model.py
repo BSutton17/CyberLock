@@ -220,6 +220,9 @@ class ModelLoader:
             
         except Exception as e:
             logger.error(f"Generation failed: {str(e)}")
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
             raise
     
     def unload_model(self):

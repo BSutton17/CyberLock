@@ -67,10 +67,25 @@ export const GameProvider = ({ children }) => {
       division_strategist: '/Enforcer_Division_Strategist.png',
       vanguard_captain: '/Enforcer_Vangaurd_Captain.png',
       field_captain: '/Rebel_Field_Captain.png',
-      rebel_coordinator: '/Rebel_Field_Coordinator.png',
+      rebel_coordinator: '/Rebel_Coordinator.png',
       operations_handler: '/Rebel_Field_Tech.png',
       division_chief: '/Enforcer_Division_Command.png',
-      rebellion_chief: '/Rebel_Field_Captain.png'
+      rebellion_chief: '/Rebel_Field_Captain.png',
+      enforcer_the_architect: '/The Architect.png',
+      enforcer_macro_hull: '/Macro Hull.png',
+      enforcer_genisis: '/Genisis.png',
+      rebel_garret_maxwell: '/Garret Maxwell.png',
+      rebel_levi_wicker: '/Levi Wicker.png',
+      rebel_virgil_wesley: '/Virgil Wesley.png'
+    };
+
+    const enemyNameImageMap = {
+      'Garret Maxwell': '/Garret Maxwell.png',
+      'Genisis': '/Genisis.png',
+      'Levi Wicker': '/Levi Wicker.png',
+      'Macro Hull': '/Macro Hull.png',
+      'The Architect': '/The Architect.png',
+      'Virgil Wesley': '/Virgil Wesley.png'
     };
 
     const getCharacterImage = (character) => {
@@ -80,10 +95,11 @@ export const GameProvider = ({ children }) => {
 
     const getEnemyImage = (enemy) => {
       const rawId = typeof enemy === 'string' ? enemy : enemy?.id;
-      if (!rawId) return '/vite.svg';
+      const enemyName = typeof enemy === 'object' ? enemy?.name : null;
+      if (!rawId) return enemyNameImageMap[enemyName] || '/vite.svg';
 
       const normalizedId = rawId.replace(/_\d+$/, '');
-      return enemyImageMap[rawId] || enemyImageMap[normalizedId] || '/vite.svg';
+      return enemyImageMap[rawId] || enemyImageMap[normalizedId] || enemyNameImageMap[enemyName] || '/vite.svg';
     };
 
     const getAbilityScaler = (ability) => {

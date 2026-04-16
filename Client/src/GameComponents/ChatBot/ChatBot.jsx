@@ -1,12 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './ChatBot.css';
 import { useGameContext } from '../../Components/Context';
+import { buildChatbotRulesContext } from '../../Utils/chatbotRulesContext';
 
 function ChatBot() {
-    const [messages, setMessages] = useState([]);
+    const [messages, setMessages] = useState([{ text: "Hello! I am your friendly chatbot. What's on your mind?", sender: 'bot' }]);
     const [input, setInput] = useState('');
     const [isThinking, setIsThinking] = useState(false);
-    const { setChat, room, socket, playerName } = useGameContext();
+    const { setChat, room, socket, playerName, playerCharacters, allPlayerAttributes } = useGameContext();
     const messagesEndRef = useRef(null);
     const pendingRequestIdsRef = useRef(new Set());
 
@@ -30,7 +31,7 @@ function ChatBot() {
             setIsThinking(false);
             setMessages((prevMessages) => [
                 ...prevMessages,
-                { text: response || 'No response received.', sender: 'ai' }
+                { text: response || 'No response received.', sender: 'bot' }
             ]);
         };
 
@@ -47,18 +48,18 @@ function ChatBot() {
             setIsThinking(false);
             setMessages((prevMessages) => [
                 ...prevMessages,
-                { text: `AI error: ${error || 'Request failed.'}`, sender: 'ai' }
+                { text: `AI error: ${error || 'Request failed.'}`, sender: 'bot' }
             ]);
         };
 
-        socket.on('ai_message', handleAiMessage);
-        socket.on('ai_thinking', handleAiThinking);
-        socket.on('ai_error', handleAiError);
+        socket.on('chatbot_message', handleAiMessage);
+        socket.on('chatbot_thinking', handleAiThinking);
+        socket.on('chatbot_error', handleAiError);
 
         return () => {
-            socket.off('ai_message', handleAiMessage);
-            socket.off('ai_thinking', handleAiThinking);
-            socket.off('ai_error', handleAiError);
+            socket.off('chatbot_message', handleAiMessage);
+            socket.off('chatbot_thinking', handleAiThinking);
+            socket.off('chatbot_error', handleAiError);
         };
     }, [socket, room]);
 
@@ -70,6 +71,12 @@ function ChatBot() {
             setMessages((prevMessages) => [...prevMessages, { text: trimmed, sender: 'user' }]);
             pendingRequestIdsRef.current.add(requestId);
 
+            const rulesContext = buildChatbotRulesContext({
+                playerName,
+                playerCharacters,
+                allPlayerAttributes
+            });
+
             socket.emit('ai_request', {
                 requestId,
                 room,
@@ -77,7 +84,8 @@ function ChatBot() {
                 message: trimmed,
                 data: {
                     source: 'chatbot',
-                    player: playerName
+                    player: playerName,
+                    rulesContext
                 },
                 characterName: playerName,
                 playerName

@@ -353,12 +353,6 @@ p {
     box-shadow: inset 0 0 0.6rem rgba(84, 193, 116, 0.2);
 }
 
-.grid-cell.fireball-zone-cell {
-    background: rgba(255, 140, 0, 0.14);
-    border-color: rgba(255, 140, 0, 0.5);
-    box-shadow: inset 0 0 0.6rem rgba(255, 140, 0, 0.24);
-}
-
 .grid-cell.black-hole-zone-cell {
     background: rgba(132, 92, 255, 0.16);
     border-color: rgba(132, 92, 255, 0.55);
@@ -375,6 +369,12 @@ p {
     background: rgba(20, 90, 20, 0.22);
     border-color: rgba(34, 139, 34, 0.7);
     box-shadow: inset 0 0 0.7rem rgba(20, 90, 20, 0.35);
+}
+
+.grid-cell.fireball-zone-cell {
+    background: rgba(255, 140, 0, 0.14);
+    border-color: rgba(255, 140, 0, 0.5);
+    box-shadow: inset 0 0 0.6rem rgba(255, 140, 0, 0.24);
 }
 
 .grid-cell.blue-barrier-cell {

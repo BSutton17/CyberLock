@@ -79,7 +79,7 @@
       "weapon": {
         "range": 1,
         "name": "Energy Sword",
-        "damage": 100
+        "damage": 10
       },
       "abilities": [],
       "ultimate": ""

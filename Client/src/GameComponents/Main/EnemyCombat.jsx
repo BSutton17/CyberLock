@@ -45,9 +45,20 @@ function calculateAttackPriority(target, playerCharacters) {
 function canKillTarget(enemy, target, playerCharacters) {
     const character = playerCharacters[target.id];
     if (!character) return false;
-    
-    const damage = (enemy.stats.strength / 10) * enemy.weapon.damage - (character.stats.resistance / 10);
+
+    const attackStat = getEnemyWeaponAttackStatValue(enemy);
+    const damage = (attackStat / 10) * enemy.weapon.damage - (character.stats.resistance / 10);
     return character.stats.health <= damage;
+}
+
+function getEnemyWeaponAttackStatValue(enemy) {
+    const weaponRange = enemy?.weapon?.range || 1;
+
+    if (weaponRange > 1) {
+        return Number(enemy?.stats?.ta) || Number(enemy?.stats?.strength) || 0;
+    }
+
+    return Number(enemy?.stats?.strength) || Number(enemy?.stats?.ta) || 0;
 }
 
 export function selectAttackTarget(enemy, allies, playerCharacters, enemyPositions, characterPositions) {
@@ -599,7 +610,17 @@ export function calculateEnemyMovement(enemy, allies, alliedEnemies, supportAlli
     }
     
     if (behavior === 'defensive') {
-        return calculateDefensiveMovement(enemy, allies, characterPositions, activeEffects, sceneKey);
+        const defensiveMove = calculateDefensiveMovement(enemy, allies, characterPositions, activeEffects, sceneKey);
+        if (defensiveMove) {
+            return defensiveMove;
+        }
+
+        const weaponTarget = selectAttackTarget(enemy, allies, playerCharacters, characterPositions, characterPositions);
+        if (!weaponTarget) {
+            return calculateAggressiveMovement(enemy, allies, characterPositions, activeEffects, sceneKey);
+        }
+
+        return null;
     }
 
     if (behavior === 'intelligent') {
@@ -614,7 +635,17 @@ export function calculateEnemyMovement(enemy, allies, alliedEnemies, supportAlli
             }
         }
 
-        return calculateDefensiveMovement(enemy, allies, characterPositions, activeEffects, sceneKey);
+        const intelligentMove = calculateDefensiveMovement(enemy, allies, characterPositions, activeEffects, sceneKey);
+        if (intelligentMove) {
+            return intelligentMove;
+        }
+
+        const weaponTarget = selectAttackTarget(enemy, allies, playerCharacters, characterPositions, characterPositions);
+        if (!weaponTarget) {
+            return calculateAggressiveMovement(enemy, allies, characterPositions, activeEffects, sceneKey);
+        }
+
+        return null;
     }
     
     return null;

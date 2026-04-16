@@ -943,10 +943,25 @@ io.on('connection', (socket) => {
     if (!room || !eventType) return;
 
     const resolvedPlayer = playerName || playerNames[socket.id] || 'system';
+    const isChatbotRequest = eventType === 'chat_message' || data?.source === 'chatbot';
 
     try {
-      // Broadcast AI thinking state to ALL players in the room
-      io.to(room).emit('ai_thinking', { requestId: requestId || null, thinking: true, from: resolvedPlayer, eventType });
+      if (isChatbotRequest) {
+        socket.emit('chatbot_thinking', {
+          requestId: requestId || null,
+          thinking: true,
+          from: resolvedPlayer,
+          eventType
+        });
+      } else {
+        // Broadcast gameplay AI thinking state to all players in the room.
+        io.to(room).emit('ai_thinking', {
+          requestId: requestId || null,
+          thinking: true,
+          from: resolvedPlayer,
+          eventType
+        });
+      }
 
       const aiResponse = await requestAiNarration({
         session_id: room,
@@ -958,7 +973,7 @@ io.on('connection', (socket) => {
         use_memory: true
       });
 
-      console.log('[AI RAW RESPONSE]', {
+      console.log(isChatbotRequest ? '[CHATBOT RESPONSE]' : '[AI RAW RESPONSE]', {
         requestId,
         room,
         eventType,
@@ -966,37 +981,73 @@ io.on('connection', (socket) => {
         aiResponse
       });
 
-      // Broadcast AI done thinking to ALL players
-      io.to(room).emit('ai_thinking', { requestId: requestId || null, thinking: false });
+      if (isChatbotRequest) {
+        socket.emit('chatbot_thinking', { requestId: requestId || null, thinking: false, eventType });
+        socket.emit('chatbot_message', {
+          requestId: requestId || null,
+          eventType,
+          response: aiResponse.response,
+          location: aiResponse.location || null,
+          attribute: aiResponse.attribute || null,
+          startCombat: aiResponse.start_combat || false,
+          options: aiResponse.options || null,
+          from: resolvedPlayer
+        });
+      } else {
+        // Broadcast gameplay AI done thinking to all players.
+        io.to(room).emit('ai_thinking', { requestId: requestId || null, thinking: false });
 
-      io.to(room).emit('ai_message', {
-        requestId: requestId || null,
-        eventType,
-        response: aiResponse.response,
-        location: aiResponse.location || null,
-        attribute: aiResponse.attribute || null,
-        startCombat: aiResponse.start_combat || false,
-        options: aiResponse.options || null,
-        from: resolvedPlayer
-      });
+        io.to(room).emit('ai_message', {
+          requestId: requestId || null,
+          eventType,
+          response: aiResponse.response,
+          location: aiResponse.location || null,
+          attribute: aiResponse.attribute || null,
+          startCombat: aiResponse.start_combat || false,
+          options: aiResponse.options || null,
+          from: resolvedPlayer
+        });
+      }
     } catch (error) {
-      console.error('[AI] Request failed:', error.message);
-      io.to(room).emit('ai_thinking', { requestId: requestId || null, thinking: false });
+      console.error(isChatbotRequest ? '[CHATBOT] Request failed:' : '[AI] Request failed:', error.message);
+
+      if (isChatbotRequest) {
+        socket.emit('chatbot_thinking', { requestId: requestId || null, thinking: false, eventType });
+      } else {
+        io.to(room).emit('ai_thinking', { requestId: requestId || null, thinking: false });
+      }
 
       const fallbackResponse = buildAiFallbackResponse(eventType, message, data);
-      io.to(room).emit('ai_message', {
-        requestId: requestId || null,
-        eventType,
-        response: fallbackResponse,
-        location: null,
-        attribute: null,
-        startCombat: false,
-        options: null,
-        from: resolvedPlayer,
-        fallback: true
-      });
 
-      socket.emit('ai_error', { requestId: requestId || null, error: error.message });
+      if (isChatbotRequest) {
+        socket.emit('chatbot_message', {
+          requestId: requestId || null,
+          eventType,
+          response: fallbackResponse,
+          location: null,
+          attribute: null,
+          startCombat: false,
+          options: null,
+          from: resolvedPlayer,
+          fallback: true
+        });
+
+        socket.emit('chatbot_error', { requestId: requestId || null, error: error.message });
+      } else {
+        io.to(room).emit('ai_message', {
+          requestId: requestId || null,
+          eventType,
+          response: fallbackResponse,
+          location: null,
+          attribute: null,
+          startCombat: false,
+          options: null,
+          from: resolvedPlayer,
+          fallback: true
+        });
+
+        socket.emit('ai_error', { requestId: requestId || null, error: error.message });
+      }
     }
   });
 

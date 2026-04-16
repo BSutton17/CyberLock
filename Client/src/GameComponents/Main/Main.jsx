@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { useState, useEffect, useRef } from 'react';
 import { useGameContext } from '../../Components/Context';
 import EnemiesData from '../../Components/Enemies.json';
@@ -196,7 +196,6 @@ const estimateTypewriterDurationMs = (message = '') => {
 // number of generic enemies for low is always party size + 2 I just put 0 here as a placeholder
 const STORY_COMBAT_FLOW = [
     { combatType: 'low', numOfGeneric: 0, numOfMid: 0, numOfMini: 0, Boss: false, postCombat: 'levelUp' },
-    { combatType: 'low', numOfGeneric: 0, numOfMid: 0, numOfMini: 0, Boss: false, postCombat: 'none' },
     { combatType: 'medium', numOfGeneric: 2, numOfMid: 2, numOfMini: 0, Boss: false, postCombat: 'none' },
     { combatType: 'boss', numOfGeneric: 2, numOfMid: 1, numOfMini: 0, Boss: true, postCombat: 'levelUp' },
 
@@ -206,9 +205,14 @@ const STORY_COMBAT_FLOW = [
     { combatType: 'boss', numOfGeneric: 2, numOfMid: 1, numOfMini: 0, Boss: true, postCombat: 'levelUp' },
 
     { combatType: 'low', numOfGeneric: 0, numOfMid: 0, numOfMini: 0, Boss: false, postCombat: 'none' },
-    { combatType: 'mini-boss', numOfGeneric: 5, numOfMid: 0, numOfMini: 1, Boss: false, postCombat: 'none' },
+    { combatType: 'mini-boss', numOfGeneric: 3, numOfMid: 2, numOfMini: 1, Boss: false, postCombat: 'none' },
     { combatType: 'boss', numOfGeneric: 4, numOfMid: 1, numOfMini: 0, Boss: true, postCombat: 'none' }
 ];
+
+const ORDERED_BOSS_IDS_BY_FACTION = {
+    enforcers: ['enforcer_the_architect', 'enforcer_macro_hull', 'enforcer_genisis'],
+    rebels: ['rebel_garret_maxwell', 'rebel_levi_wicker', 'rebel_virgil_wesley']
+};
 
 function Main() {
     const {
@@ -426,6 +430,37 @@ function Main() {
                 resistance: calculateTotalStat(unit, unitId, 'resistance', effects)
             }
         };
+    };
+
+    const usesTaForWeaponDamage = (character) => {
+        if (!character) return false;
+
+        return character.role === 'Support' || character.id === 'spellcaster_dps_1';
+    };
+
+    const getPlayerWeaponScalingStat = (character) => (
+        usesTaForWeaponDamage(character) ? 'ta' : 'strength'
+    );
+
+    const getPlayerWeaponAttackStatValue = (character, characterId, effects = activeEffects) => {
+        if (!character || !characterId) return 0;
+
+        return calculateTotalStat(
+            character,
+            characterId,
+            getPlayerWeaponScalingStat(character),
+            effects
+        );
+    };
+
+    const getEnemyWeaponAttackStatValue = (enemy) => {
+        const weaponRange = enemy?.weapon?.range || 1;
+
+        if (weaponRange > 1) {
+            return Number(enemy?.stats?.ta) || Number(enemy?.stats?.strength) || 0;
+        }
+
+        return Number(enemy?.stats?.strength) || Number(enemy?.stats?.ta) || 0;
     };
 
     const getEffectivePlayerCharacters = (characters = playerCharacters, effects = activeEffects) =>
@@ -2336,14 +2371,26 @@ function Main() {
         return null;
     };
 
-    const getFilteredTierPool = (tier) => {
+    const getEncounterEnemyFaction = () => {
         const activeSelectedFaction = selectedFactionRef.current || selectedFaction;
-        const opposingFaction =
-            activeSelectedFaction === 'enforcers'
-                ? 'rebels'
-                : activeSelectedFaction === 'rebels'
-                    ? 'enforcers'
-                    : null;
+
+        if (activeSelectedFaction === 'enforcers') return 'rebels';
+        if (activeSelectedFaction === 'rebels') return 'enforcers';
+        return null;
+    };
+
+    const getBossEncounterOrdinal = (encounterIndex = combatFlowIndexRef.current) => {
+        const normalizedEncounterIndex = Math.max(0, Number(encounterIndex) || 0);
+        return Math.max(
+            0,
+            STORY_COMBAT_FLOW
+                .slice(0, normalizedEncounterIndex + 1)
+                .filter(encounter => encounter?.combatType === 'boss').length - 1
+        );
+    };
+
+    const getFilteredTierPool = (tier) => {
+        const opposingFaction = getEncounterEnemyFaction();
 
         let tierEnemies = EnemiesData.enemies.filter(enemy => enemy.tier === tier);
         if (opposingFaction) {
@@ -2353,16 +2400,47 @@ function Main() {
         return tierEnemies;
     };
 
-    const selectEnemiesByTier = (tier, count, partySize, partyLevel, startInstanceNumber = 0) => {
+    const selectOrderedBossEnemy = (partySize, partyLevel, startInstanceNumber = 0, encounterIndex = combatFlowIndexRef.current) => {
+        const bossTierEnemies = getFilteredTierPool('boss');
+        if (bossTierEnemies.length === 0) return [];
+
+        const encounterEnemyFaction = getEncounterEnemyFaction();
+        const orderedBossIds = ORDERED_BOSS_IDS_BY_FACTION[encounterEnemyFaction] || [];
+        const bossOrderIndex = getBossEncounterOrdinal(encounterIndex);
+        const targetBossId = orderedBossIds[Math.min(bossOrderIndex, Math.max(orderedBossIds.length - 1, 0))];
+        const selectedBossTemplate = bossTierEnemies.find(enemy => enemy.id === targetBossId) || bossTierEnemies[0];
+
+        if (!selectedBossTemplate) return [];
+
+        return [createEnemyInstance(selectedBossTemplate, startInstanceNumber, partySize, partyLevel + 1)];
+    };
+
+    const selectEnemiesByTier = (tier, count, partySize, partyLevel, startInstanceNumber = 0, options = {}) => {
         if (count <= 0) return [];
+
+        if (tier === 'boss') {
+            return selectOrderedBossEnemy(
+                partySize,
+                partyLevel,
+                startInstanceNumber,
+                options?.encounterIndex ?? combatFlowIndexRef.current
+            );
+        }
 
         const tierEnemies = getFilteredTierPool(tier);
         if (tierEnemies.length === 0) return [];
 
         const selectedEnemies = [];
+        const shouldLimitMediumSupportSpawns = options?.combatType === 'medium' && tier === 'mid-tier';
+
         for (let index = 0; index < count; index++) {
-            const randomIndex = Math.floor(Math.random() * tierEnemies.length);
-            selectedEnemies.push(createEnemyInstance(tierEnemies[randomIndex], startInstanceNumber + index, partySize, partyLevel));
+            const supportMidAlreadySelected = selectedEnemies.some(enemy => enemy.role === 'Support');
+            const availablePool = shouldLimitMediumSupportSpawns && supportMidAlreadySelected
+                ? tierEnemies.filter(enemy => enemy.role !== 'Support')
+                : tierEnemies;
+            const eligibleEnemies = availablePool.length > 0 ? availablePool : tierEnemies;
+            const randomIndex = Math.floor(Math.random() * eligibleEnemies.length);
+            selectedEnemies.push(createEnemyInstance(eligibleEnemies[randomIndex], startInstanceNumber + index, partySize, partyLevel));
         }
 
         return selectedEnemies;
@@ -2374,28 +2452,55 @@ function Main() {
 
         const config = combatConfig || STORY_COMBAT_FLOW[0];
         const isLowEncounter = config?.combatType === 'low';
+        const suppressGenericsForSmallParty =
+            partySize <= 3 &&
+            ['medium', 'boss', 'mini-boss'].includes(config?.combatType);
         const genericCount = isLowEncounter
             ? Math.max(1, partySize + 2)
-            : Math.max(0, Number(config.numOfGeneric) || 0);
+            : suppressGenericsForSmallParty
+                ? 0
+                : Math.max(0, Number(config.numOfGeneric) || 0);
         const midCount = Math.max(0, Number(config.numOfMid) || 0);
         const miniCount = Math.max(0, Number(config.numOfMini) || 0);
+        const bossCount = config?.combatType === 'boss' ? 1 : 0;
+        const encounterIndex = combatFlowIndexRef.current;
 
         let instanceNumber = 0;
         const generated = [];
 
-        const genericEnemies = selectEnemiesByTier('generic', genericCount, partySize, partyLevel, instanceNumber);
+        const genericEnemies = selectEnemiesByTier('generic', genericCount, partySize, partyLevel, instanceNumber, {
+            combatType: config?.combatType,
+            encounterIndex
+        });
         generated.push(...genericEnemies);
         instanceNumber += genericEnemies.length;
 
-        const midEnemies = selectEnemiesByTier('mid-tier', midCount, partySize, partyLevel, instanceNumber);
+        const bossEnemies = selectEnemiesByTier('boss', bossCount, partySize, partyLevel, instanceNumber, {
+            combatType: config?.combatType,
+            encounterIndex
+        });
+        generated.push(...bossEnemies);
+        instanceNumber += bossEnemies.length;
+
+        const midEnemies = selectEnemiesByTier('mid-tier', midCount, partySize, partyLevel, instanceNumber, {
+            combatType: config?.combatType,
+            encounterIndex
+        });
         generated.push(...midEnemies);
         instanceNumber += midEnemies.length;
 
-        const miniEnemies = selectEnemiesByTier('mini-boss', miniCount, partySize, partyLevel, instanceNumber);
+        const miniEnemies = selectEnemiesByTier('mini-boss', miniCount, partySize, partyLevel, instanceNumber, {
+            combatType: config?.combatType,
+            encounterIndex
+        });
         generated.push(...miniEnemies);
 
         if (generated.length === 0) {
-            const fallbackEnemies = selectEnemiesByTier('generic', 1, partySize, partyLevel, 0);
+            const fallbackTier = bossCount > 0 ? 'boss' : midCount > 0 ? 'mid-tier' : miniCount > 0 ? 'mini-boss' : 'generic';
+            const fallbackEnemies = selectEnemiesByTier(fallbackTier, 1, partySize, partyLevel, 0, {
+                combatType: config?.combatType,
+                encounterIndex
+            });
             generated.push(...fallbackEnemies);
         }
 
@@ -2932,7 +3037,8 @@ function Main() {
                 if (target) {
                     const hasReflection = hasDamageReflection(activeEffects, turnAction.target);
                     const effectiveTarget = withEffectiveResistance(target, turnAction.target, activeEffects);
-                    let damageAmount = Math.max(1, (enemy.stats.strength / 10) * enemy.weapon.damage - (effectiveTarget.stats.resistance / 10));
+                    const enemyWeaponAttackStat = getEnemyWeaponAttackStatValue(enemy);
+                    let damageAmount = Math.max(1, (enemyWeaponAttackStat / 10) * enemy.weapon.damage - (effectiveTarget.stats.resistance / 10));
                     damageAmount = applyDamageKeywords(damageAmount, activeEffects, turnAction.target, { minimumDamage: 0 });
                     const targetNameForNarration = target?.name || turnAction.target;
                     const targetMaxHp = Math.max(1, target?.stats?.maxHealth || target?.stats?.max_health || target?.stats?.health || 1);
@@ -2969,7 +3075,8 @@ function Main() {
                         const hasImmunity = hasDamageImmunity(activeEffects, turnAction.target);
                         const hasReflection = hasDamageReflection(activeEffects, turnAction.target);
                         const effectiveTarget = withEffectiveResistance(target, turnAction.target, activeEffects);
-                        const rawDamage = (enemy.stats.strength / 10) * enemy.weapon.damage - (effectiveTarget.stats.resistance / 10);
+                        const enemyWeaponAttackStat = getEnemyWeaponAttackStatValue(enemy);
+                        const rawDamage = (enemyWeaponAttackStat / 10) * enemy.weapon.damage - (effectiveTarget.stats.resistance / 10);
                         let damageAmount = Math.max(1, rawDamage);
                         damageAmount = applyDamageKeywords(damageAmount, activeEffects, turnAction.target, { minimumDamage: 0 });
                         console.log(`[WEAPON ATTACK] ${enemy.name} attacks ${turnAction.target} for ${damageAmount.toFixed(1)} damage!`);
@@ -3668,7 +3775,9 @@ function Main() {
                 }
 
                 const effectiveEnemy = withEffectiveResistance(enemy, enemyId, activeEffects);
-                const baseDamage = Math.max(1, (currentPlayerCharacter.stats.strength / 10) * currentPlayerCharacter.weapon.damage - (effectiveEnemy.stats.resistance / 10));
+                const weaponScalingStat = getPlayerWeaponScalingStat(currentPlayerCharacter);
+                const weaponAttackStat = getPlayerWeaponAttackStatValue(currentPlayerCharacter, playerName, activeEffects);
+                const baseDamage = Math.max(1, (weaponAttackStat / 10) * currentPlayerCharacter.weapon.damage - (effectiveEnemy.stats.resistance / 10));
                 const totalMultiplier = getDamageTakenMultiplier(activeEffects, enemyId);
                 const damage = applyDamageKeywords(baseDamage, activeEffects, enemyId, { minimumDamage: 1 });
                 const newHealth = enemy.stats.health - damage;
@@ -3677,6 +3786,8 @@ function Main() {
                     attacker: currentPlayerCharacter.name,
                     target: enemy.name,
                     weapon: currentPlayerCharacter.weapon.name,
+                    scalingStat: weaponScalingStat,
+                    attackStat: weaponAttackStat,
                     range: weaponRange,
                     distance: distance,
                     baseDamage: baseDamage.toFixed(1),
@@ -5251,16 +5362,24 @@ function Main() {
 
                         <div className="weapon-section">
                             <h4>Weapon</h4>
+                            {(() => {
+                                const weaponScalingStat = getPlayerWeaponScalingStat(currentPlayerCharacter);
+                                const weaponScalerIcon = getAbilityScaler({ damageScaling: weaponScalingStat });
+
+                                return (
                             <div
                                 className={`weapon-card ${weaponSelected ? 'weapon-selected' : ''} ${((actionUsed && extraWeaponAttacksRemaining <= 0) || !isPlayerAlive || isTurnActionLocked) ? 'weapon-disabled' : ''}`}
                                 onClick={() => isMyTurn && !isTurnActionLocked && (!actionUsed || extraWeaponAttacksRemaining > 0) && isPlayerAlive && setWeaponSelected(!weaponSelected)}
                                 style={{ cursor: (isMyTurn && !isTurnActionLocked && (!actionUsed || extraWeaponAttacksRemaining > 0) && isPlayerAlive) ? 'pointer' : 'not-allowed' }}
                             >
+                                <div className='damage-scaling'>{weaponScalerIcon}</div>
                                 <div className="weapon-info">
                                     <div className="weapon-name" style={currentPlayerCharacter.weapon.name === 'Shotgun' ? { color: 'var(--neon-pink)', textShadow: '0 0 8px rgba(var(--neon-pink-rgb), 0.6)' } : {}}>{currentPlayerCharacter.weapon.name}</div>
                                     <div className="weapon-range" style={currentPlayerCharacter.weapon.name === 'Shotgun' ? { color: '#9a9aaa', fontWeight: 400, lineHeight: 1.3 } : {}}>{currentPlayerCharacter.weapon.range == 1 ? "Melee" : "Range: " + currentPlayerCharacter.weapon.range}</div>
                                 </div>
                             </div>
+                                );
+                            })()}
                         </div>
 
                         <div className="abilities-section">

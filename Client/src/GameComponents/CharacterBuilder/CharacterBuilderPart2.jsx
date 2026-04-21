@@ -55,8 +55,8 @@ function CharacterBuilderPart2() {
 
     const clearAttribute = (index) => {
         setPlayerAttributes((prev) => {
-            const newAttrributes = [...prev];
-            newAttrributes[index] = null;
+            const newAttributes = [...prev];
+            newAttributes[index] = null;
             socket.emit('update_attributes', { room, playerName, newAttributes});
             return newAttributes;
         });
@@ -184,20 +184,18 @@ function CharacterBuilderPart2() {
                         <div className="allocation-column allocation-attributes">
                             <div className="attributes-list">
                                 {NON_COMBAT_ATTRIBUTES.filter(attr => !(allPlayerAttributes[playerName]?.slice(0, 2) || []).includes(attr.name)).map((attr) => (
-                                    <div className="attribute-info" key={attr.id}>
-                                        <div
-                                            onMouseEnter={() => setShowDescription(attr.id)}
-                                            onMouseLeave={() => setShowDescription(null)}
-                                            
-                                            className='item-name'
-                                        >
-                                            <button onClick={() => {
-                                                setAttribute(attr);
-                                            }}
-                                            disabled ={playerAttributes.includes(attr.name)}
-                                            >{attr.name}</button>
+                                    <button 
+                                        className="attribute-item" 
+                                        key={attr.id}
+                                        onMouseEnter={() => setShowDescription(attr.id)}
+                                        onMouseLeave={() => setShowDescription(null)}
+                                        onClick={() => setAttribute(attr)}
+                                        disabled={playerAttributes.includes(attr.name)}
+                                    >
+                                        <div className="attribute-info">
+                                            <h4>{attr.name}</h4>
                                         </div>
-                                    </div>
+                                    </button>
                                 ))}
                             </div>
                         </div>

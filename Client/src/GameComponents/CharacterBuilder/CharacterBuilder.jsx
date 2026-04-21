@@ -176,20 +176,18 @@ function CharacterBuilder() {
                         <div className="allocation-column allocation-attributes">
                             <div className="attributes-list">
                                 {NON_COMBAT_ATTRIBUTES.map((attr) => (
-                                    <div className="attribute-info" key={attr.id}>
-                                        <div
-                                            onMouseEnter={() => setShowDescription(attr.id)}
-                                            onMouseLeave={() => setShowDescription(null)}
-                                            
-                                            className='item-name'
-                                        >
-                                            <button onClick={() => {
-                                                setAttribute(attr);
-                                            }}
-                                            disabled ={playerAttributes[0] === attr.name || playerAttributes[1] === attr.name || isDisabled(attr.name)}
-                                            >{attr.name}</button>
+                                    <button 
+                                        className="attribute-item" 
+                                        key={attr.id}
+                                        onMouseEnter={() => setShowDescription(attr.id)}
+                                        onMouseLeave={() => setShowDescription(null)}
+                                        onClick={() => setAttribute(attr)}
+                                        disabled={playerAttributes[0] === attr.name || playerAttributes[1] === attr.name || isDisabled(attr.name)}
+                                    >
+                                        <div className="attribute-info">
+                                            <h4>{attr.name}</h4>
                                         </div>
-                                    </div>
+                                    </button>
                                 ))}
                             </div>
                         </div>

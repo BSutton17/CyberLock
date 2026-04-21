@@ -68,11 +68,12 @@ export function assignEnemyAbilities(enemy) {
     console.log(`[ENEMY ABILITIES] Assigning abilities for ${enemy.name} (level ${level}, behavior: ${behavior})`);
     console.log(`[ENEMY ABILITIES] Valid roles: ${validRoles.join(', ')}`);
 
-    // For level 1 enemies: assign 1 level 1 ability
-    if (level === 1) {
-        const level1Abilities = getAbilitiesByLevelAndRole(1, validRoles);
-        const selectedAbility = selectRandomAbility(level1Abilities);
-        
+    const unlockedAbilityLevels = [1, 3, 5].filter(abilityLevel => level >= abilityLevel);
+
+    unlockedAbilityLevels.forEach((abilityLevel) => {
+        const matchingAbilities = getAbilitiesByLevelAndRole(abilityLevel, validRoles);
+        const selectedAbility = selectRandomAbility(matchingAbilities);
+
         if (selectedAbility) {
             assignedAbilities.push({
                 id: selectedAbility.id,
@@ -80,43 +81,11 @@ export function assignEnemyAbilities(enemy) {
                 level: selectedAbility.level,
                 role: selectedAbility.role
             });
-            console.log(`[ENEMY ABILITIES] Assigned level 1 ability: ${selectedAbility.name}`);
+            console.log(`[ENEMY ABILITIES] Assigned level ${abilityLevel} ability: ${selectedAbility.name}`);
         } else {
-            console.warn(`[ENEMY ABILITIES] No level 1 ${validRoles.join('/')} abilities found`);
+            console.warn(`[ENEMY ABILITIES] No level ${abilityLevel} ${validRoles.join('/')} abilities found`);
         }
-    } 
-    // For higher level enemies: assign 1 ability at their level + 1 level 1 ability
-    else if (level > 1) {
-        // Assign a level 1 ability
-        const level1Abilities = getAbilitiesByLevelAndRole(1, validRoles);
-        const level1Ability = selectRandomAbility(level1Abilities);
-        
-        if (level1Ability) {
-            assignedAbilities.push({
-                id: level1Ability.id,
-                name: level1Ability.name,
-                level: level1Ability.level,
-                role: level1Ability.role
-            });
-            console.log(`[ENEMY ABILITIES] Assigned level 1 ability: ${level1Ability.name}`);
-        }
-
-        // Assign an ability at the enemy's level
-        const levelMatchAbilities = getAbilitiesByLevelAndRole(level, validRoles);
-        const levelMatchAbility = selectRandomAbility(levelMatchAbilities);
-        
-        if (levelMatchAbility) {
-            assignedAbilities.push({
-                id: levelMatchAbility.id,
-                name: levelMatchAbility.name,
-                level: levelMatchAbility.level,
-                role: levelMatchAbility.role
-            });
-            console.log(`[ENEMY ABILITIES] Assigned level ${level} ability: ${levelMatchAbility.name}`);
-        } else {
-            console.warn(`[ENEMY ABILITIES] No level ${level} ${validRoles.join('/')} abilities found`);
-        }
-    }
+    });
 
     return assignedAbilities;
 }

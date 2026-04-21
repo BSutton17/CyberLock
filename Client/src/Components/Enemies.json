@@ -17,7 +17,7 @@
       },
       "weapon": {
         "name": "Shock Baton",
-        "damage": 7,
+        "damage": 6,
         "range": 1
       }
     },
@@ -38,7 +38,7 @@
       },
       "weapon": {
         "name": "Pulse Carbine",
-        "damage": 6,
+        "damage": 4,
         "range": 3
       }
     },
@@ -59,7 +59,7 @@
       },
       "weapon": {
         "name": "Scrap Blade",
-        "damage": 7,
+        "damage": 6,
         "range": 1
       }
     },
@@ -80,7 +80,7 @@
       },
       "weapon": {
         "name": "Arc Launcher",
-        "damage": 6,
+        "damage": 4,
         "range": 3
       }
     },
@@ -92,12 +92,12 @@
       "level": 1,
       "behavior": "defensive",
       "stats": {
-        "health": 70,
-        "maxHealth": 70,
-        "speed": 55,
-        "resistance": 80,
+        "health": 50,
+        "maxHealth": 50,
+        "speed": 40,
+        "resistance": 50,
         "strength": 30,
-        "ta": 65
+        "ta": 55
       },
       "weapon": {
         "name": "Command Uplink",
@@ -113,16 +113,16 @@
       "level": 1,
       "behavior": "support",
       "stats": {
-        "health": 80,
-        "maxHealth": 80,
+        "health": 55,
+        "maxHealth": 55,
         "speed": 30,
-        "resistance": 75,
-        "strength": 35,
+        "resistance": 55,
+        "strength": 25,
         "ta": 60
       },
       "weapon": {
         "name": "Tactical Railcaster",
-        "damage": 8,
+        "damage": 7,
         "range": 4
       }
     },
@@ -134,16 +134,16 @@
       "level": 1,
       "behavior": "intelligent",
       "stats": {
-        "health": 120,
-        "maxHealth": 120,
-        "speed": 30,
-        "resistance": 65,
-        "strength": 50,
-        "ta": 35
+        "health": 90,
+        "maxHealth": 90,
+        "speed": 25,
+        "resistance": 55,
+        "strength": 40,
+        "ta": 15
       },
       "weapon": {
         "name": "Siege Gauntlets",
-        "damage": 11,
+        "damage": 10,
         "range": 1
       }
     },
@@ -155,11 +155,11 @@
       "level": 1,
       "behavior": "intelligent",
       "stats": {
-        "health": 120,
-        "maxHealth": 120,
-        "speed": 50,
-        "resistance": 80,
-        "strength": 45,
+        "health": 80,
+        "maxHealth": 80,
+        "speed": 40,
+        "resistance": 60,
+        "strength": 35,
         "ta": 20
       },
       "weapon": {
@@ -176,16 +176,16 @@
       "level": 1,
       "behavior": "aggressive",
       "stats": {
-        "health": 110,
-        "maxHealth": 110,
-        "speed": 60,
-        "resistance": 70,
-        "strength": 40,
+        "health": 75,
+        "maxHealth": 75,
+        "speed": 45,
+        "resistance": 45,
+        "strength": 45,
         "ta": 20
       },
       "weapon": {
         "name": "Breaker Hammer",
-        "damage": 11,
+        "damage": 10,
         "range": 1
       }
     },
@@ -193,16 +193,16 @@
       "id": "operations_handler",
       "name": "Operations Handler",
       "tier": "mid-tier",
-      "role": "Support",
+      "role": "DPS",
       "level": 1,
-      "behavior": "support",
+      "behavior": "DPS",
       "stats": {
-        "health": 100,
-        "maxHealth": 100,
+        "health": 60,
+        "maxHealth": 60,
         "speed": 30,
-        "resistance": 50,
-        "strength": 35,
-        "ta": 75
+        "resistance": 40,
+        "strength": 25,
+        "ta": 70
       },
       "weapon": {
         "name": "Signal Rifle",
@@ -218,16 +218,16 @@
       "level": 1,
       "behavior": "intelligent",
       "stats": {
-        "health": 215,
-        "maxHealth": 215,
-        "speed": 55,
-        "resistance": 130,
-        "strength": 50,
-        "ta": 50
+        "health": 125,
+        "maxHealth": 125,
+        "speed": 30,
+        "resistance": 80,
+        "strength": 35,
+        "ta": 30
       },
       "weapon": {
         "name": "Compliance Blade",
-        "damage": 13,
+        "damage": 8,
         "range": 1
       }
     },
@@ -239,17 +239,143 @@
       "level": 1,
       "behavior": "intelligent",
       "stats": {
-        "health": 210,
-        "maxHealth": 210,
-        "speed": 35,
-        "resistance": 115,
-        "strength": 80,
-        "ta": 65
+        "health": 115,
+        "maxHealth": 115,
+        "speed": 30,
+        "resistance": 60,
+        "strength": 60,
+        "ta": 35
       },
       "weapon": {
         "name": "Liberator Halberd",
-        "damage": 13,
+        "damage": 9,
         "range": 1
+      }
+    },
+    {
+      "id": "enforcer_the_architect",
+      "name": "The Architect",
+      "tier": "boss",
+      "role": "DPS",
+      "level": 1,
+      "behavior": "defensive",
+      "stats": {
+        "health": 160,
+        "maxHealth": 160,
+        "speed": 40,
+        "resistance": 130,
+        "strength": 35,
+        "ta": 85
+      },
+      "weapon": {
+        "name": "Directive Prism",
+        "damage": 8,
+        "range": 4
+      }
+    },
+    {
+      "id": "enforcer_macro_hull",
+      "name": "Macro Hull",
+      "tier": "boss",
+      "role": "Tank",
+      "level": 1,
+      "behavior": "intelligent",
+      "stats": {
+        "health": 180,
+        "maxHealth": 180,
+        "speed": 25,
+        "resistance": 150,
+        "strength": 70,
+        "ta": 25
+      },
+      "weapon": {
+        "name": "Bastion Maul",
+        "damage": 10,
+        "range": 1
+      }
+    },
+    {
+      "id": "enforcer_genisis",
+      "name": "Genisis",
+      "tier": "boss",
+      "role": "DPS",
+      "level": 1,
+      "behavior": "intelligent",
+      "stats": {
+        "health": 155,
+        "maxHealth": 155,
+        "speed": 50,
+        "resistance": 120,
+        "strength": 95,
+        "ta": 30
+      },
+      "weapon": {
+        "name": "Zero-Lag Blades",
+        "damage": 10,
+        "range": 1
+      }
+    },
+    {
+      "id": "rebel_garret_maxwell",
+      "name": "Garret Maxwell",
+      "tier": "boss",
+      "role": "Tank",
+      "level": 1,
+      "behavior": "defensive",
+      "stats": {
+        "health": 175,
+        "maxHealth": 175,
+        "speed": 35,
+        "resistance": 140,
+        "strength": 65,
+        "ta": 35
+      },
+      "weapon": {
+        "name": "Breaker Cannon",
+        "damage": 9,
+        "range": 2
+      }
+    },
+    {
+      "id": "rebel_levi_wicker",
+      "name": "Levi Wicker",
+      "tier": "boss",
+      "role": "DPS",
+      "level": 1,
+      "behavior": "intelligent",
+      "stats": {
+        "health": 150,
+        "maxHealth": 150,
+        "speed": 50,
+        "resistance": 115,
+        "strength": 105,
+        "ta": 30
+      },
+      "weapon": {
+        "name": "Riot Splitter",
+        "damage": 11,
+        "range": 1
+      }
+    },
+    {
+      "id": "rebel_virgil_wesley",
+      "name": "Virgil Wesley",
+      "tier": "boss",
+      "role": "DPS",
+      "level": 1,
+      "behavior": "defensive",
+      "stats": {
+        "health": 160,
+        "maxHealth": 160,
+        "speed": 40,
+        "resistance": 125,
+        "strength": 35,
+        "ta": 90
+      },
+      "weapon": {
+        "name": "Signal Dominion",
+        "damage": 9,
+        "range": 4
       }
     }
   ]

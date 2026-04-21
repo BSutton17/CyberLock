@@ -44,7 +44,7 @@
     },
     {
       "id": "spellcaster_dps_1",
-      "name": "Shoot House",
+      "name": "Gene Shock",
       "role": "DPS",
       "level": 1,
       "stats": {
@@ -58,7 +58,7 @@
       "weapon": {
         "range": 3,
         "name": "Ray Gun",
-        "damage": 9
+        "damage": 4.5
       },
       "abilities": [],
       "ultimate": ""
@@ -123,7 +123,7 @@
       "weapon": {
         "range": 4,
         "name": "Drone",
-        "damage": 6
+        "damage": 3
       },
       "abilities": [],
       "ultimate": ""
@@ -144,7 +144,7 @@
       "weapon": {
         "range": 2,
         "name": "Electric Guitar",
-        "damage": 6
+        "damage": 3
       },
       "abilities": [],
       "ultimate": ""
@@ -165,7 +165,7 @@
       "weapon": {
         "range": 3,
         "name": "Magic Energy",
-        "damage": 6
+        "damage": 3
       },
       "abilities": [
         
@@ -188,7 +188,7 @@
       "weapon": {
         "range": 3,
         "name": "Laptop",
-        "damage": 6
+        "damage": 3
       },
       "abilities": [],
       "ultimate": ""

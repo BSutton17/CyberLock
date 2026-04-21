@@ -1,12 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './ChatBot.css';
 import { useGameContext } from '../../Components/Context';
+import { buildChatbotRulesContext } from '../../Utils/chatbotRulesContext';
 
 function ChatBot() {
-    const [messages, setMessages] = useState([]);
+    const [messages, setMessages] = useState([{ text: "Hello! I am your friendly chatbot. What's on your mind?", sender: 'bot' }]);
     const [input, setInput] = useState('');
-    const { chat, setChat } = useGameContext();
+    const [isThinking, setIsThinking] = useState(false);
+    const { setChat, room, socket, playerName, playerCharacters, allPlayerAttributes } = useGameContext();
     const messagesEndRef = useRef(null);
+    const pendingRequestIdsRef = useRef(new Set());
 
     const scrollToBottom = () => {
         // Use the MDN Web Docs scrollIntoView method with smooth behavior
@@ -14,17 +17,81 @@ function ChatBot() {
     };
 
     useEffect(() => {
-        scrollToBottom(); 
-    }, [messages]);
+        scrollToBottom();
+    }, [messages, isThinking]);
+
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleAiMessage = ({ requestId, eventType, response }) => {
+            if (eventType !== 'chat_message') return;
+            if (!pendingRequestIdsRef.current.has(requestId)) return;
+
+            pendingRequestIdsRef.current.delete(requestId);
+            setIsThinking(false);
+            setMessages((prevMessages) => [
+                ...prevMessages,
+                { text: response || 'No response received.', sender: 'bot' }
+            ]);
+        };
+
+        const handleAiThinking = ({ requestId, thinking, eventType }) => {
+            if (eventType !== 'chat_message') return;
+            if (!pendingRequestIdsRef.current.has(requestId)) return;
+            setIsThinking(Boolean(thinking));
+        };
+
+        const handleAiError = ({ requestId, error }) => {
+            if (!pendingRequestIdsRef.current.has(requestId)) return;
+
+            pendingRequestIdsRef.current.delete(requestId);
+            setIsThinking(false);
+            setMessages((prevMessages) => [
+                ...prevMessages,
+                { text: `AI error: ${error || 'Request failed.'}`, sender: 'bot' }
+            ]);
+        };
+
+        socket.on('chatbot_message', handleAiMessage);
+        socket.on('chatbot_thinking', handleAiThinking);
+        socket.on('chatbot_error', handleAiError);
+
+        return () => {
+            socket.off('chatbot_message', handleAiMessage);
+            socket.off('chatbot_thinking', handleAiThinking);
+            socket.off('chatbot_error', handleAiError);
+        };
+    }, [socket, room]);
 
     const handleSendMessage = () => {
         if (input.trim()) {
-            setMessages((prevMessages) => [...prevMessages, { text: input, sender: 'user' }]);
+            const trimmed = input.trim();
+            const requestId = `chat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+            setMessages((prevMessages) => [...prevMessages, { text: trimmed, sender: 'user' }]);
+            pendingRequestIdsRef.current.add(requestId);
+
+            const rulesContext = buildChatbotRulesContext({
+                playerName,
+                playerCharacters,
+                allPlayerAttributes
+            });
+
+            socket.emit('ai_request', {
+                requestId,
+                room,
+                eventType: 'chat_message',
+                message: trimmed,
+                data: {
+                    source: 'chatbot',
+                    player: playerName,
+                    rulesContext
+                },
+                characterName: playerName,
+                playerName
+            });
             setInput('');
-            const botResponse = { text: "This is a bot response.", sender: 'bot' };
-            setTimeout(() => {
-                setMessages((prevMessages) => [...prevMessages, botResponse]);  
-            }, 500);
+
         }
     };
 
@@ -39,6 +106,9 @@ function ChatBot() {
                         {msg.text}
                     </div>
                 ))}
+                {isThinking && (
+                    <div className="message ai-thinking">AI is thinking...</div>
+                )}
                 <div ref={messagesEndRef} />
             </div>
             <div className="input-area">

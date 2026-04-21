@@ -44,6 +44,38 @@ sessions = {}
 rate_limit_data = defaultdict(list)
 
 
+def _build_event_summary(event_type: str, message: Optional[str], data: Optional[dict]) -> str:
+    """Build a compact event summary for prompting and memory."""
+
+    if event_type == "chat_message":
+        return message or "Player asked a rules question."
+
+    summary = message or f"Event type: {event_type}."
+    if data:
+        summary += f" Data: {data}"
+    return summary
+
+
+def _sanitize_message_history(messages: list[dict]) -> list[dict]:
+    """Ensure message history alternates user/assistant and starts with user."""
+
+    sanitized = []
+    expected_role = "user"
+
+    for message in messages:
+        role = message.get("role")
+        content = message.get("content")
+        if role not in {"user", "assistant"} or not content:
+            continue
+        if role != expected_role:
+            continue
+
+        sanitized.append({"role": role, "content": content})
+        expected_role = "assistant" if expected_role == "user" else "user"
+
+    return sanitized
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
@@ -247,6 +279,7 @@ async def game_event(
         if request.session_id not in sessions:
             sessions[request.session_id] = {
                 "messages": [],
+                "chat_messages": [],
                 "created_at": time.time(),
                 "used_locations": set()
             }
@@ -254,20 +287,21 @@ async def game_event(
         session = sessions[request.session_id]
         if "used_locations" not in session:
             session["used_locations"] = set()
+        if "chat_messages" not in session:
+            session["chat_messages"] = []
 
         # Build event summary for the user message
-        event_summary = request.message or f"Event type: {request.event_type}."
-        if request.data:
-            event_summary += f" Data: {request.data}"
+        event_summary = _build_event_summary(request.event_type, request.message, request.data)
 
         # Event-specific performance tuning
         is_turn_action = request.event_type == "turn_action"
-        context_limit = 6 if is_turn_action else settings.MEMORY_CONTEXT_SIZE
-        use_memory = False if is_turn_action else request.use_memory
+        is_chat_message = request.event_type == "chat_message"
+        context_limit = 6 if is_turn_action else (8 if is_chat_message else settings.MEMORY_CONTEXT_SIZE)
+        use_memory = False if (is_turn_action or is_chat_message) else request.use_memory
         temperature = request.temperature or (0.6 if is_turn_action else settings.TEMPERATURE)
-        max_tokens = request.max_tokens or (160 if is_turn_action else settings.MAX_NEW_TOKENS)
-        include_lore = False if is_turn_action else True
-        minimal_prompt = True if is_turn_action else False
+        max_tokens = request.max_tokens or (192 if is_chat_message else (160 if is_turn_action else settings.MAX_NEW_TOKENS))
+        include_lore = False if (is_turn_action or is_chat_message) else True
+        minimal_prompt = True if (is_turn_action or is_chat_message) else False
 
         # Compute available locations (exclude already-used ones)
         all_locations = ["city_square", "warehouse", "club", "hospital", "office", "sewer", "street"]
@@ -284,17 +318,20 @@ async def game_event(
             scenario_type=request.scenario_type,
             custom_instructions=event_instructions,
             include_lore=include_lore,
-            minimal=minimal_prompt
+            minimal=minimal_prompt,
+            assistant_mode="rules_helper" if is_chat_message else "dm"
         )
 
-        # Prepare message history (avoid bloating session for turn_action)
-        recent_messages = session["messages"][-context_limit:]
-        if is_turn_action:
-            messages_for_prompt = recent_messages + [{"role": "user", "content": event_summary}]
+        # Prepare message history without mutating session state before generation succeeds.
+        if is_chat_message:
+            history_key = "chat_messages"
         else:
-            user_message = {"role": "user", "content": event_summary}
-            session["messages"].append(user_message)
-            messages_for_prompt = session["messages"][-context_limit:]
+            history_key = "messages"
+
+        session[history_key] = _sanitize_message_history(session.get(history_key, []))
+        recent_messages = session[history_key][-context_limit:]
+        user_message = {"role": "user", "content": event_summary}
+        messages_for_prompt = recent_messages + [user_message]
 
         # Use RAG to enhance context (disabled for turn_action)
         context = None
@@ -337,6 +374,13 @@ async def game_event(
             start_combat = False
             options = None
 
+        # Hard override for chat_message: keep chatbot outputs informational only
+        if is_chat_message:
+            location = None
+            attribute = None
+            start_combat = False
+            options = None
+
         # Validate location against known scenes
         valid_locations = {"city_square", "warehouse", "club", "hospital", "office", "sewer", "shop", "boss", "street"}
         if location and location not in valid_locations:
@@ -365,12 +409,12 @@ async def game_event(
                 if len(options) == 0:
                     options = None
 
-        # Add assistant message to history (skip for turn_action to reduce growth)
+        # Add successful exchanges to history (skip turn_action to reduce growth)
         if not is_turn_action:
             assistant_message = {"role": "assistant", "content": narration}
-            session["messages"].append(assistant_message)
+            session[history_key].extend([user_message, assistant_message])
 
-        # Auto-save important information to memory (skip for turn_action)
+        # Auto-save important information to memory (skip for turn_action/chat_message)
         if memory_store and use_memory:
             await _auto_save_memories(
                 event_summary,

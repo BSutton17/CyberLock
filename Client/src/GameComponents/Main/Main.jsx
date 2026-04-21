@@ -507,6 +507,7 @@ function Main() {
     );
     const [showYouDiedScreen, setShowYouDiedScreen] = useState(false);
     const [showEnemiesDefeatedScreen, setShowEnemiesDefeatedScreen] = useState(false);
+    const [showTheEndScreen, setShowTheEndScreen] = useState(false);
     const [gameOver, setGameOver] = useState(false);
 
     // Refs to track latest state values for handleEndTurn
@@ -1485,6 +1486,7 @@ function Main() {
 
         const handleAiMessage = ({ requestId, eventType, response, location, attribute, startCombat, options, fallback }) => {
             const turnNarrationContext = releaseTurnNarrationTracking(requestId);
+            const hasIncomingOptions = Array.isArray(options) && options.length > 0;
 
             if (turnNarrationContext && !isTurnNarrationContextCurrent(turnNarrationContext)) {
                 markAiRequestCompleted(requestId);
@@ -1549,6 +1551,14 @@ function Main() {
                 pendingPostCombatNarrationRequestIdRef.current = null;
                 pendingPostCombatActionRef.current = null;
 
+                if (hasIncomingOptions) {
+                    setPendingPostEncounterChoice(true);
+                    setPendingNextEncounterChoice(false);
+                    setAllowFallbackPostEncounterChoices(false);
+                    setAiOptions(options.filter(option => typeof option === 'string' && option.trim().length > 0));
+                    return;
+                }
+
                 proceedPostCombatAction(postCombatAction);
                 setAllowFallbackPostEncounterChoices(Boolean(fallback));
                 return;
@@ -1580,7 +1590,6 @@ function Main() {
             }
 
             // Display options from AI only when a decision state is active
-            const hasIncomingOptions = Array.isArray(options) && options.length > 0;
             const normalizedIncomingAttribute = normalizeDecisionAttribute(attribute || '');
             const shouldAcceptAiOptions =
                 pendingFactionChoice ||
@@ -1860,6 +1869,25 @@ function Main() {
 
             const completedEncounter = lastCombatConfigRef.current;
             const postCombatAction = completedEncounter?.postCombat || 'none';
+            const isFinalBossEncounter =
+                completedEncounter?.combatType === 'boss' &&
+                combatFlowIndexRef.current >= STORY_COMBAT_FLOW.length;
+
+            if (isFinalBossEncounter) {
+                setShowEnemiesDefeatedScreen(false);
+                setPendingPostEncounterChoice(false);
+                setPendingNextEncounterChoice(false);
+                setAllowFallbackPostEncounterChoices(false);
+                setAllowFallbackNextEncounterChoice(false);
+                setAiOptions(null);
+                setAiAttribute(null);
+                setAiBusy(false);
+                clearPendingPostCombatFallback();
+                pendingPostCombatNarrationRequestIdRef.current = null;
+                pendingPostCombatActionRef.current = null;
+                setShowTheEndScreen(true);
+                return;
+            }
 
             postCombatOverlayTimeoutRef.current = setTimeout(() => {
                 setShowEnemiesDefeatedScreen(false);
@@ -4961,6 +4989,14 @@ function Main() {
                 </div>
             )}
 
+            {showTheEndScreen && (
+                <div className="you-died-screen">
+                    <div className="the-end-content">
+                        <h1>THE END</h1>
+                    </div>
+                </div>
+            )}
+
             {gameOver && (
                 <div className="game-over-overlay">
                     <div className="game-over-screen">
@@ -4975,6 +5011,7 @@ function Main() {
                                     setGameOver(false);
                                     setShowYouDiedScreen(false);
                                     setShowEnemiesDefeatedScreen(false);
+                                    setShowTheEndScreen(false);
                                     setEnemies([]);
                                     setTurnOrder([]);
                                     setActiveEffects([]);
@@ -5003,6 +5040,7 @@ function Main() {
                                     setGameOver(false);
                                     setShowYouDiedScreen(false);
                                     setShowEnemiesDefeatedScreen(false);
+                                    setShowTheEndScreen(false);
                                     setEnemies([]);
                                     setTurnOrder([]);
                                     setActiveEffects([]);

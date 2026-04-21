@@ -1368,6 +1368,10 @@ p {
     text-align: center;
 }
 
+.the-end-content {
+    text-align: center;
+}
+
 @media (max-width: 1024px) {
     .main-game-container {
         grid-template-columns: 2fr 10fr;
@@ -1659,6 +1663,16 @@ p {
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     text-shadow: 0 0 20px rgba(91, 141, 255, 0.45), 0 0 24px rgba(123, 97, 255, 0.35);
+}
+
+.the-end-content h1 {
+    font-size: 4.4vmin;
+    font-weight: bold;
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.32em;
+    color: #f5f1d7;
+    text-shadow: 0 0 18px rgba(245, 241, 215, 0.55), 0 0 28px rgba(255, 215, 120, 0.25);
 }
 
 .you-died-content p {

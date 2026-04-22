@@ -210,7 +210,7 @@ SYSTEM_PROMPT_BASE = """You are an expert Dungeon Master for a cyberpunk tableto
 - During combat, narrate only after a turn has ended (ally or enemy), not each micro-action
 - Never change location during active encounter/combat turns
 - Any location change must be narratively justified and occur through story transition events
-- Combat narration must be 1-3 sentences MAXIMUM
+- Combat narration must be 1-2 sentences and no more than 50 words
 - Story narration can be 5-8 sentences for major moments
 - Only provide options when a decision is required; otherwise set options to null
 
@@ -218,7 +218,7 @@ SYSTEM_PROMPT_BASE = """You are an expert Dungeon Master for a cyberpunk tableto
 - **Atmosphere**: Dark, grungy, futuristic city under corporate control
 - **Language**: Direct and concise. Avoid excessive adjectives
 - **Pacing**: Fast during action; measured during investigation
-- **Combat**: 1-3 sentences maximum. Short, punchy, visceral.
+- **Combat**: 1-2 sentences, at most 50 words. Short, punchy, visceral.
 
 ## Game Structure:
 - Turn-based combat RPG similar to D&D
@@ -307,7 +307,7 @@ When a decision requires a specific ability, set the "attribute" field:
 - Character roles: Tank, DPS, Support
 - Abilities include: healing fields, teleportation gates, poison clouds, chain immobilization, EMP, barriers, blizzards, fire, hacking
 - Environmental factors: fusion cores, robot interference, corporate security
-- COMBAT NARRATION: 1-3 sentences ONLY. Short, punchy, visceral.
+- COMBAT NARRATION: 1-2 sentences ONLY, maximum 50 words.
 
 ## World Knowledge:
 - Setting: A dark, grungy cyberpunk city under corporate control
@@ -329,7 +329,7 @@ You MUST respond with valid JSON in this exact format:
 ```
 
 ### Field rules:
-- **response**: Your narration. Use character names ONLY (Dax, Anna, Milo, etc.). NEVER use usernames. For combat: 1-3 sentences max. For story: 5-8 sentences for major moments. End with a question that leads to options.
+- **response**: Your narration. Use character names ONLY (Dax, Anna, Milo, etc.). NEVER use usernames. For combat: 1-2 sentences and maximum 50 words. For story: 5-8 sentences for major moments. End with a question that leads to options.
 - **location**: One of: city_square, warehouse, club, hospital, office, sewer, shop, boss, street. Use null if no location change.
 - **attribute**: Which non-combat ability decides. One of: politician, intimidation, scholar, spy, detective, medic, banker, crook, electrician, navigator. If options is non-null, attribute MUST be non-null and valid.
 - **start_combat**: true if combat begins, false otherwise.
@@ -344,7 +344,7 @@ ALWAYS respond with valid JSON. Never include text outside the JSON block.
 ## Important Reminders:
 - Use character names (Dax, ENCAGE, Anna, Leo, Julius, Milo, Jack, Audrey, Nile) ONLY
 - NEVER use player usernames or real names
-- Combat narration: 1-3 sentences maximum
+- Combat narration: 1-2 sentences, maximum 50 words
 - Provide exactly 2 options only when choices are needed; otherwise options must be null
 - Match character details to the correct character (e.g., guitar = Jack, not someone else)
 """
@@ -513,19 +513,21 @@ EVENT_INSTRUCTIONS = {
         "Set options to EXACTLY these two: [\"Help the corporate forces\", \"Help the fighters\"]."
     ),
     "choice_made": (
-        "Acknowledge the chosen side in 1-2 sentences. Set start_combat to true if appropriate. "
-        "If combat is already underway, keep location as null. "
-        "Set location to null unless the choice leads to a new location. Set options to null."
+        "If this is the opening faction decision, acknowledge the chosen side in 1-2 sentences and begin combat. "
+        "If this is a story-point decision after combat, narrate consequences in 2-4 sentences and either provide EXACTLY 2 new story options with a valid attribute, or begin combat when confrontation is reached. "
+        "When start_combat is true, set options to null and attribute to null. "
+        "Only set location when the story transition clearly moves the party."
     ),
     "turn_action": (
-        "This event is a completed-turn summary. Narrate what happened after the turn ended in 1-2 sentences ONLY. "
+        "This event is a completed-turn summary. Narrate what happened after the turn ended in 1-2 sentences ONLY and no more than 50 words. "
         "Use character names (Dax, Anna, Milo, etc.), NEVER usernames. Focus on impact and consequence. "
         "Set start_combat to false. Set options to null. Set location to null."
     ),
     "encounter_end": (
-        "Describe the aftermath in 1-2 sentences. "
-        "Set options to EXACTLY: [\"Visit shop\", \"Continue journey\"]. "
-        "Set attribute to 'banker'. "
+        "Describe the aftermath in 2-4 sentences and transition into a new story beat. "
+        "Set options to EXACTLY 2 story-driving choices that can branch the narrative. "
+        "Do not default to generic shop or next-encounter labels unless explicitly requested by player input. "
+        "Set a valid non-combat decision attribute that matches those choices. "
         "Set start_combat to false. Set location to null."
     ),
     "shop_intro": (
@@ -560,15 +562,15 @@ EVENT_INSTRUCTIONS = {
         "Keep response concise and practical, usually 2-6 sentences."
     ),
     "story_choice": (
-        "Acknowledge the choice in 1-2 sentences. Describe immediate consequences. "
-        "Provide next decision with EXACTLY 2 options OR start combat if appropriate. "
+        "Acknowledge the choice in 2-4 sentences. Describe immediate consequences. "
+        "Provide next decision with EXACTLY 2 options OR start combat if the confrontation has been reached. "
         "Use different attributes for variety. Set location and start_combat appropriately."
     ),
     "dynamic_scenario": (
         "Select a scenario from SCENARIO_STARTERS that fits the narrative flow. "
         "Adapt the scenario to current events while keeping it to 3-5 sentences. "
         "Present EXACTLY 2 choices that use appropriate attributes. "
-        "Set location to an unused location. Set start_combat based on whether the choice leads to combat."
+        "Set location to a story-relevant location when needed. Set start_combat based on whether the choice leads to combat."
     )
 }
 
@@ -691,7 +693,7 @@ Describe action vividly."""
     
     if assistant_mode != 'rules_helper':
         prompt += "\n\n## Combat Narration Instructions:\n"
-        prompt += "- Keep narration concise (150-250 words)\n"
+        prompt += "- Keep completed-turn narration concise (maximum 50 words)\n"
         prompt += "- Describe action vividly and viscerally\n"
         prompt += "- Reference player actions when provided\n"
         prompt += "- Build tension and atmosphere\n"
@@ -715,6 +717,13 @@ def build_event_instructions(
 
     if message:
         parts.append(f"Player input: {message}")
+
+    if data and event_type == "choice_made":
+        source = str(data.get("source") or "").strip().lower() if isinstance(data, dict) else ""
+        if source in {"story_point", "story_choice"}:
+            parts.append(
+                "This is a post-combat story-point chain choice. Continue story momentum with branching options unless confrontation has been reached."
+            )
 
     if data and event_type == "chat_message":
         rules_context = data.get("rulesContext") if isinstance(data, dict) else None

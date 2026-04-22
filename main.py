@@ -57,6 +57,8 @@ VALID_DECISION_ATTRIBUTES = {
     "navigator",
 }
 
+STORY_POINT_MAX_CHOICES = 3
+
 VALID_LOCATIONS = {
     "city_square",
     "warehouse",
@@ -68,6 +70,27 @@ VALID_LOCATIONS = {
     "boss",
     "street",
 }
+
+COMBAT_LOCATION_ROTATION = [
+    "city_square",
+    "warehouse",
+    "club",
+    "hospital",
+    "office",
+    "sewer",
+    "street",
+    "boss",
+]
+
+STORY_LOCATION_ROTATION = [
+    "street",
+    "warehouse",
+    "club",
+    "hospital",
+    "office",
+    "sewer",
+    "city_square",
+]
 
 LOCATION_ALIASES = {
     "city": "city_square",
@@ -291,6 +314,66 @@ def _sanitize_narration_text(response_value: Optional[str], raw_text: Optional[s
     return _clean_narration_artifacts(_strip_markdown_code_fence(fallback))
 
 
+def _clamp_to_word_limit(text: Optional[str], max_words: int) -> str:
+    if not text:
+        return ""
+
+    words = str(text).strip().split()
+    if len(words) <= max_words:
+        return str(text).strip()
+
+    trimmed = " ".join(words[:max_words]).rstrip(" ,;:")
+    if trimmed and trimmed[-1] not in ".!?":
+        trimmed += "."
+    return trimmed
+
+
+def _get_story_point_fallback_options(choice_count: int) -> list[str]:
+    fallback_sets = [
+        ["Pursue the strongest lead", "Take the safer route"],
+        ["Press deeper into the district", "Gather intel from the outskirts"],
+        ["Commit to the final approach", "Set up a careful flank"],
+    ]
+    index = max(0, min(choice_count, len(fallback_sets) - 1))
+    return fallback_sets[index]
+
+
+def _pick_story_location(session: dict, preferred_location: Optional[str]) -> Optional[str]:
+    normalized_preferred = _normalize_location(preferred_location)
+    if normalized_preferred:
+        session["last_story_location"] = normalized_preferred
+        return normalized_preferred
+
+    last_story_location = _normalize_location(session.get("last_story_location"))
+    for candidate in STORY_LOCATION_ROTATION:
+        if candidate != last_story_location:
+            session["last_story_location"] = candidate
+            return candidate
+
+    return last_story_location or "street"
+
+
+def _choose_next_combat_location(session: dict) -> str:
+    used_combat_locations = session.get("used_combat_locations")
+    if not isinstance(used_combat_locations, set):
+        used_combat_locations = set(used_combat_locations or [])
+
+    remaining = [
+        location
+        for location in COMBAT_LOCATION_ROTATION
+        if location not in used_combat_locations
+    ]
+
+    if remaining:
+        selected_location = remaining[0]
+    else:
+        selected_location = COMBAT_LOCATION_ROTATION[len(used_combat_locations) % len(COMBAT_LOCATION_ROTATION)]
+
+    used_combat_locations.add(selected_location)
+    session["used_combat_locations"] = used_combat_locations
+    return selected_location
+
+
 def _resolve_faction_choice(*values: Optional[str]) -> Optional[str]:
     combined_text = " ".join(str(value or "") for value in values).lower()
     if not combined_text.strip():
@@ -310,7 +393,7 @@ def _infer_decision_attribute(
     options: list[str],
     current_attribute: Optional[str]
 ) -> str:
-    if event_type in {"encounter_end", "shop_intro", "shop_continue"}:
+    if event_type in {"shop_intro", "shop_continue"}:
         return "banker"
     if event_type == "game_start":
         return "politician"
@@ -342,6 +425,23 @@ def _infer_decision_attribute(
         return "electrician"
 
     return "politician"
+
+
+def _is_story_point_choice(request_event_type: str, data: dict, session: dict) -> bool:
+    if request_event_type != "choice_made":
+        return False
+
+    if not session.get("opening_combat_started", False):
+        return False
+
+    if data.get("faction"):
+        return False
+
+    source = str(data.get("source") or "").strip().lower()
+    if source in {"story_point", "story_choice"}:
+        return True
+
+    return True
 
 
 @asynccontextmanager
@@ -550,8 +650,11 @@ async def game_event(
                 "chat_messages": [],
                 "created_at": time.time(),
                 "used_locations": set(),
+                "used_combat_locations": set(),
                 "selected_faction": None,
                 "opening_combat_started": False,
+                "story_points_in_chain": 0,
+                "last_story_location": None,
             }
         
         session = sessions[request.session_id]
@@ -563,6 +666,14 @@ async def game_event(
             session["selected_faction"] = None
         if "opening_combat_started" not in session:
             session["opening_combat_started"] = False
+        if "used_combat_locations" not in session:
+            session["used_combat_locations"] = set()
+        if "story_points_in_chain" not in session:
+            session["story_points_in_chain"] = 0
+        if "last_story_location" not in session:
+            session["last_story_location"] = None
+
+        event_data = request.data if isinstance(request.data, dict) else {}
 
         # Build event summary for the user message
         event_summary = _build_event_summary(request.event_type, request.message, request.data)
@@ -577,16 +688,16 @@ async def game_event(
         include_lore = False if (is_turn_action or is_chat_message) else True
         minimal_prompt = True if (is_turn_action or is_chat_message) else False
 
-        # Compute available locations (exclude already-used ones)
+        # Compute available combat locations (exclude already-used combat locations)
         all_locations = ["city_square", "warehouse", "club", "hospital", "office", "sewer", "street"]
-        available_locations = [loc for loc in all_locations if loc not in session["used_locations"]]
+        available_locations = [loc for loc in all_locations if loc not in session["used_combat_locations"]]
 
         # Build event instructions and system prompt
         event_instructions = build_event_instructions(
             event_type=request.event_type,
-            data=request.data,
+            data=event_data,
             message=request.message,
-            available_locations=available_locations if request.event_type in ("game_start", "choice_made", "next_encounter") else None
+            available_locations=available_locations if request.event_type in ("game_start", "encounter_end", "choice_made", "next_encounter", "story_choice", "dynamic_scenario") else None
         )
         system_prompt = build_system_prompt(
             scenario_type=request.scenario_type,
@@ -637,6 +748,8 @@ async def game_event(
         # Parse structured JSON from model output
         parsed = _parse_structured_response(response_text)
         narration = _sanitize_narration_text(parsed.get("response"), response_text)
+        if is_turn_action:
+            narration = _clamp_to_word_limit(narration, 50)
         location = _normalize_location(parsed.get("location"))
         attribute = _normalize_attribute(parsed.get("attribute"))
         start_combat = bool(parsed.get("start_combat", False))
@@ -660,22 +773,11 @@ async def game_event(
             start_combat = True
             options = None
             attribute = None
-            if not location:
-                remaining_locations = [loc for loc in all_locations if loc not in session["used_locations"]]
-                location = remaining_locations[0] if remaining_locations else "street"
+            location = _choose_next_combat_location(session)
 
         # Validate location against known scenes
         if location and location not in VALID_LOCATIONS:
             location = None
-
-        # Enforce no location reuse (shop/boss exempt) and track used locations
-        if location and location not in ("shop", "boss"):
-            if location in session["used_locations"]:
-                # AI picked an already-used location — override with first available one
-                remaining = [loc for loc in all_locations if loc not in session["used_locations"]]
-                location = remaining[0] if remaining else None
-            if location:
-                session["used_locations"].add(location)
 
         # Validate attribute against known attributes
         if attribute and attribute not in VALID_DECISION_ATTRIBUTES:
@@ -703,13 +805,13 @@ async def game_event(
             attribute = "politician"
             start_combat = False
             location = location or "city_square"
+            session["story_points_in_chain"] = 0
 
         # Faction choice must lead into opening combat after narration.
         if request.event_type == "choice_made" and not is_chat_message:
-            data = request.data if isinstance(request.data, dict) else {}
             explicit_faction = _resolve_faction_choice(
-                data.get("faction"),
-                data.get("choice"),
+                event_data.get("faction"),
+                event_data.get("choice"),
                 request.message,
             )
 
@@ -720,13 +822,51 @@ async def game_event(
                 start_combat = True
                 options = None
                 attribute = None
-                location = None
+                location = "city_square"
+                session["used_combat_locations"].add(location)
+                session["story_points_in_chain"] = 0
                 session["opening_combat_started"] = True
+
+        # Start of post-combat story chain.
+        if request.event_type == "encounter_end" and not is_chat_message:
+            session["story_points_in_chain"] = 0
+            start_combat = False
+
+            if not options or len(options) < 2:
+                options = _get_story_point_fallback_options(0)
+            else:
+                options = options[:2]
+
+            attribute = _infer_decision_attribute("story_choice", options, attribute)
+            location = _pick_story_location(session, location)
+
+        # Continue story chain until cap is reached; then force combat start.
+        if _is_story_point_choice(request.event_type, event_data, session) and not is_chat_message:
+            story_points_completed = int(session.get("story_points_in_chain", 0)) + 1
+            session["story_points_in_chain"] = story_points_completed
+
+            if story_points_completed >= STORY_POINT_MAX_CHOICES:
+                start_combat = True
+                options = None
+                attribute = None
+                location = _choose_next_combat_location(session)
+                session["story_points_in_chain"] = 0
+            else:
+                start_combat = False
+                if not options or len(options) < 2:
+                    options = _get_story_point_fallback_options(story_points_completed)
+                else:
+                    options = options[:2]
+                attribute = _infer_decision_attribute("story_choice", options, attribute)
+                location = _pick_story_location(session, location)
 
         # Never surface decision controls once combat is about to begin.
         if start_combat:
             options = None
             attribute = None
+            location = _normalize_location(location) or _choose_next_combat_location(session)
+        elif location:
+            location = _pick_story_location(session, location)
 
         # Add successful exchanges to history (skip turn_action to reduce growth)
         if not is_turn_action:

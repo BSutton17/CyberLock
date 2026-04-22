@@ -214,14 +214,61 @@ def _extract_response_text_from_jsonish(text: Optional[str]) -> Optional[str]:
     return None
 
 
+def _clean_narration_artifacts(text: Optional[str]) -> str:
+    if text is None:
+        return ""
+
+    cleaned = str(text).strip()
+    if not cleaned:
+        return ""
+
+    # Decode common escaped sequences that can leak into UI output.
+    cleaned = (
+        cleaned
+        .replace("\\/", "/")
+        .replace("\\n", "\n")
+        .replace("\\r", "\n")
+        .replace("\\t", " ")
+        .replace('\\"', '"')
+    )
+
+    # Remove slash-only noise lines and markdown fence remnants.
+    normalized_lines = []
+    for line in cleaned.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped in {"/", "\\", "```", "```json"}:
+            continue
+        normalized_lines.append(stripped)
+
+    normalized = " ".join(normalized_lines) if normalized_lines else cleaned
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized
+
+
 def _sanitize_narration_text(response_value: Optional[str], raw_text: Optional[str]) -> str:
     for candidate in (response_value, raw_text):
         extracted = _extract_response_text_from_jsonish(candidate)
         if extracted:
-            return extracted
+            return _clean_narration_artifacts(extracted)
 
     fallback = str(response_value if response_value is not None else (raw_text or "")).strip()
-    return _strip_markdown_code_fence(fallback)
+    return _clean_narration_artifacts(_strip_markdown_code_fence(fallback))
+
+
+def _resolve_faction_choice(*values: Optional[str]) -> Optional[str]:
+    combined_text = " ".join(str(value or "") for value in values).lower()
+    if not combined_text.strip():
+        return None
+
+    if re.search(r"enforcer|corporate|corp\b|authority|division|security|law|order|forces", combined_text):
+        return "enforcers"
+
+    if re.search(r"rebel|fighter|fighters|people|citizen|uprising|resistance|protest", combined_text):
+        return "rebels"
+
+    return None
 
 
 def _infer_decision_attribute(
@@ -468,7 +515,9 @@ async def game_event(
                 "messages": [],
                 "chat_messages": [],
                 "created_at": time.time(),
-                "used_locations": set()
+                "used_locations": set(),
+                "selected_faction": None,
+                "opening_combat_started": False,
             }
         
         session = sessions[request.session_id]
@@ -476,6 +525,10 @@ async def game_event(
             session["used_locations"] = set()
         if "chat_messages" not in session:
             session["chat_messages"] = []
+        if "selected_faction" not in session:
+            session["selected_faction"] = None
+        if "opening_combat_started" not in session:
+            session["opening_combat_started"] = False
 
         # Build event summary for the user message
         event_summary = _build_event_summary(request.event_type, request.message, request.data)
@@ -597,6 +650,34 @@ async def game_event(
         # Any actionable options must include a valid decision attribute for frontend ownership logic.
         if options and not is_chat_message:
             attribute = _infer_decision_attribute(request.event_type, options, attribute)
+
+        # Opening scene must always present the faction decision with clear ownership.
+        if request.event_type == "game_start" and not is_chat_message:
+            if not options or len(options) < 2:
+                options = ["Help the corporate forces", "Help the fighters"]
+            else:
+                options = options[:2]
+            attribute = "politician"
+            start_combat = False
+            location = location or "city_square"
+
+        # Faction choice must lead into opening combat after narration.
+        if request.event_type == "choice_made" and not is_chat_message:
+            data = request.data if isinstance(request.data, dict) else {}
+            explicit_faction = _resolve_faction_choice(
+                data.get("faction"),
+                data.get("choice"),
+                request.message,
+            )
+
+            if explicit_faction:
+                session["selected_faction"] = explicit_faction
+
+            if session.get("selected_faction") and not session.get("opening_combat_started", False):
+                start_combat = True
+                options = None
+                attribute = None
+                session["opening_combat_started"] = True
 
         # Add successful exchanges to history (skip turn_action to reduce growth)
         if not is_turn_action:

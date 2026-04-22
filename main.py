@@ -69,6 +69,21 @@ VALID_LOCATIONS = {
     "street",
 }
 
+LOCATION_ALIASES = {
+    "city": "city_square",
+    "citysquare": "city_square",
+    "city_square": "city_square",
+    "square": "city_square",
+    "warehouse": "warehouse",
+    "club": "club",
+    "hospital": "hospital",
+    "office": "office",
+    "sewer": "sewer",
+    "shop": "shop",
+    "boss": "boss",
+    "street": "street",
+}
+
 ATTRIBUTE_ALIASES = {
     "politics": "politician",
     "political": "politician",
@@ -134,6 +149,18 @@ def _normalize_attribute(value: Optional[str]) -> Optional[str]:
 
     canonical = ATTRIBUTE_ALIASES.get(normalized, normalized)
     return canonical if canonical in VALID_DECISION_ATTRIBUTES else None
+
+
+def _normalize_location(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+
+    normalized = re.sub(r"[^a-z0-9]+", "_", str(value).strip().lower()).strip("_")
+    if not normalized:
+        return None
+
+    canonical = LOCATION_ALIASES.get(normalized, normalized)
+    return canonical if canonical in VALID_LOCATIONS else None
 
 
 def _strip_markdown_code_fence(text: str) -> str:
@@ -243,6 +270,13 @@ def _clean_narration_artifacts(text: Optional[str]) -> str:
         normalized_lines.append(stripped)
 
     normalized = " ".join(normalized_lines) if normalized_lines else cleaned
+    # Remove leaked metadata fragments from malformed model outputs.
+    normalized = re.sub(
+        r"\b(?:location|attribute|start_?combat|options)\b\s*(?:[:=]|is)?\s*(?:null|none|true|false|\[[^\]]*\]|\"[^\"]*\"|[a-z_]+)",
+        "",
+        normalized,
+        flags=re.IGNORECASE,
+    )
     normalized = re.sub(r"\s+", " ", normalized).strip()
     return normalized
 
@@ -603,7 +637,7 @@ async def game_event(
         # Parse structured JSON from model output
         parsed = _parse_structured_response(response_text)
         narration = _sanitize_narration_text(parsed.get("response"), response_text)
-        location = parsed.get("location") or None
+        location = _normalize_location(parsed.get("location"))
         attribute = _normalize_attribute(parsed.get("attribute"))
         start_combat = bool(parsed.get("start_combat", False))
         options = parsed.get("options") or None
@@ -620,6 +654,15 @@ async def game_event(
             attribute = None
             start_combat = False
             options = None
+
+        # Next encounter must always transition directly into combat with no decision buttons.
+        if request.event_type == "next_encounter" and not is_chat_message:
+            start_combat = True
+            options = None
+            attribute = None
+            if not location:
+                remaining_locations = [loc for loc in all_locations if loc not in session["used_locations"]]
+                location = remaining_locations[0] if remaining_locations else "street"
 
         # Validate location against known scenes
         if location and location not in VALID_LOCATIONS:
@@ -677,7 +720,13 @@ async def game_event(
                 start_combat = True
                 options = None
                 attribute = None
+                location = None
                 session["opening_combat_started"] = True
+
+        # Never surface decision controls once combat is about to begin.
+        if start_combat:
+            options = None
+            attribute = None
 
         # Add successful exchanges to history (skip turn_action to reduce growth)
         if not is_turn_action:
@@ -719,45 +768,20 @@ def _parse_structured_response(raw_text: str) -> dict:
     includes extra text around the JSON.
     """
     if not raw_text or not raw_text.strip():
-        return {"response": raw_text}
+        return {"response": ""}
 
     text = raw_text.strip()
 
-    # Try direct JSON parse first
-    try:
-        parsed = json.loads(text)
-        if isinstance(parsed, dict) and "response" in parsed:
-            return parsed
-    except (json.JSONDecodeError, ValueError):
-        pass
+    parsed = _try_parse_json_dict(text)
+    if parsed:
+        return parsed
 
-    # Try extracting JSON from markdown code blocks
-    code_block_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', text, re.DOTALL)
-    if code_block_match:
-        try:
-            parsed = json.loads(code_block_match.group(1))
-            if isinstance(parsed, dict) and "response" in parsed:
-                return parsed
-        except (json.JSONDecodeError, ValueError):
-            pass
+    extracted_response = _extract_response_text_from_jsonish(text)
+    if extracted_response:
+        return {"response": extracted_response}
 
-    # Try finding a JSON object anywhere in the text
-    brace_match = re.search(r'\{[^{}]*"response"[^{}]*\}', text, re.DOTALL)
-    if not brace_match:
-        # Try nested braces
-        brace_match = re.search(r'\{.*"response".*\}', text, re.DOTALL)
-
-    if brace_match:
-        try:
-            parsed = json.loads(brace_match.group(0))
-            if isinstance(parsed, dict) and "response" in parsed:
-                return parsed
-        except (json.JSONDecodeError, ValueError):
-            pass
-
-    # Fallback: return raw text as the response
-    logger.warning(f"Could not parse structured JSON from AI response, using raw text")
-    return {"response": text}
+    # Best-effort narration fallback without warning spam for common malformed generations.
+    return {"response": _strip_markdown_code_fence(text)}
 
 
 async def _auto_save_memories(

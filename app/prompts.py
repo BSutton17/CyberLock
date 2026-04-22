@@ -212,7 +212,7 @@ SYSTEM_PROMPT_BASE = """You are an expert Dungeon Master for a cyberpunk tableto
 - Any location change must be narratively justified and occur through story transition events
 - Combat narration must be 1-3 sentences MAXIMUM
 - Story narration can be 5-8 sentences for major moments
-- Always provide EXACTLY 2 options, never more, never less
+- Only provide options when a decision is required; otherwise set options to null
 
 ## Tone & Style:
 - **Atmosphere**: Dark, grungy, futuristic city under corporate control
@@ -345,7 +345,7 @@ ALWAYS respond with valid JSON. Never include text outside the JSON block.
 - Use character names (Dax, ENCAGE, Anna, Leo, Julius, Milo, Jack, Audrey, Nile) ONLY
 - NEVER use player usernames or real names
 - Combat narration: 1-3 sentences maximum
-- Always provide exactly 2 options when choices are needed
+- Provide exactly 2 options only when choices are needed; otherwise options must be null
 - Match character details to the correct character (e.g., guitar = Jack, not someone else)
 """
 
@@ -542,7 +542,7 @@ EVENT_INSTRUCTIONS = {
     "next_encounter": (
         "Set the scene for the next encounter in 1-2 sentences with a clear narrative bridge from the current location. "
         "Set start_combat to true. You MUST set location to one of the available locations listed below. "
-        "Never reuse a location that has already been visited. Set options to null."
+        "Never reuse a location that has already been visited. Set attribute to null. Set options to null."
     ),
     "chat_message": (
         "You are now acting as a rules helper and stuck-player assistant for this game. "
@@ -558,13 +558,6 @@ EVENT_INSTRUCTIONS = {
         "Do not move location, start combat, or generate decision buttons. "
         "Set location to null. Set attribute to null. Set start_combat to false. Set options to null. "
         "Keep response concise and practical, usually 2-6 sentences."
-        "Pick an appropriate scenario from SCENARIO_STARTERS that fits the current story flow. "
-        "You can choose from: market_explosion, rebel_hideout, enforcer_recruitment, power_plant_district, crown_gene_facility, or create your own variation. "
-        "Set the scene in 3-5 sentences based on the chosen scenario. "
-        "Provide a meaningful decision with EXACTLY 2 options that use different attributes. "
-        "Rotate through unused attributes (intimidation, scholar, spy, detective, crook, electrician). "
-        "Set location to one of: warehouse, club, hospital, office, sewer, boss, street. Never reuse locations already visited. "
-        "Set start_combat to false unless the decision leads directly to combat."
     ),
     "story_choice": (
         "Acknowledge the choice in 1-2 sentences. Describe immediate consequences. "

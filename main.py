@@ -44,6 +44,54 @@ sessions = {}
 rate_limit_data = defaultdict(list)
 
 
+VALID_DECISION_ATTRIBUTES = {
+    "politician",
+    "intimidation",
+    "scholar",
+    "spy",
+    "detective",
+    "medic",
+    "banker",
+    "crook",
+    "electrician",
+    "navigator",
+}
+
+VALID_LOCATIONS = {
+    "city_square",
+    "warehouse",
+    "club",
+    "hospital",
+    "office",
+    "sewer",
+    "shop",
+    "boss",
+    "street",
+}
+
+ATTRIBUTE_ALIASES = {
+    "politics": "politician",
+    "political": "politician",
+    "persuasion": "politician",
+    "diplomat": "politician",
+    "diplomacy": "politician",
+    "research": "scholar",
+    "investigation": "detective",
+    "investigate": "detective",
+    "medicine": "medic",
+    "medical": "medic",
+    "criminal": "crook",
+    "underworld": "crook",
+    "electrical": "electrician",
+    "electric": "electrician",
+    "navigation": "navigator",
+    "travel": "navigator",
+    "finance": "banker",
+    "financial": "banker",
+    "money": "banker",
+}
+
+
 def _build_event_summary(event_type: str, message: Optional[str], data: Optional[dict]) -> str:
     """Build a compact event summary for prompting and memory."""
 
@@ -74,6 +122,145 @@ def _sanitize_message_history(messages: list[dict]) -> list[dict]:
         expected_role = "assistant" if expected_role == "user" else "user"
 
     return sanitized
+
+
+def _normalize_attribute(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+
+    normalized = re.sub(r"[^a-z0-9]+", "_", str(value).strip().lower()).strip("_")
+    if not normalized:
+        return None
+
+    canonical = ATTRIBUTE_ALIASES.get(normalized, normalized)
+    return canonical if canonical in VALID_DECISION_ATTRIBUTES else None
+
+
+def _strip_markdown_code_fence(text: str) -> str:
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\s*```$", "", cleaned)
+    return cleaned.strip()
+
+
+def _try_parse_json_dict(text: str) -> Optional[dict]:
+    if not text:
+        return None
+
+    candidate = _strip_markdown_code_fence(text)
+
+    try:
+        parsed = json.loads(candidate)
+        if isinstance(parsed, dict):
+            return parsed
+        if isinstance(parsed, str):
+            inner = parsed.strip()
+            try:
+                nested = json.loads(inner)
+                if isinstance(nested, dict):
+                    return nested
+            except (json.JSONDecodeError, ValueError, TypeError):
+                return None
+    except (json.JSONDecodeError, ValueError, TypeError):
+        pass
+
+    first_brace = candidate.find("{")
+    last_brace = candidate.rfind("}")
+    if first_brace != -1 and last_brace > first_brace:
+        snippet = candidate[first_brace:last_brace + 1]
+        try:
+            parsed = json.loads(snippet)
+            if isinstance(parsed, dict):
+                return parsed
+        except (json.JSONDecodeError, ValueError, TypeError):
+            return None
+
+    return None
+
+
+def _extract_response_text_from_jsonish(text: Optional[str]) -> Optional[str]:
+    if text is None:
+        return None
+
+    candidate = str(text).strip()
+    if not candidate:
+        return None
+
+    parsed = _try_parse_json_dict(candidate)
+    if parsed:
+        for key in ("response", "narration", "text"):
+            value = parsed.get(key)
+            if value is None:
+                continue
+            if isinstance(value, (dict, list)):
+                continue
+            normalized = str(value).strip()
+            if normalized:
+                return normalized
+
+    response_match = re.search(r'"response"\s*:\s*"((?:\\.|[^"\\])*)"', candidate, re.DOTALL)
+    if response_match:
+        escaped_value = response_match.group(1)
+        try:
+            decoded_value = json.loads(f'"{escaped_value}"')
+        except (json.JSONDecodeError, ValueError):
+            decoded_value = escaped_value
+
+        decoded_value = str(decoded_value).strip()
+        if decoded_value:
+            return decoded_value
+
+    return None
+
+
+def _sanitize_narration_text(response_value: Optional[str], raw_text: Optional[str]) -> str:
+    for candidate in (response_value, raw_text):
+        extracted = _extract_response_text_from_jsonish(candidate)
+        if extracted:
+            return extracted
+
+    fallback = str(response_value if response_value is not None else (raw_text or "")).strip()
+    return _strip_markdown_code_fence(fallback)
+
+
+def _infer_decision_attribute(
+    event_type: str,
+    options: list[str],
+    current_attribute: Optional[str]
+) -> str:
+    if event_type in {"encounter_end", "shop_intro", "shop_continue"}:
+        return "banker"
+    if event_type == "game_start":
+        return "politician"
+
+    if current_attribute in VALID_DECISION_ATTRIBUTES:
+        return current_attribute
+
+    option_text = " ".join(option.lower() for option in options)
+
+    if re.search(r"shop|vendor|buy|sell|browse|market|store|price|barter", option_text):
+        return "banker"
+    if re.search(r"leave|journey|travel|route|where|next encounter|move|head|go", option_text):
+        return "navigator"
+    if re.search(r"help|ally|support|convince|negotiate|diplomacy|corporate|fighters", option_text):
+        return "politician"
+    if re.search(r"threat|pressure|coerce|intimidat", option_text):
+        return "intimidation"
+    if re.search(r"clue|investigat|evidence|pattern", option_text):
+        return "detective"
+    if re.search(r"stealth|infiltrat|surveil|sneak", option_text):
+        return "spy"
+    if re.search(r"study|research|lore|decipher|ancient", option_text):
+        return "scholar"
+    if re.search(r"heal|treat|diagnos|stabilize", option_text):
+        return "medic"
+    if re.search(r"theft|forge|scam|criminal|underworld", option_text):
+        return "crook"
+    if re.search(r"circuit|power|electric|grid|reroute", option_text):
+        return "electrician"
+
+    return "politician"
 
 
 @asynccontextmanager
@@ -362,9 +549,9 @@ async def game_event(
 
         # Parse structured JSON from model output
         parsed = _parse_structured_response(response_text)
-        narration = parsed.get("response", response_text)
+        narration = _sanitize_narration_text(parsed.get("response"), response_text)
         location = parsed.get("location") or None
-        attribute = parsed.get("attribute") or None
+        attribute = _normalize_attribute(parsed.get("attribute"))
         start_combat = bool(parsed.get("start_combat", False))
         options = parsed.get("options") or None
 
@@ -382,8 +569,7 @@ async def game_event(
             options = None
 
         # Validate location against known scenes
-        valid_locations = {"city_square", "warehouse", "club", "hospital", "office", "sewer", "shop", "boss", "street"}
-        if location and location not in valid_locations:
+        if location and location not in VALID_LOCATIONS:
             location = None
 
         # Enforce no location reuse (shop/boss exempt) and track used locations
@@ -396,8 +582,7 @@ async def game_event(
                 session["used_locations"].add(location)
 
         # Validate attribute against known attributes
-        valid_attributes = {"politician", "intimidation", "scholar", "spy", "detective", "medic", "banker", "crook", "electrician", "navigator"}
-        if attribute and attribute not in valid_attributes:
+        if attribute and attribute not in VALID_DECISION_ATTRIBUTES:
             attribute = None
 
         # Ensure options is a list of strings if present
@@ -405,9 +590,13 @@ async def game_event(
             if not isinstance(options, list):
                 options = None
             else:
-                options = [str(o) for o in options if o]
+                options = [str(o).strip() for o in options if str(o).strip()]
                 if len(options) == 0:
                     options = None
+
+        # Any actionable options must include a valid decision attribute for frontend ownership logic.
+        if options and not is_chat_message:
+            attribute = _infer_decision_attribute(request.event_type, options, attribute)
 
         # Add successful exchanges to history (skip turn_action to reduce growth)
         if not is_turn_action:

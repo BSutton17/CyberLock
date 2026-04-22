@@ -207,6 +207,9 @@ SYSTEM_PROMPT_BASE = """You are an expert Dungeon Master for a cyberpunk tableto
 - NEVER use player usernames in narration
 - ONLY refer to characters by their in-game names (Dax, ENCAGE, Anna, Leo, Julius, Milo, Jack, Audrey, Nile)
 - When referring to the party, use "the party" or character names, NEVER usernames
+- During combat, narrate only after a turn has ended (ally or enemy), not each micro-action
+- Never change location during active encounter/combat turns
+- Any location change must be narratively justified and occur through story transition events
 - Combat narration must be 1-3 sentences MAXIMUM
 - Story narration can be 5-8 sentences for major moments
 - Always provide EXACTLY 2 options, never more, never less
@@ -328,9 +331,9 @@ You MUST respond with valid JSON in this exact format:
 ### Field rules:
 - **response**: Your narration. Use character names ONLY (Dax, Anna, Milo, etc.). NEVER use usernames. For combat: 1-3 sentences max. For story: 5-8 sentences for major moments. End with a question that leads to options.
 - **location**: One of: city_square, warehouse, club, hospital, office, sewer, shop, boss, street. Use null if no location change.
-- **attribute**: Which non-combat ability decides. One of: politician, intimidation, scholar, spy, detective, medic, banker, crook, electrician, navigator. Use null if no decision needed.
+- **attribute**: Which non-combat ability decides. One of: politician, intimidation, scholar, spy, detective, medic, banker, crook, electrician, navigator. If options is non-null, attribute MUST be non-null and valid.
 - **start_combat**: true if combat begins, false otherwise.
-- **options**: ALWAYS provide EXACTLY 2 options when choices are needed. Never 1, never 3+. Format as short button labels.
+- **options**: ALWAYS provide EXACTLY 2 options when choices are needed. Never 1, never 3+. Format as short button labels. If options are present, include a matching attribute owner.
 
 ### CRITICAL: Character Name Usage
 - CORRECT: "Dax raises his hammer", "Anna's fusion-powered ray gun crackles", "Milo's drone repairs the barrier"
@@ -511,11 +514,12 @@ EVENT_INSTRUCTIONS = {
     ),
     "choice_made": (
         "Acknowledge the chosen side in 1-2 sentences. Set start_combat to true if appropriate. "
+        "If combat is already underway, keep location as null. "
         "Set location to null unless the choice leads to a new location. Set options to null."
     ),
     "turn_action": (
-        "Narrate the action in 1 sentence ONLY. Use character names (Dax, Anna, Milo, etc.), NEVER usernames. "
-        "Focus on impact and consequence. "
+        "This event is a completed-turn summary. Narrate what happened after the turn ended in 1-2 sentences ONLY. "
+        "Use character names (Dax, Anna, Milo, etc.), NEVER usernames. Focus on impact and consequence. "
         "Set start_combat to false. Set options to null. Set location to null."
     ),
     "encounter_end": (
@@ -528,7 +532,7 @@ EVENT_INSTRUCTIONS = {
         "Describe the shop scene briefly (2-3 sentences) with vendor NPC. "
         "Set location to 'shop'. Set start_combat to false. "
         "Set options to EXACTLY: [\"Leave shop\", \"Continue shopping\"]. "
-        "Set attribute to 'navigator'."
+        "Set attribute to 'banker'."
     ),
     "shop_continue": (
         "Player continues shopping. Describe available items briefly. "
@@ -536,7 +540,7 @@ EVENT_INSTRUCTIONS = {
         "Set attribute to 'banker'. Set location to null. Set start_combat to false."
     ),
     "next_encounter": (
-        "Set the scene for the next encounter in 1-2 sentences. "
+        "Set the scene for the next encounter in 1-2 sentences with a clear narrative bridge from the current location. "
         "Set start_combat to true. You MUST set location to one of the available locations listed below. "
         "Never reuse a location that has already been visited. Set options to null."
     ),
@@ -652,9 +656,8 @@ def build_system_prompt(
     minimal: bool = False,
     assistant_mode: str = 'dm'
 ) -> str:
-    """Build system prompt for gameplay."""
-    from app.combat import format_combat_context
-    
+    """Build system prompt for gameplay.
+
     Args:
         encounter_index: Current encounter (0-10) from combat.py
         faction: Player's chosen faction
@@ -663,6 +666,9 @@ def build_system_prompt(
         include_lore: Whether to include full world lore
         minimal: Use minimal system prompt for fast responses
         assistant_mode: 'dm' for story/combat narration, 'rules_helper' for chatbot help
+    """
+    from app.combat import format_combat_context
+
     if minimal:
         prompt = """You are a DM narrating cyberpunk RPG combat.
 1-3 sentences ONLY. Use character names (Dax, Anna, Milo, etc.), NEVER usernames.
@@ -676,9 +682,9 @@ Describe action vividly."""
     if assistant_mode == 'rules_helper':
         prompt = RULES_HELPER_PROMPT_BASE
     else:
-        prompt = SYSTEM_PROMPT_BASE + ("\n\n" + CYBERPUNK_LORE if include_lore else "")
-    if include_lore:
-        prompt += "\n\n" + CYBERPUNK_LORE
+        prompt = SYSTEM_PROMPT_BASE
+        if include_lore:
+            prompt += "\n\n" + CYBERPUNK_LORE
     
     if encounter_index is not None:
         encounter_context = format_combat_context(encounter_index, faction)

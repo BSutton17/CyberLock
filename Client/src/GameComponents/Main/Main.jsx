@@ -374,25 +374,34 @@ function Main() {
         const normalizedAttribute = normalizeDecisionAttribute(requiredAttribute);
         if (!normalizedAttribute) return null;
 
-        let bestOwner = null;
-        let bestScore = -1;
-
-        players.forEach((player) => {
-            const score = Number(allPlayerAttributes?.[player]?.[normalizedAttribute]);
-            if (!Number.isFinite(score)) return;
-
-            if (score > bestScore) {
-                bestScore = score;
-                bestOwner = player;
-            }
+        // allPlayerAttributes is an object where each player maps to an array of attributes
+        // We need to find players who have this attribute, prioritizing the first one listed
+        const playersWithAttribute = players.filter(player => {
+            const playerAttributes = allPlayerAttributes?.[player];
+            if (!Array.isArray(playerAttributes)) return false;
+            
+            // Check if any attribute in their list matches (case-insensitive)
+            return playerAttributes.some(attr => 
+                normalizeDecisionAttribute(attr) === normalizedAttribute
+            );
         });
 
-        if (bestOwner) {
-            return bestOwner;
+        console.log('[DECISION OWNER] Attribute decision:', {
+            requiredAttribute,
+            normalizedAttribute,
+            playersWithAttribute,
+            allPlayersData: Object.entries(allPlayerAttributes || {}).reduce((acc, [player, attrs]) => {
+                acc[player] = attrs;
+                return acc;
+            }, {})
+        });
+
+        // If multiple players have the attribute, the first one in the players list gets priority
+        if (playersWithAttribute.length > 0) {
+            return playersWithAttribute[0];
         }
 
-        const owner = players.find(player => allPlayerAttributes[player]?.[0] === normalizedAttribute);
-        return owner || null;
+        return null;
     };
 
     const abilityConsumesAction = (ability) => {
@@ -1293,7 +1302,22 @@ function Main() {
     const handleAiOptionClick = (option) => {
         // Determine which attribute governs this choice
         const requiredAttribute = aiAttribute || null;
-        if (requiredAttribute && !canPlayerDecide(requiredAttribute)) return;
+        const decisionOwner = getDecisionOwner(requiredAttribute);
+        const canDecide = canPlayerDecide(requiredAttribute);
+        
+        console.log('[DECISION] AI option clicked:', {
+            option,
+            requiredAttribute,
+            decisionOwner,
+            currentPlayer: playerName,
+            canDecide,
+            aiBusy
+        });
+        
+        if (requiredAttribute && !canDecide) {
+            console.log('[DECISION] BLOCKED - only', decisionOwner, 'can make this decision');
+            return;
+        }
         if (aiBusy) return;
 
         // Detect common option patterns and route them to existing handlers
@@ -1351,15 +1375,27 @@ function Main() {
         }
     }, [playerCharacters, playerName]);
 
+    const cooldownsRef = useRef(cooldowns);
+    
     useEffect(() => {
-        if (!cooldownStorageKey) return;
+        cooldownsRef.current = cooldowns;
+    }, [cooldowns]);
 
-        const storedCooldowns = sessionStorage.getItem(cooldownStorageKey);
+    useEffect(() => {
+        if (!cooldownStorageKey) {
+            console.log('[COOLDOWN] Storage key not ready:', { room: !!room, playerName: !!playerName });
+            return;
+        }
+
+        const storedCooldowns = localStorage.getItem(cooldownStorageKey);
+        console.log('[COOLDOWN RESTORE] Attempting restore:', { cooldownStorageKey, hasStoredData: !!storedCooldowns });
         if (!storedCooldowns) return;
 
         try {
             const parsedCooldowns = JSON.parse(storedCooldowns);
+            console.log('[COOLDOWN RESTORE] Parsed cooldowns:', parsedCooldowns);
             if (parsedCooldowns && typeof parsedCooldowns === 'object' && !Array.isArray(parsedCooldowns)) {
+                console.log('[COOLDOWN RESTORE] Restoring cooldowns to state:', parsedCooldowns);
                 setCooldowns(parsedCooldowns);
             }
         } catch (error) {
@@ -1368,9 +1404,13 @@ function Main() {
     }, [cooldownStorageKey]);
 
     useEffect(() => {
-        if (!cooldownStorageKey) return;
+        if (!cooldownStorageKey || Object.keys(cooldowns || {}).length === 0) {
+            // Don't save empty cooldowns during initialization
+            return;
+        }
 
-        sessionStorage.setItem(cooldownStorageKey, JSON.stringify(cooldowns || {}));
+        console.log('[COOLDOWN SAVE] Saving cooldowns:', { cooldownStorageKey, cooldowns });
+        localStorage.setItem(cooldownStorageKey, JSON.stringify(cooldowns));
     }, [cooldowns, cooldownStorageKey]);
 
     useEffect(() => {
@@ -4401,6 +4441,7 @@ function Main() {
         }
 
         if (result.newCooldown) {
+            console.log('[ABILITY CAST] Setting cooldown:', { abilityId, cooldown: result.newCooldown });
             setCooldowns(prev => ({
                 ...prev,
                 [abilityId]: result.newCooldown

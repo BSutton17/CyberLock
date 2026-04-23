@@ -481,30 +481,38 @@ function Main() {
         if (!normalizedAttribute) return null;
 
         // allPlayerAttributes is an object where each player maps to an array of attributes
-        // We need to find players who have this attribute, prioritizing the first one listed
-        const playersWithAttribute = players.filter(player => {
-            const playerAttributes = allPlayerAttributes?.[player];
-            if (!Array.isArray(playerAttributes)) return false;
-            
-            // Check if any attribute in their list matches (case-insensitive)
-            return playerAttributes.some(attr => 
-                normalizeDecisionAttribute(attr) === normalizedAttribute
-            );
-        });
+        // We need to find players who have this attribute, prioritizing those with it earliest in their list
+        const playersWithAttribute = players
+            .map(player => {
+                const playerAttributes = allPlayerAttributes?.[player];
+                if (!Array.isArray(playerAttributes)) return null;
+                
+                // Find the index of this attribute in their list
+                const attributeIndex = playerAttributes.findIndex(attr => 
+                    normalizeDecisionAttribute(attr) === normalizedAttribute
+                );
+                
+                // If they don't have it, exclude them
+                if (attributeIndex === -1) return null;
+                
+                return { player, attributeIndex };
+            })
+            .filter(Boolean) // Remove null entries
+            .sort((a, b) => a.attributeIndex - b.attributeIndex); // Sort by attribute index (lower = higher priority)
 
         console.log('[DECISION OWNER] Attribute decision:', {
             requiredAttribute,
             normalizedAttribute,
-            playersWithAttribute,
+            playersWithAttribute: playersWithAttribute.map(p => p.player),
             allPlayersData: Object.entries(allPlayerAttributes || {}).reduce((acc, [player, attrs]) => {
                 acc[player] = attrs;
                 return acc;
             }, {})
         });
 
-        // If multiple players have the attribute, the first one in the players list gets priority
+        // Return the player with the highest priority (earliest attribute position)
         if (playersWithAttribute.length > 0) {
-            return playersWithAttribute[0];
+            return playersWithAttribute[0].player;
         }
 
         return null;
@@ -2394,12 +2402,8 @@ function Main() {
             return;
         }
 
-        if (!shouldAutoEndTurn()) {
-            return;
-        }
-
         turnTimerAutoEndedRef.current = true;
-        console.log('[AUTO END TURN TIMER] Timer reached 0, ending turn');
+        console.log('[AUTO END TURN TIMER] Timer reached 0, ending turn automatically');
         handleEndTurn();
     }, [isMyTurn, turnTimeLeft]);
 

@@ -100,7 +100,7 @@
       "weapon": {
         "range": 2,
         "name": "Shotgun",
-        "damage": 10
+        "damage": 9
       },
       "abilities": [
         

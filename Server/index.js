@@ -24,7 +24,7 @@ app.use(cors({
         'http://localhost:5173',
         'http://100.69.32.219:5173'
       ]  // Allow specific origins in production for testing
-    : true, // In dev, reflect any origin so LAN devices (phones, tablets) can connect
+    : true, 
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -85,7 +85,6 @@ if (process.env.NODE_ENV === 'production') {
       res.sendFile(clientIndexPath);
     });
 
-    console.log('✅ Serving React app from /Client/dist');
   } else {
     app.get('/', (req, res) => {
       res.json({

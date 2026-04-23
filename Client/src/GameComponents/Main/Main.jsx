@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { useState, useEffect, useRef } from 'react';
 import { useGameContext } from '../../Components/Context';
 import EnemiesData from '../../Components/Enemies.json';
@@ -315,6 +315,24 @@ function Main() {
         isIntroNarrationGateActiveRef.current = Boolean(isActive);
         setIsIntroNarrationGateActive(Boolean(isActive));
     };
+
+    useEffect(() => {
+        const battleMusic = new Audio('/BattleMusic.mp3');
+        battleMusic.loop = true;
+        battleMusic.volume = 0.5;
+
+        const playPromise = battleMusic.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(error => {
+                console.log("Audio autoplay prevented or failed:", error);
+            });
+        }
+
+        return () => {
+            battleMusic.pause();
+            battleMusic.currentTime = 0;
+        };
+    }, []);
 
     useEffect(() => {
         if (!room || !playerName) return;

@@ -1,6 +1,6 @@
 import "../App.css";
 import "./HomeScreen.css";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../Components/AuthContext";
 import WaitingRoom from "./WaitingRoom";
@@ -43,6 +43,47 @@ function HomeScreen() {
     const savedRoom = localStorage.getItem('room');
     return (savedName && savedRoom) ? savedName : user?.username;
   });
+
+  const titleMusicRef = useRef(null);
+
+  useEffect(() => {
+    if (!titleMusicRef.current) {
+      titleMusicRef.current = new Audio('/Title.mp3');
+      titleMusicRef.current.loop = true;
+      titleMusicRef.current.volume = 0.5;
+    }
+
+    const screensWithTitleMusic = [
+      "waiting", 
+      "characterSelect", 
+      "characterBuilder", 
+      "characterBuilderPart2",
+      "chooseAbilities"
+    ];
+    
+    const shouldPlayTitleMusic = !isJoining || screensWithTitleMusic.includes(screen);
+
+    if (shouldPlayTitleMusic) {
+      const playPromise = titleMusicRef.current.play();
+      if (playPromise !== undefined) {
+          playPromise.catch(error => {
+              console.log("Audio autoplay prevented or failed:", error);
+          });
+      }
+    } else {
+      titleMusicRef.current.pause();
+      titleMusicRef.current.currentTime = 0;
+    }
+  }, [screen, isJoining]);
+
+  useEffect(() => {
+    return () => {
+      if (titleMusicRef.current) {
+        titleMusicRef.current.pause();
+        titleMusicRef.current.currentTime = 0;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const updateOrientationState = () => {

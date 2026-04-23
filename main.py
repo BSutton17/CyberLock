@@ -860,6 +860,25 @@ async def game_event(
                 attribute = _infer_decision_attribute("story_choice", options, attribute)
                 location = _pick_story_location(session, location)
 
+        # Final safety: never leave non-combat story mode without actionable options.
+        is_non_combat_story_mode = (
+            not is_chat_message
+            and not is_turn_action
+            and not start_combat
+            and session.get("opening_combat_started", False)
+            and request.event_type in {"encounter_end", "choice_made", "story_choice", "dynamic_scenario"}
+            and not event_data.get("faction")
+        )
+        if is_non_combat_story_mode:
+            if not options or len(options) < 2:
+                current_story_step = int(session.get("story_points_in_chain", 0))
+                options = _get_story_point_fallback_options(current_story_step)
+            else:
+                options = options[:2]
+
+            attribute = _infer_decision_attribute(request.event_type, options, attribute)
+            location = _pick_story_location(session, location)
+
         # Never surface decision controls once combat is about to begin.
         if start_combat:
             options = None

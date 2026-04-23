@@ -945,6 +945,10 @@ io.on('connection', (socket) => {
 
     const resolvedPlayer = playerName || playerNames[socket.id] || 'system';
     const isChatbotRequest = eventType === 'chat_message' || data?.source === 'chatbot';
+    const selectedCharacterName = rooms[room]?.characterSelections?.[resolvedPlayer]?.name;
+    const sanitizedCharacterName = typeof characterName === 'string' && characterName.trim()
+      ? characterName.trim()
+      : (selectedCharacterName || (isChatbotRequest ? 'the ally' : 'the operative'));
 
     try {
       if (isChatbotRequest) {
@@ -970,7 +974,7 @@ io.on('connection', (socket) => {
         message,
         data,
         scenario_type: scenarioType,
-        character_name: characterName || resolvedPlayer,
+        character_name: sanitizedCharacterName,
         use_memory: true
       });
 

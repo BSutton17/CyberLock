@@ -570,21 +570,108 @@
 }
 
 @media (max-width: 768px) {
+
+    h1{
+        transform: scale(2);
+    }
+    h3{
+        transform: scale(2);
+        transform-origin: top left;
+    }
     .character-builder-container {
         height: auto;
-        min-height: 100vh;
         overflow-x: auto;
         overflow-y: auto;
-        width: 200%;
-        min-height: 200vh;
+        width: 375vmin;
+        height: 158vmin;
         transform: scale(0.5);
         transform-origin: top left;
     }
 
+
     .builder-content {
         grid-template-columns: 2fr 1fr;
         min-width: 1400px;
+        font-size: 12vmin;
     }
+
+    .allocation-grid{
+    transform: scale(2);
+    transform-origin: top left;
+    margin-right: 150vmin;
+    }
+
+    .attribute-allocation{
+        width: 275vmin;
+    }
+
+    .character-card{
+       transform: scale(1);
+    }
+
+    .player-allocations {
+        background: rgba(20, 20, 40, 0.7);
+        backdrop-filter: blur(1.671vmin);
+        border: 0.279vmin solid rgba(139, 92, 246, 0.3);
+        border-radius: 1.114vmin;
+        padding: 1.393vmin;
+        overflow-y: auto;
+        box-shadow: 0 1.114vmin 4.455vmin rgba(0, 0, 0, 0.4);
+        width: 87vmin;
+    }
+
+    .player-allocations h3 {
+        margin: 0 0 1.393vmin 0;
+        font-size: 1.764vmin;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: #c4b5fd;
+        font-weight: 800;
+        border-bottom: 0.279vmin solid rgba(139, 92, 246, 0.5);
+        padding-bottom: 0.928vmin;
+        text-shadow: 0 0.279vmin 1.114vmin rgba(139, 92, 246, 0.6);
+    }
+
+    .player-stats-card{
+        transform: scale(2);
+        transform-origin: top left;
+        width: 40vmin;
+        margin-bottom: 12vmin;
+    }
+
+    .builder-footer{
+        height: 20vmin;
+    }
+
+    .builder-header{
+        height: 10vmin;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+    }
+
+    .builder-header > p{
+        font-size: small;
+    }
+    
+
+    .ready-button{
+        height: 10vmin;
+        width: 100vmin !important;
+        font-size: clamp(18px, 5vmin, 24px) !important;
+    }
+    
+    .desc-message{
+        width: 100%;
+        max-width: none;
+        font-size: clamp(14px, 3vmin, 18px);
+    }
+
+    .ready-status{
+        font-size: clamp(14px, 3vmin, 18px) !important;
+    }
+
 }
 
 

@@ -179,10 +179,11 @@
     border-radius: 999px;
 }
 
-@media (max-width: 480px) {
+@media (max-width: 768px) {
     .chatbot-container {
         width: 95vw;
         height: 75vh;
+        margin-top: 200vmin;
     }
 
     .send-button {

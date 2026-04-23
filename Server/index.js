@@ -22,7 +22,7 @@ app.use(cors({
         'https://cyber-lock.online',
         'http://localhost:5000',
         'http://localhost:5173',
-        'http://100.69.34.141:5173'
+        'http://100.69.32.219:5173'
       ]  // Allow specific origins in production for testing
     : true, // In dev, reflect any origin so LAN devices (phones, tablets) can connect
   credentials: true,
@@ -41,7 +41,8 @@ const io = new Server(server, {
       ? [
           'https://cyber-lock.online',
           'http://localhost:5000',
-          'http://localhost:5173'
+          'http://localhost:5173',
+          'http://100.69.32.219:5173'
         ]  // Allow specific origins in production for testing
       : true, // In dev, reflect any origin so LAN devices (phones, tablets) can connect
     methods: ['GET', 'POST'],

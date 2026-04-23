@@ -240,7 +240,9 @@ function Main() {
         chat,
         setChat,
         getIsBonusAction,
-        allPlayerAttributes
+        allPlayerAttributes,
+        musicVolume,
+        isMuted
     } = useGameContext();
     const [currentPlayerCharacter, setCurrentPlayerCharacter] = useState(null);
     const [ultimateReady, setUltimateReady] = useState(false);
@@ -316,12 +318,18 @@ function Main() {
         setIsIntroNarrationGateActive(Boolean(isActive));
     };
 
-    useEffect(() => {
-        const battleMusic = new Audio('/BattleMusic.mp3');
-        battleMusic.loop = true;
-        battleMusic.volume = 0.5;
+    const battleMusicRef = useRef(null);
 
-        const playPromise = battleMusic.play();
+    useEffect(() => {
+        if (!battleMusicRef.current) {
+            battleMusicRef.current = new Audio('/BattleMusic.mp3');
+            battleMusicRef.current.loop = true;
+        }
+        
+        battleMusicRef.current.volume = musicVolume * (2 / 3);
+        battleMusicRef.current.muted = isMuted;
+
+        const playPromise = battleMusicRef.current.play();
         if (playPromise !== undefined) {
             playPromise.catch(error => {
                 console.log("Audio autoplay prevented or failed:", error);
@@ -329,10 +337,19 @@ function Main() {
         }
 
         return () => {
-            battleMusic.pause();
-            battleMusic.currentTime = 0;
+            if (battleMusicRef.current) {
+                battleMusicRef.current.pause();
+                battleMusicRef.current.currentTime = 0;
+            }
         };
     }, []);
+
+    useEffect(() => {
+        if (battleMusicRef.current) {
+            battleMusicRef.current.volume = musicVolume * (2 / 3);
+            battleMusicRef.current.muted = isMuted;
+        }
+    }, [musicVolume, isMuted]);
 
     useEffect(() => {
         if (!room || !playerName) return;

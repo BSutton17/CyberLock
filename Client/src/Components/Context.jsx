@@ -46,6 +46,23 @@ export const GameProvider = ({ children }) => {
     const [allPlayerAttributes, setAllPlayerAttributes] = useState({});
     const [chat, setChat] = useState(false);
 
+    const [musicVolume, setMusicVolume] = useState(() => {
+      const savedVolume = localStorage.getItem('musicVolume');
+      return savedVolume !== null ? parseFloat(savedVolume) : 0.75;
+    });
+    
+    const [isMuted, setIsMuted] = useState(() => {
+      const savedMuted = localStorage.getItem('isMuted');
+      return savedMuted === 'true';
+    });
+
+    React.useEffect(() => {
+      localStorage.setItem('musicVolume', musicVolume.toString());
+    }, [musicVolume]);
+
+    React.useEffect(() => {
+      localStorage.setItem('isMuted', isMuted.toString());
+    }, [isMuted]);
     const characterImageMap = {
       offensive_tank_1: '/Offensive_Tank_1.png',
       defensive_tank_2: '/Defensive_Tank_2.png',
@@ -134,6 +151,8 @@ export const GameProvider = ({ children }) => {
         enemies, setEnemies,
         allPlayerAttributes, setAllPlayerAttributes,
         debugLogLevel,
+        musicVolume, setMusicVolume,
+        isMuted, setIsMuted,
         characterImageMap,
         enemyImageMap,
         getCharacterImage,

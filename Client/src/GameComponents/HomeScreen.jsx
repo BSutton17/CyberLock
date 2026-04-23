@@ -13,6 +13,7 @@ import CharacterBuilderPart2 from "./CharacterBuilder/CharacterBuilderPart2";
 import LevelUp from "./LevelUp/LevelUp.jsx"
 import ChooseAbilities from "./ChooseAbilities/ChooseAbilities.jsx"
 import ChatBot from "./ChatBot/ChatBot.jsx";
+import SettingsMenu from "../Components/SettingsMenu";
 import { FaRotate } from "react-icons/fa6";
 
 const getIsMobilePortrait = () => {
@@ -35,7 +36,7 @@ function HomeScreen() {
     const savedRoom = localStorage.getItem('room');
     return !!(savedName && savedRoom);
   });
-  const { socket, room, setRoom, screen, setPlayerName, setAdmin, setScreen } = useGameContext();
+  const { socket, room, setRoom, screen, setPlayerName, setAdmin, setScreen, musicVolume, isMuted } = useGameContext();
   const navigate = useNavigate();
   const { user, logout: logoutAuth } = useAuth();
   const [name] = useState(() => {
@@ -50,7 +51,6 @@ function HomeScreen() {
     if (!titleMusicRef.current) {
       titleMusicRef.current = new Audio('/Title.mp3');
       titleMusicRef.current.loop = true;
-      titleMusicRef.current.volume = 0.5;
     }
 
     const screensWithTitleMusic = [
@@ -84,6 +84,13 @@ function HomeScreen() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (titleMusicRef.current) {
+      titleMusicRef.current.volume = musicVolume * (2 / 3);
+      titleMusicRef.current.muted = isMuted;
+    }
+  }, [musicVolume, isMuted]);
 
   useEffect(() => {
     const updateOrientationState = () => {
@@ -203,6 +210,7 @@ function HomeScreen() {
   return (
     <div className="home-screen-container">
       <Events />
+      <SettingsMenu />
       {isMobilePortrait && (
         <div className="rotate-device-overlay">
           <div className="rotate-device-card">

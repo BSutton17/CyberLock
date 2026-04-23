@@ -513,7 +513,7 @@ EVENT_INSTRUCTIONS = {
         "Set options to EXACTLY these two: [\"Fight with the Enforcers\", \"Fight with the Rebels\"]."
     ),
     "choice_made": (
-        "If this is the opening faction decision, acknowledge the chosen side in 1-2 sentences and begin combat. "
+        "If this is the opening faction decision, acknowledge the chosen side in 1-2 sentences and begin combat. The chosen side fights the opposite faction; never reverse allies and opponents. "
         "If this is a story-point decision after combat, narrate consequences in 2-4 sentences and either provide EXACTLY 2 new story options with a valid attribute, or begin combat when confrontation is reached. "
         "When start_combat is true, set options to null and attribute to null. "
         "Only set location when the story transition clearly moves the party."

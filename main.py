@@ -139,6 +139,23 @@ def _build_event_summary(event_type: str, message: Optional[str], data: Optional
     summary = message or f"Event type: {event_type}."
     if data:
         summary += f" Data: {data}"
+
+        if event_type == "choice_made":
+            selected_faction = _resolve_faction_choice(
+                data.get("selected_faction"),
+                data.get("selected_side"),
+                data.get("faction"),
+                data.get("choice"),
+            )
+            if selected_faction:
+                opposing_faction = _resolve_faction_choice(
+                    data.get("opposing_faction"),
+                    data.get("opposing_side"),
+                )
+                if not opposing_faction or opposing_faction == selected_faction:
+                    opposing_faction = "rebels" if selected_faction == "enforcers" else "enforcers"
+                summary += f" Selected faction: {selected_faction}. Opposing faction: {opposing_faction}."
+
     return summary
 
 
@@ -395,14 +412,33 @@ def _choose_next_combat_location(session: dict) -> str:
 
 
 def _resolve_faction_choice(*values: Optional[str]) -> Optional[str]:
-    combined_text = " ".join(str(value or "") for value in values).lower()
-    if not combined_text.strip():
+    enforcer_pattern = r"enforcer|corporate|corp\b|authority|division|security|law|order|forces"
+    rebel_pattern = r"rebel|fighter|fighters|people|citizen|uprising|resistance|protest"
+
+    normalized_values = [str(value or "").strip().lower() for value in values]
+
+    # Prioritize explicit per-field values so mixed text cannot flip the selected side.
+    for value in normalized_values:
+        if not value:
+            continue
+        has_enforcer = bool(re.search(enforcer_pattern, value))
+        has_rebel = bool(re.search(rebel_pattern, value))
+
+        if has_enforcer and not has_rebel:
+            return "enforcers"
+        if has_rebel and not has_enforcer:
+            return "rebels"
+
+    combined_text = " ".join(value for value in normalized_values if value)
+    if not combined_text:
         return None
 
-    if re.search(r"enforcer|corporate|corp\b|authority|division|security|law|order|forces", combined_text):
-        return "enforcers"
+    has_enforcer = bool(re.search(enforcer_pattern, combined_text))
+    has_rebel = bool(re.search(rebel_pattern, combined_text))
 
-    if re.search(r"rebel|fighter|fighters|people|citizen|uprising|resistance|protest", combined_text):
+    if has_enforcer and not has_rebel:
+        return "enforcers"
+    if has_rebel and not has_enforcer:
         return "rebels"
 
     return None
@@ -828,6 +864,8 @@ async def game_event(
         # Faction choice must lead into opening combat after narration.
         if request.event_type == "choice_made" and not is_chat_message:
             explicit_faction = _resolve_faction_choice(
+                event_data.get("selected_faction"),
+                event_data.get("selected_side"),
                 event_data.get("faction"),
                 event_data.get("choice"),
                 request.message,
@@ -841,6 +879,11 @@ async def game_event(
                 options = None
                 attribute = None
                 location = "city_square"
+                allied_faction = session.get("selected_faction")
+                opposing_faction = "rebels" if allied_faction == "enforcers" else "enforcers"
+                allied_label = "Enforcers" if allied_faction == "enforcers" else "Rebels"
+                opposing_label = "Rebels" if opposing_faction == "rebels" else "Enforcers"
+                narration = f"The party sides with the {allied_label} against the {opposing_label}, and the opening battle begins now."
                 session["used_combat_locations"].add(location)
                 session["story_points_in_chain"] = 0
                 session["opening_combat_started"] = True

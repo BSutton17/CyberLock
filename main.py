@@ -293,6 +293,15 @@ def _clean_narration_artifacts(text: Optional[str]) -> str:
         normalized_lines.append(stripped)
 
     normalized = " ".join(normalized_lines) if normalized_lines else cleaned
+    # Strip leaked turn-context suffix blocks that should never reach the UI.
+    turn_context_marker = re.search(
+        r"\b(?:turn\s*cycle|turn\s*type|actor|action\s*type|summaries|data)\s*:",
+        normalized,
+        flags=re.IGNORECASE,
+    )
+    if turn_context_marker:
+        normalized = normalized[:turn_context_marker.start()].strip()
+
     # Remove leaked metadata fragments from malformed model outputs.
     normalized = re.sub(
         r"\b(?:location|attribute|start_?combat|options)\b\s*(?:[:=]|is)?\s*(?:null|none|true|false|\[[^\]]*\]|\"[^\"]*\"|[a-z_]+)",
@@ -326,6 +335,17 @@ def _clamp_to_word_limit(text: Optional[str], max_words: int) -> str:
     if trimmed and trimmed[-1] not in ".!?":
         trimmed += "."
     return trimmed
+
+
+def _limit_to_sentence_count(text: Optional[str], max_sentences: int) -> str:
+    if not text or max_sentences <= 0:
+        return ""
+
+    segments = [segment.strip() for segment in re.split(r"(?<=[.!?])\s+", str(text).strip()) if segment.strip()]
+    if len(segments) <= max_sentences:
+        return str(text).strip()
+
+    return " ".join(segments[:max_sentences]).strip()
 
 
 def _get_story_point_fallback_options(choice_count: int) -> list[str]:
@@ -749,6 +769,7 @@ async def game_event(
         parsed = _parse_structured_response(response_text)
         narration = _sanitize_narration_text(parsed.get("response"), response_text)
         if is_turn_action:
+            narration = _limit_to_sentence_count(narration, 2)
             narration = _clamp_to_word_limit(narration, 50)
         location = _normalize_location(parsed.get("location"))
         attribute = _normalize_attribute(parsed.get("attribute"))
@@ -798,10 +819,7 @@ async def game_event(
 
         # Opening scene must always present the faction decision with clear ownership.
         if request.event_type == "game_start" and not is_chat_message:
-            if not options or len(options) < 2:
-                options = ["Help the corporate forces", "Help the fighters"]
-            else:
-                options = options[:2]
+            options = ["Fight with the Enforcers", "Fight with the Rebels"]
             attribute = "politician"
             start_combat = False
             location = location or "city_square"

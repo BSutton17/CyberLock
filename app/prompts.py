@@ -508,9 +508,9 @@ EVENT_INSTRUCTIONS = {
         "Introduce the tension between corporations and people. "
         "Build to a conflict or pivotal event unfolding. "
         "End with a direct question that leads to the two options. "
-        "The party has NOT chosen a side yet. Do NOT mention 'Enforcers' or 'Rebels' - use neutral terms like 'corporate forces' and 'fighters' or 'masked rebels'. "
+        "The party has NOT chosen a side yet. Present the choice as Enforcers versus Rebels so the sides are explicit. "
         "Set location to 'city_square'. Set attribute to 'politician'. Set start_combat to false. "
-        "Set options to EXACTLY these two: [\"Help the corporate forces\", \"Help the fighters\"]."
+        "Set options to EXACTLY these two: [\"Fight with the Enforcers\", \"Fight with the Rebels\"]."
     ),
     "choice_made": (
         "If this is the opening faction decision, acknowledge the chosen side in 1-2 sentences and begin combat. "

@@ -87,6 +87,18 @@ const DECISION_ATTRIBUTE_ALIASES = {
     tech: 'electrician'
 };
 
+const SCENE_TRANSITION_EVENTS = new Set([
+    'game_start',
+    'choice_made',
+    'shop_intro',
+    'next_encounter',
+    'scene',
+    'scene_change',
+    'location',
+    'story_choice',
+    'dynamic_scenario'
+]);
+
 const getAllowedAbilitySlots = (level) => {
     if (level >= 5) return 3;
     if (level >= 3) return 2;
@@ -156,6 +168,70 @@ const normalizeDecisionAttribute = (rawAttribute = '') => {
     return DECISION_ATTRIBUTE_ALIASES[normalizedAttribute] || normalizedAttribute || null;
 };
 
+const inferDecisionAttributeFromOptions = (eventType, options = []) => {
+    if (eventType === 'shop_intro' || eventType === 'shop_continue') {
+        return 'banker';
+    }
+    if (eventType === 'game_start') {
+        return 'politician';
+    }
+
+    const optionText = options.join(' ').toLowerCase();
+
+    if (/(shop|vendor|buy|sell|browse|market|store|price|barter)/.test(optionText)) {
+        return 'banker';
+    }
+    if (/(leave|journey|travel|route|where|next encounter|move|head|go)/.test(optionText)) {
+        return 'navigator';
+    }
+    if (/(help|ally|support|convince|negotiate|diplomacy|corporate|fighters|people)/.test(optionText)) {
+        return 'politician';
+    }
+    if (/(threat|pressure|coerce|intimidat)/.test(optionText)) {
+        return 'intimidation';
+    }
+    if (/(clue|investigat|evidence|pattern)/.test(optionText)) {
+        return 'detective';
+    }
+    if (/(stealth|infiltrat|surveil|sneak)/.test(optionText)) {
+        return 'spy';
+    }
+    if (/(study|research|lore|decipher|ancient)/.test(optionText)) {
+        return 'scholar';
+    }
+    if (/(heal|treat|diagnos|stabilize)/.test(optionText)) {
+        return 'medic';
+    }
+    if (/(theft|forge|scam|criminal|underworld)/.test(optionText)) {
+        return 'crook';
+    }
+    if (/(circuit|power|electric|grid|reroute)/.test(optionText)) {
+        return 'electrician';
+    }
+
+    return 'politician';
+};
+
+const sanitizeAiNarrationText = (rawText = '') => {
+    const normalizedText = String(rawText || '')
+        .replace(/\\\//g, '/')
+        .replace(/\\n/g, '\n')
+        .replace(/\\r/g, '\n')
+        .replace(/\\t/g, ' ')
+        .replace(/\\"/g, '"');
+
+    const lines = normalizedText
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line && line !== '/' && line !== '\\' && line !== '```' && line !== '```json');
+
+    return lines
+        .join(' ')
+        .replace(/\b(?:location|attribute|start_?combat|options)\b\s*(?:[:=]|is)?\s*(?:null|none|true|false|\[[^\]]*\]|"[^"]*"|[a-z_]+)/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+};
+
 const resolveSceneKey = (rawKeyword = '') => {
     const normalizedKeyword = normalizeSceneToken(rawKeyword);
     return SCENE_ALIASES[normalizedKeyword] || null;
@@ -223,6 +299,7 @@ function Main() {
         room,
         socket,
         getAbilityScaler,
+        gamePhase,
         setGamePhase,
         isMyTurn,
         currentTurn,
@@ -282,9 +359,11 @@ function Main() {
     const pendingAiRequestResolversRef = useRef(new Map());
     const completedAiRequestIdsRef = useRef(new Set());
     const aiTypingCompletionByRequestIdRef = useRef(new Map());
+    const allyTurnSummaryPartsRef = useRef([]);
     const turnNarrationRequestContextByIdRef = useRef(new Map());
     const activeTurnNarrationByPhaseRef = useRef(new Map());
     const pendingPostCombatActionRef = useRef(null);
+    const pendingEncounterEndAfterLevelUpRef = useRef(null);
     const pendingPostCombatNarrationRequestIdRef = useRef(null);
     const pendingStartCombatNarrationRequestIdRef = useRef(null);
     const introNarrationRequestIdRef = useRef(null);
@@ -295,11 +374,13 @@ function Main() {
     const combatLifecycleActiveRef = useRef(false);
     const cooldownStorageKey = room && playerName ? `cooldowns_${room}_${playerName}` : null;
     const storyProgressStorageKey = room ? `storyProgress_${room}` : null;
+    const pendingEncounterNarrationStorageKey = room ? `pendingEncounterEndAfterLevelUp_${room}` : null;
     const isQuietLogs = debugLogLevel === 'quiet';
     const isVerboseLogs = debugLogLevel === 'verbose';
     const [isStoryStateHydrated, setIsStoryStateHydrated] = useState(false);
     const [isIntroNarrationGateActive, setIsIntroNarrationGateActive] = useState(false);
     const isIntroNarrationGateActiveRef = useRef(false);
+    const gamePhaseRef = useRef(gamePhase);
 
     const logImportant = (...args) => {
         if (isQuietLogs) return;
@@ -309,6 +390,21 @@ function Main() {
     const logVerbose = (...args) => {
         if (!isVerboseLogs) return;
         console.log(...args);
+    };
+
+    const appendAllyTurnSummary = (summaryText) => {
+        if (typeof summaryText !== 'string') return;
+        const normalizedSummary = summaryText.trim();
+        if (!normalizedSummary) return;
+        allyTurnSummaryPartsRef.current.push(normalizedSummary);
+    };
+
+    const consumeAllyTurnSummary = () => {
+        const summaries = allyTurnSummaryPartsRef.current
+            .map(summary => String(summary || '').trim())
+            .filter(Boolean);
+        allyTurnSummaryPartsRef.current = [];
+        return summaries;
     };
 
     const setIntroNarrationGate = (isActive) => {
@@ -323,6 +419,7 @@ function Main() {
         const currentEnemyPositionsKey = `enemyPositions_${room}`;
         const currentCooldownKey = `cooldowns_${room}_${playerName}`;
         const currentStoryProgressKey = `storyProgress_${room}`;
+        const currentPendingEncounterNarrationKey = `pendingEncounterEndAfterLevelUp_${room}`;
 
         const removedKeys = [];
 
@@ -339,8 +436,17 @@ function Main() {
             const isStaleStoryProgress =
                 key.startsWith('storyProgress_') &&
                 key !== currentStoryProgressKey;
+            const isStalePendingEncounterNarration =
+                key.startsWith('pendingEncounterEndAfterLevelUp_') &&
+                key !== currentPendingEncounterNarrationKey;
 
-            if (isStalePlayerPositions || isStaleEnemyPositions || isStaleCooldownForPlayer || isStaleStoryProgress) {
+            if (
+                isStalePlayerPositions ||
+                isStaleEnemyPositions ||
+                isStaleCooldownForPlayer ||
+                isStaleStoryProgress ||
+                isStalePendingEncounterNarration
+            ) {
                 removedKeys.push(key);
                 sessionStorage.removeItem(key);
             }
@@ -499,6 +605,34 @@ function Main() {
         if (!owner) return isStoryController;
         return owner === playerName;
     };
+
+    const buildFallbackStoryOptions = (eventType = 'story_choice') => {
+        if (eventType === 'encounter_end') {
+            return ['Investigate the nearest lead', 'Take a cautious route forward'];
+        }
+        if (eventType === 'choice_made') {
+            return ['Press the advantage', 'Regroup and gather intel'];
+        }
+        return ['Push the story forward', 'Take the safer approach'];
+    };
+
+    const formatDecisionAttributeLabel = (rawAttribute) => {
+        const normalizedAttribute = normalizeDecisionAttribute(rawAttribute || 'politician') || 'politician';
+        return normalizedAttribute
+            .split('_')
+            .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+            .join(' ');
+    };
+
+    const getDecisionOwnerDisplay = (rawAttribute, fallbackAttribute = 'politician') => {
+        const normalizedAttribute = normalizeDecisionAttribute(rawAttribute || fallbackAttribute) || fallbackAttribute;
+        const ownerName = getDecisionOwner(normalizedAttribute) || storyControllerLabel;
+        const attributeLabel = formatDecisionAttributeLabel(normalizedAttribute);
+        return `Decision owner (${attributeLabel}): ${ownerName}`;
+    };
+
+    const effectiveAiDecisionAttribute = normalizeDecisionAttribute(aiAttribute || 'politician') || 'politician';
+
     const hasDynamicAiChoices = !!(aiOptions && aiOptions.length > 0 && isAiNarrationComplete);
     const hasFallbackFactionChoices = !!(pendingFactionChoice && !aiOptions && allowFallbackFactionChoices && isAiNarrationComplete);
     const hasFallbackPostEncounterChoices = !!(pendingPostEncounterChoice && !aiOptions && allowFallbackPostEncounterChoices && isAiNarrationComplete);
@@ -648,7 +782,12 @@ function Main() {
     }, [actionUsed]);
 
     useEffect(() => {
+        gamePhaseRef.current = gamePhase;
+    }, [gamePhase]);
+
+    useEffect(() => {
         currentTurnRef.current = currentTurn;
+        allyTurnSummaryPartsRef.current = [];
     }, [currentTurn]);
 
     useEffect(() => {
@@ -675,6 +814,7 @@ function Main() {
             processingEnemyExecutionIdsRef.current.clear();
             completedEnemyExecutionIdsRef.current.clear();
             enemyMovementConsumedCyclesRef.current.clear();
+            allyTurnSummaryPartsRef.current = [];
         }
 
         wasCombatTurnOrderActiveRef.current = hasTurnOrder;
@@ -805,6 +945,7 @@ function Main() {
         lastCombatConfigRef.current = null;
         preCombatPlayerPositionsRef.current = null;
         combatLifecycleActiveRef.current = false;
+        pendingEncounterEndAfterLevelUpRef.current = null;
     }, [room]);
 
     useEffect(() => {
@@ -988,7 +1129,9 @@ function Main() {
 
     const setSceneFromKeyword = (keyword) => {
         const resolvedScene = resolveSceneKey(keyword);
-        setCurrentSceneKey(resolvedScene || 'city_square');
+        if (resolvedScene) {
+            setCurrentSceneKey(resolvedScene);
+        }
     };
 
     const emitAiEvent = (eventType, message, data = {}, options = {}) => {
@@ -1190,7 +1333,11 @@ function Main() {
 
         if (
             normalized.includes('enforcer') ||
+            normalized.includes('corporate') ||
+            normalized.includes('corp') ||
+            normalized.includes('force') ||
             normalized.includes('division') ||
+            normalized.includes('security') ||
             normalized.includes('authority') ||
             normalized.includes('law')
         ) {
@@ -1199,11 +1346,14 @@ function Main() {
 
         if (
             normalized.includes('rebel') ||
+            normalized.includes('fighter') ||
+            normalized.includes('fighters') ||
             normalized.includes('people') ||
             normalized.includes('protester') ||
             normalized.includes('protestor') ||
             normalized.includes('protest') ||
             normalized.includes('uprising') ||
+            normalized.includes('resistance') ||
             normalized.includes('citizens')
         ) {
             return 'rebels';
@@ -1231,7 +1381,20 @@ function Main() {
         setAllowFallbackFactionChoices(false);
         setAiOptions(null);
         pendingStartCombatRef.current = true;
-        emitAiEvent('choice_made', `The party chooses to fight with ${choice}.`, { choice });
+        const selectedSide = normalizedChoice;
+        const opposingSide = selectedSide === 'enforcers' ? 'rebels' : 'enforcers';
+        const selectedLabel = selectedSide === 'enforcers' ? 'Enforcers' : 'Rebels';
+        const opposingLabel = opposingSide === 'enforcers' ? 'Enforcers' : 'Rebels';
+        emitAiEvent(
+            'choice_made',
+            `The party sides with the ${selectedLabel} against the ${opposingLabel}.`,
+            {
+                choice,
+                faction: selectedSide,
+                selected_faction: selectedSide,
+                opposing_faction: opposingSide
+            }
+        );
     };
 
     useEffect(() => {
@@ -1242,8 +1405,9 @@ function Main() {
                 setPendingFactionChoice(false);
                 setAllowFallbackFactionChoices(false);
                 setAiOptions(null);
+                pendingStartCombatRef.current = true;
 
-                if (pendingStartCombatRef.current && isStoryController) {
+                if (pendingStartCombatRef.current && isStoryController && pendingStartCombatNarrationRequestIdRef.current) {
                     void startCombatAfterNarration([pendingStartCombatNarrationRequestIdRef.current]);
                 }
             }
@@ -1299,6 +1463,19 @@ function Main() {
         emitAiEvent('next_encounter', 'Leaving the shop, the party moves toward the next encounter.', { choice: 'next_encounter' });
     };
 
+    const handleStoryPointChoice = (choice) => {
+        const requiredAttribute = aiAttribute || null;
+        if (requiredAttribute && !canPlayerDecide(requiredAttribute)) return;
+        if (aiBusy) return;
+
+        setAiOptions(null);
+        emitAiEvent(
+            'choice_made',
+            `The party chose: ${choice}`,
+            { choice, source: 'story_point' }
+        );
+    };
+
     const handleAiOptionClick = (option) => {
         // Determine which attribute governs this choice
         const requiredAttribute = aiAttribute || null;
@@ -1329,6 +1506,11 @@ function Main() {
             return;
         }
 
+        if (pendingFactionChoice) {
+            logImportant('[FACTION] Option selected while awaiting faction, but faction could not be resolved:', option);
+            return;
+        }
+
         if (!selectedFactionRef.current && pendingFactionChoice && lowerOption.includes('enforcer')) {
             handleFactionChoice(option);
             return;
@@ -1337,16 +1519,8 @@ function Main() {
             handleFactionChoice(option);
             return;
         }
-        if (pendingPostEncounterChoice && lowerOption.includes('shop')) {
-            handlePostEncounterChoice('shop');
-            return;
-        }
-        if (pendingPostEncounterChoice && (lowerOption.includes('next encounter') || lowerOption.includes('next_encounter') || lowerOption.includes('continue'))) {
-            handlePostEncounterChoice('next_encounter');
-            return;
-        }
-        if (pendingNextEncounterChoice && (lowerOption.includes('next encounter') || lowerOption.includes('next_encounter') || lowerOption.includes('continue'))) {
-            handleNextEncounter();
+        if (pendingPostEncounterChoice || pendingNextEncounterChoice) {
+            handleStoryPointChoice(option);
             return;
         }
 
@@ -1496,16 +1670,53 @@ function Main() {
             }
         };
 
+        const persistPendingEncounterNarration = (payload) => {
+            pendingEncounterEndAfterLevelUpRef.current = payload;
+
+            if (!pendingEncounterNarrationStorageKey || !payload) return;
+
+            try {
+                sessionStorage.setItem(pendingEncounterNarrationStorageKey, JSON.stringify(payload));
+            } catch (error) {
+                console.error('[POST-COMBAT] Failed to persist pending level-up narration:', error);
+            }
+        };
+
+        const consumePendingEncounterNarration = () => {
+            let pendingNarration = pendingEncounterEndAfterLevelUpRef.current;
+
+            if (!pendingNarration && pendingEncounterNarrationStorageKey) {
+                const storedNarration = sessionStorage.getItem(pendingEncounterNarrationStorageKey);
+                if (storedNarration) {
+                    try {
+                        pendingNarration = JSON.parse(storedNarration);
+                    } catch (error) {
+                        console.error('[POST-COMBAT] Failed to parse pending level-up narration:', error);
+                    }
+                }
+            }
+
+            pendingEncounterEndAfterLevelUpRef.current = null;
+            if (pendingEncounterNarrationStorageKey) {
+                sessionStorage.removeItem(pendingEncounterNarrationStorageKey);
+            }
+
+            if (!pendingNarration?.postCombatAction || !pendingNarration?.narrationMessage) {
+                return null;
+            }
+
+            return pendingNarration;
+        };
+
         const proceedPostCombatAction = (postCombatAction) => {
             clearPendingPostCombatFallback();
             logImportant('[POST-COMBAT] Proceeding with postCombatAction:', postCombatAction);
             
             if (postCombatAction === 'levelUp') {
-                socket.emit('level_up', { room });
-                // After level up, set pending choice so next encounter button appears
                 setPendingPostEncounterChoice(true);
-                setAllowFallbackPostEncounterChoices(false);
-                logImportant('[POST-COMBAT] Level up sent; pending choice set for next phase');
+                setPendingNextEncounterChoice(false);
+                setAllowFallbackPostEncounterChoices(true);
+                logImportant('[POST-COMBAT] Level up complete; post-combat story choices unlocked');
                 return;
             }
 
@@ -1524,28 +1735,88 @@ function Main() {
             logImportant('[POST-COMBAT] No post-combat action; pending choice set for next encounter');
         };
 
+        const queueEncounterEndNarration = (postCombatAction, narrationMessage, extraData = {}) => {
+            if (!isStoryController) return;
+
+            pendingPostCombatActionRef.current = postCombatAction;
+            const requestId = emitAiEvent('encounter_end', narrationMessage, {
+                room,
+                postCombatAction,
+                ...extraData
+            });
+            pendingPostCombatNarrationRequestIdRef.current = requestId;
+
+            clearPendingPostCombatFallback();
+            pendingPostCombatFallbackTimeoutRef.current = setTimeout(() => {
+                if (!isStoryController) return;
+                if (pendingPostCombatNarrationRequestIdRef.current !== requestId) return;
+
+                logImportant('[POST-COMBAT] AI narration timed out, continuing with fallback action:', postCombatAction);
+                pendingPostCombatNarrationRequestIdRef.current = null;
+                pendingPostCombatActionRef.current = null;
+                proceedPostCombatAction(postCombatAction);
+                setAllowFallbackPostEncounterChoices(true);
+            }, POST_COMBAT_NARRATION_TIMEOUT_MS);
+        };
+
+        const handleLevelUpComplete = () => {
+            if (!isStoryController) return;
+
+            const pendingNarration = consumePendingEncounterNarration();
+            if (!pendingNarration) return;
+
+            queueEncounterEndNarration(
+                pendingNarration.postCombatAction,
+                pendingNarration.narrationMessage,
+                { source: 'post_level_up' }
+            );
+        };
+
         const handleAiMessage = ({ requestId, eventType, response, location, attribute, startCombat, options, fallback }) => {
             const turnNarrationContext = releaseTurnNarrationTracking(requestId);
-            const hasIncomingOptions = Array.isArray(options) && options.length > 0;
+            const normalizedIncomingOptions = Array.isArray(options)
+                ? options.map(option => String(option || '').trim()).filter(Boolean)
+                : [];
+            const hasIncomingOptions = normalizedIncomingOptions.length > 0;
+            const normalizedIncomingAttribute = normalizeDecisionAttribute(attribute || '');
+            const effectiveIncomingAttribute = hasIncomingOptions
+                ? (normalizedIncomingAttribute || inferDecisionAttributeFromOptions(eventType, normalizedIncomingOptions))
+                : normalizedIncomingAttribute;
+
+            const isStoryDecisionEvent = eventType === 'encounter_end' || eventType === 'choice_made' || eventType === 'story_choice';
+            let resolvedIncomingOptions = normalizedIncomingOptions;
+            let resolvedIncomingAttribute = effectiveIncomingAttribute;
+
+            if (isStoryDecisionEvent && !startCombat && resolvedIncomingOptions.length === 0) {
+                resolvedIncomingOptions = buildFallbackStoryOptions(eventType);
+                resolvedIncomingAttribute =
+                    normalizeDecisionAttribute(
+                        resolvedIncomingAttribute || inferDecisionAttributeFromOptions(eventType, resolvedIncomingOptions)
+                    ) || 'politician';
+            }
+
+            const hasResolvedOptions = resolvedIncomingOptions.length > 0;
 
             if (turnNarrationContext && !isTurnNarrationContextCurrent(turnNarrationContext)) {
                 markAiRequestCompleted(requestId);
+                const safeResponse = sanitizeAiNarrationText(response || '');
                 const lateEnemyNarration =
                     turnNarrationContext.turnType === 'enemy' &&
-                    typeof response === 'string' &&
-                    response.trim().length > 0;
+                    safeResponse.length > 0;
 
                 // If enemy narration arrives late, render it to avoid a frozen narration panel.
-                markAiTypingExpectedCompletion(requestId, lateEnemyNarration ? response : '');
+                markAiTypingExpectedCompletion(requestId, lateEnemyNarration ? safeResponse : '');
                 setAiBusy(false);
 
                 if (lateEnemyNarration) {
-                    appendAiLog({ role: 'ai', text: response, eventType });
-                    setAiText(response);
+                    appendAiLog({ role: 'ai', text: safeResponse, eventType });
+                    setAiText(safeResponse);
                 }
 
                 return;
             }
+
+            const safeResponse = sanitizeAiNarrationText(response || '');
 
             const isIntroNarrationResponse =
                 eventType === 'game_start' ||
@@ -1560,25 +1831,36 @@ function Main() {
             }
 
             markAiRequestCompleted(requestId);
-            markAiTypingExpectedCompletion(requestId, response || '');
+            markAiTypingExpectedCompletion(requestId, safeResponse);
             setAiBusy(false);
-            appendAiLog({ role: 'ai', text: response, eventType });
-            setAiText(response || '');
+            appendAiLog({ role: 'ai', text: safeResponse, eventType });
+            setAiText(safeResponse);
 
-            // Update location from structured response
-            if (location) {
-                setSceneFromKeyword(location);
-            } else {
-                const trimmedResponse = (response || '').trim();
-                const isSingleKeyword = /^[a-zA-Z0-9_-]+$/.test(trimmedResponse);
-                const isSceneEvent = eventType === 'scene' || eventType === 'scene_change' || eventType === 'location';
-                if (isSceneEvent || isSingleKeyword) {
-                    setSceneFromKeyword(trimmedResponse);
+            const isCombatPhaseActive = gamePhaseRef.current === 'combat';
+            const isSceneTransitionEvent = SCENE_TRANSITION_EVENTS.has(eventType);
+
+            // Ignore all location changes during combat and only accept scene shifts from scene-transition events.
+            if (!isCombatPhaseActive && isSceneTransitionEvent) {
+                if (location) {
+                    setSceneFromKeyword(location);
+                } else {
+                    const trimmedResponse = safeResponse.trim();
+                    const isSingleKeyword = /^[a-zA-Z0-9_-]+$/.test(trimmedResponse);
+                    if (isSingleKeyword) {
+                        setSceneFromKeyword(trimmedResponse);
+                    }
                 }
+            } else if (isCombatPhaseActive && location) {
+                logImportant('[LOCATION LOCK] Ignoring AI location during combat:', {
+                    eventType,
+                    location
+                });
             }
 
+            const canShowDecisionOptions = !isCombatPhaseActive;
+
             // Store attribute for decision-making
-            setAiAttribute(normalizeDecisionAttribute(attribute || ''));
+            setAiAttribute(canShowDecisionOptions ? (resolvedIncomingAttribute || null) : null);
 
             // Handle post-combat narration FIRST, before options display logic
             if (
@@ -1591,11 +1873,11 @@ function Main() {
                 pendingPostCombatNarrationRequestIdRef.current = null;
                 pendingPostCombatActionRef.current = null;
 
-                if (hasIncomingOptions) {
+                if (hasResolvedOptions) {
                     setPendingPostEncounterChoice(true);
                     setPendingNextEncounterChoice(false);
                     setAllowFallbackPostEncounterChoices(false);
-                    setAiOptions(options.filter(option => typeof option === 'string' && option.trim().length > 0));
+                    setAiOptions(canShowDecisionOptions ? resolvedIncomingOptions : null);
                     return;
                 }
 
@@ -1606,6 +1888,13 @@ function Main() {
 
             // Handle start_combat flag from AI
             if (startCombat && isStoryController) {
+                setPendingPostEncounterChoice(false);
+                setPendingNextEncounterChoice(false);
+                setAllowFallbackPostEncounterChoices(false);
+                setAllowFallbackNextEncounterChoice(false);
+                setAiOptions(null);
+                setAiAttribute(null);
+
                 if (!selectedFactionRef.current) {
                     pendingStartCombatRef.current = true;
                     pendingStartCombatNarrationRequestIdRef.current = requestId || null;
@@ -1619,28 +1908,25 @@ function Main() {
             }
 
             // Sync decision state for all clients so decision UI renders for everyone.
-            if (eventType === 'encounter_end') {
+            if (eventType === 'encounter_end' || eventType === 'choice_made' || eventType === 'story_choice') {
                 setPendingPostEncounterChoice(true);
                 setPendingNextEncounterChoice(false);
             }
 
-            if (eventType === 'shop_intro') {
-                setPendingPostEncounterChoice(false);
-                setPendingNextEncounterChoice(true);
-            }
-
             // Display options from AI only when a decision state is active
-            const normalizedIncomingAttribute = normalizeDecisionAttribute(attribute || '');
             const shouldAcceptAiOptions =
-                pendingFactionChoice ||
-                pendingPostEncounterChoice ||
-                pendingNextEncounterChoice ||
-                eventType === 'encounter_end' ||
-                eventType === 'shop_intro' ||
-                (!selectedFactionRef.current && (eventType === 'game_start' || normalizedIncomingAttribute === 'politician'));
+                canShowDecisionOptions && (
+                    pendingFactionChoice ||
+                    pendingPostEncounterChoice ||
+                    pendingNextEncounterChoice ||
+                    eventType === 'encounter_end' ||
+                    eventType === 'choice_made' ||
+                    eventType === 'story_choice' ||
+                    (!selectedFactionRef.current && (eventType === 'game_start' || resolvedIncomingAttribute === 'politician'))
+                );
 
-            if (hasIncomingOptions && shouldAcceptAiOptions) {
-                setAiOptions(options);
+            if (hasResolvedOptions && shouldAcceptAiOptions) {
+                setAiOptions(resolvedIncomingOptions);
             } else {
                 setAiOptions(null);
             }
@@ -1661,22 +1947,15 @@ function Main() {
                 }
             }
 
-            if (eventType === 'encounter_end' && !options) {
+            if (eventType === 'encounter_end' && !hasResolvedOptions) {
                 logImportant('[ENCOUNTER_END] No AI options provided in fallback/normal response');
                 setAllowFallbackPostEncounterChoices(Boolean(fallback));
             } else if (eventType === 'encounter_end') {
                 logImportant('[ENCOUNTER_END] AI provided options:', options);
             }
 
-            if (eventType === 'shop_intro' && !options) {
-                setPendingNextEncounterChoice(true);
-                setAllowFallbackNextEncounterChoice(Boolean(fallback));
-            }
-
-            if (eventType === 'next_encounter' && !startCombat) {
-                if (pendingStartCombatRef.current && isStoryController) {
-                    void startCombatAfterNarration([requestId]);
-                }
+            if ((eventType === 'choice_made' || eventType === 'story_choice') && !hasResolvedOptions && !startCombat) {
+                setAllowFallbackPostEncounterChoices(Boolean(fallback));
             }
         };
 
@@ -1925,9 +2204,16 @@ function Main() {
                 clearPendingPostCombatFallback();
                 pendingPostCombatNarrationRequestIdRef.current = null;
                 pendingPostCombatActionRef.current = null;
+                pendingEncounterEndAfterLevelUpRef.current = null;
+                if (pendingEncounterNarrationStorageKey) {
+                    sessionStorage.removeItem(pendingEncounterNarrationStorageKey);
+                }
                 setShowTheEndScreen(true);
                 return;
             }
+
+            setGamePhase('story');
+            gamePhaseRef.current = 'story';
 
             postCombatOverlayTimeoutRef.current = setTimeout(() => {
                 setShowEnemiesDefeatedScreen(false);
@@ -1942,24 +2228,16 @@ function Main() {
                             ? 'All enemies have been defeated. The team regroups and heads toward the shop.'
                             : 'All enemies have been defeated. The team regroups and pushes forward.';
 
-                pendingPostCombatActionRef.current = postCombatAction;
-                const requestId = emitAiEvent('encounter_end', narrationMessage, {
-                    room,
-                    postCombatAction
-                });
-                pendingPostCombatNarrationRequestIdRef.current = requestId;
+                if (postCombatAction === 'levelUp') {
+                    persistPendingEncounterNarration({
+                        postCombatAction,
+                        narrationMessage
+                    });
+                    socket.emit('level_up', { room });
+                    return;
+                }
 
-                clearPendingPostCombatFallback();
-                pendingPostCombatFallbackTimeoutRef.current = setTimeout(() => {
-                    if (!isStoryController) return;
-                    if (pendingPostCombatNarrationRequestIdRef.current !== requestId) return;
-
-                    logImportant('[POST-COMBAT] AI narration timed out, continuing with fallback action:', postCombatAction);
-                    pendingPostCombatNarrationRequestIdRef.current = null;
-                    pendingPostCombatActionRef.current = null;
-                    proceedPostCombatAction(postCombatAction);
-                    setAllowFallbackPostEncounterChoices(true);
-                }, POST_COMBAT_NARRATION_TIMEOUT_MS);
+                queueEncounterEndNarration(postCombatAction, narrationMessage);
             }, 2000);
         };
 
@@ -1967,22 +2245,41 @@ function Main() {
         socket.on('ai_error', handleAiError);
         socket.on('ai_thinking', handleAiThinking);
         socket.on('combat_ended', handleCombatEnded);
+        socket.on('level_up_complete', handleLevelUpComplete);
+
+        // Recover delayed post-levelup narration when Main remounts after levelup screen transitions.
+        if (
+            isStoryController &&
+            !pendingPostCombatNarrationRequestIdRef.current
+        ) {
+            const pendingNarration = consumePendingEncounterNarration();
+            if (pendingNarration) {
+                queueEncounterEndNarration(
+                    pendingNarration.postCombatAction,
+                    pendingNarration.narrationMessage,
+                    { source: 'post_level_up_resume' }
+                );
+            }
+        }
 
         return () => {
             socket.off('ai_message', handleAiMessage);
             socket.off('ai_error', handleAiError);
             socket.off('ai_thinking', handleAiThinking);
             socket.off('combat_ended', handleCombatEnded);
+            socket.off('level_up_complete', handleLevelUpComplete);
         };
-    }, [socket, isStoryController, room, playerName, players, playerCharacters, pendingFactionChoice, pendingPostEncounterChoice, pendingNextEncounterChoice]);
+    }, [socket, isStoryController, room, playerName, players, playerCharacters, pendingFactionChoice, pendingPostEncounterChoice, pendingNextEncounterChoice, pendingEncounterNarrationStorageKey]);
 
     useEffect(() => {
         return () => {
             pendingAiRequestResolversRef.current.clear();
             completedAiRequestIdsRef.current.clear();
             aiTypingCompletionByRequestIdRef.current.clear();
+            allyTurnSummaryPartsRef.current = [];
             turnNarrationRequestContextByIdRef.current.clear();
             activeTurnNarrationByPhaseRef.current.clear();
+            pendingEncounterEndAfterLevelUpRef.current = null;
         };
     }, []);
 
@@ -2822,6 +3119,7 @@ function Main() {
             const latestPlayerCharacters = playerCharactersRef.current;
             const latestActiveEffects = activeEffectsRef.current;
             const narrationRequestIdsForTurn = [];
+            const enemyTurnSummaryParts = [];
 
             // Check if game is over - don't execute enemy turns
             if (gameOverRef.current) {
@@ -2903,16 +3201,14 @@ function Main() {
                 turnId: enemyId
             };
 
-            const queueEnemyNarration = (message, data = {}, phase = 'enemy_action') => {
-                const requestId = emitAiEvent('turn_action', message, data, {
-                    turnNarrationContext: narrationTurnContext,
-                    turnNarrationPhase: phase
-                });
+            const queueEnemyNarration = (message) => {
+                if (typeof message !== 'string') return null;
 
-                if (requestId && !narrationRequestIdsForTurn.includes(requestId)) {
-                    narrationRequestIdsForTurn.push(requestId);
-                }
-                return requestId;
+                const normalizedMessage = message.trim();
+                if (!normalizedMessage) return null;
+
+                enemyTurnSummaryParts.push(normalizedMessage);
+                return null;
             };
 
             logImportant('[ENEMY TURN] Executing AI turn for enemy:', enemy.name);
@@ -3300,6 +3596,33 @@ function Main() {
                     processingEnemyTurnCyclesRef.current.delete(completionKey);
                     markExecutionHandled();
                     return;
+                }
+
+                const enemyTurnSummaryText = enemyTurnSummaryParts.length > 0
+                    ? enemyTurnSummaryParts.join(' ')
+                    : `${enemy.name} regroups and ends the turn.`;
+
+                const enemyTurnRequestId = emitAiEvent(
+                    'turn_action',
+                    `${enemy.name}'s turn ends: ${enemyTurnSummaryText}`,
+                    {
+                        actor: enemy.name,
+                        actionType: 'enemy_turn_end_summary',
+                        summaries: enemyTurnSummaryParts
+                    },
+                    {
+                        turnNarrationContext: {
+                            turnCycle: turnCycleAtSchedule,
+                            turnType: 'enemy',
+                            turnId: enemyId,
+                            actor: enemy.name
+                        },
+                        turnNarrationPhase: 'enemy_turn_end'
+                    }
+                );
+
+                if (enemyTurnRequestId && !narrationRequestIdsForTurn.includes(enemyTurnRequestId)) {
+                    narrationRequestIdsForTurn.push(enemyTurnRequestId);
                 }
 
                 await waitForNarrationTypingCompletion(
@@ -3864,16 +4187,8 @@ function Main() {
                     newHealth: Math.max(0, newHealth).toFixed(1)
                 });
 
-                emitAiEvent(
-                    'turn_action',
-                    `${currentPlayerCharacter.name} uses their ${currentPlayerCharacter.weapon.name} to hit ${enemy.name}, dealing ${damage.toFixed(1)} damage.`,
-                    {
-                        actor: currentPlayerCharacter.name,
-                        target: enemy.name,
-                        weapon: currentPlayerCharacter.weapon.name,
-                        damage: Number(damage.toFixed(1)),
-                        actionType: 'weapon_attack'
-                    }
+                appendAllyTurnSummary(
+                    `${currentPlayerCharacter.name} strikes ${enemy.name} with ${currentPlayerCharacter.weapon.name} for ${damage.toFixed(1)} damage.`
                 );
 
                 // Update enemy health
@@ -4502,15 +4817,8 @@ function Main() {
 
         console.log('✨ Ability executed:', result.message);
 
-        emitAiEvent(
-            'turn_action',
-            `${currentPlayerCharacter?.name || playerName} uses ${abilityId}: ${result.message}`,
-            {
-                actor: currentPlayerCharacter?.name || playerName,
-                abilityId,
-                target,
-                actionType: 'ability'
-            }
+        appendAllyTurnSummary(
+            `${currentPlayerCharacter?.name || playerName} uses ${abilityId}: ${result.message}`
         );
 
         // Apply effects to game state
@@ -4693,15 +5001,8 @@ function Main() {
 
         console.log('Ability executed:', result.message);
 
-        emitAiEvent(
-            'turn_action',
-            `${currentPlayerCharacter?.name || playerName} unleashes ${abilityId}: ${result.message}`,
-            {
-                actor: currentPlayerCharacter?.name || playerName,
-                abilityId,
-                targets,
-                actionType: 'ability_multi'
-            }
+        appendAllyTurnSummary(
+            `${currentPlayerCharacter?.name || playerName} unleashes ${abilityId}: ${result.message}`
         );
 
         // Apply effects to game state
@@ -4815,15 +5116,8 @@ function Main() {
 
         console.log('✨ Ground-target ability executed:', result.message);
 
-        emitAiEvent(
-            'turn_action',
-            `${currentPlayerCharacter?.name || playerName} targets the ground with ${abilityId}: ${result.message}`,
-            {
-                actor: currentPlayerCharacter?.name || playerName,
-                abilityId,
-                targetPosition,
-                actionType: 'ability_ground'
-            }
+        appendAllyTurnSummary(
+            `${currentPlayerCharacter?.name || playerName} targets the ground with ${abilityId}: ${result.message}`
         );
 
         // Apply effects to game state
@@ -4997,17 +5291,33 @@ function Main() {
             const endPos = characterPositions[playerName];
             const moved = endPos.row !== turnStartPosition.row || endPos.col !== turnStartPosition.col;
             if (moved) {
-                emitAiEvent(
-                    'turn_action',
-                    `${currentPlayerCharacter?.name || playerName} repositions from (${turnStartPosition.row}, ${turnStartPosition.col}) to (${endPos.row}, ${endPos.col}) and ends the turn.`,
-                    {
-                        actor: currentPlayerCharacter?.name || playerName,
-                        from: turnStartPosition,
-                        to: endPos,
-                        actionType: 'movement'
-                    }
+                appendAllyTurnSummary(
+                    `${currentPlayerCharacter?.name || playerName} repositions from (${turnStartPosition.row}, ${turnStartPosition.col}) to (${endPos.row}, ${endPos.col}).`
                 );
             }
+        }
+
+        const allyTurnSummaries = consumeAllyTurnSummary();
+        if (allyTurnSummaries.length > 0) {
+            const actorName = currentPlayerCharacter?.name || playerName;
+            emitAiEvent(
+                'turn_action',
+                `${actorName}'s turn ends: ${allyTurnSummaries.join(' ')}`,
+                {
+                    actor: actorName,
+                    actionType: 'ally_turn_end_summary',
+                    summaries: allyTurnSummaries
+                },
+                {
+                    turnNarrationContext: {
+                        turnCycle,
+                        turnType: 'ally',
+                        turnId: playerName,
+                        actor: actorName
+                    },
+                    turnNarrationPhase: 'ally_turn_end'
+                }
+            );
         }
     };
 
@@ -5226,16 +5536,14 @@ function Main() {
                     {/* AI-driven dynamic options */}
                     {hasDynamicAiChoices && (
                         <div className="ai-choices">
-                            {aiAttribute && (
-                                <div className="ai-choice-owner">
-                                    Decision owner: {getDecisionOwner(aiAttribute) || storyControllerLabel}
-                                </div>
-                            )}
+                            <div className="ai-choice-owner">
+                                {getDecisionOwnerDisplay(aiAttribute, 'politician')}
+                            </div>
                             {aiOptions.map((option, idx) => (
                                 <button
                                     key={idx}
                                     onClick={() => handleAiOptionClick(option)}
-                                    disabled={aiBusy || (aiAttribute && !canPlayerDecide(aiAttribute))}
+                                    disabled={aiBusy || !canPlayerDecide(effectiveAiDecisionAttribute)}
                                 >
                                     {option}
                                 </button>
@@ -5246,27 +5554,27 @@ function Main() {
                     {hasFallbackFactionChoices && (
                         <div className="ai-choices">
                             <div className="ai-choice-owner">
-                                Decision owner: {getDecisionOwner('politician') || storyControllerLabel}
+                                {getDecisionOwnerDisplay('politician', 'politician')}
                             </div>
-                            <button onClick={() => handleFactionChoice('the Enforcers')} disabled={aiBusy || !canPlayerDecide('politician')}>Fight with Enforcers</button>
-                            <button onClick={() => handleFactionChoice('the People of the City')} disabled={aiBusy || !canPlayerDecide('politician')}>Fight with the People of the City</button>
+                            <button onClick={() => handleFactionChoice('the Enforcers')} disabled={aiBusy || !canPlayerDecide('politician')}>Fight with the Enforcers</button>
+                            <button onClick={() => handleFactionChoice('the Rebels')} disabled={aiBusy || !canPlayerDecide('politician')}>Fight with the Rebels</button>
                         </div>
                     )}
                     {hasFallbackPostEncounterChoices && (
                         <div className="ai-choices">
                             <div className="ai-choice-owner">
-                                Shop decision: {getDecisionOwner('banker') || storyControllerLabel} | Travel decision: {getDecisionOwner('navigator') || storyControllerLabel}
+                                {getDecisionOwnerDisplay(aiAttribute || 'politician', 'politician')}
                             </div>
-                            <button onClick={() => handlePostEncounterChoice('shop')} disabled={aiBusy || !canPlayerDecide('banker')}>Go to Shop</button>
-                            <button onClick={() => handlePostEncounterChoice('next_encounter')} disabled={aiBusy || !canPlayerDecide('navigator')}>Next Encounter</button>
+                            <button onClick={() => handleStoryPointChoice('Investigate the nearest lead')} disabled={aiBusy || !canPlayerDecide(effectiveAiDecisionAttribute)}>Investigate the nearest lead</button>
+                            <button onClick={() => handleStoryPointChoice('Take a cautious route forward')} disabled={aiBusy || !canPlayerDecide(effectiveAiDecisionAttribute)}>Take a cautious route forward</button>
                         </div>
                     )}
                     {hasFallbackNextEncounterChoices && (
                         <div className="ai-choices">
                             <div className="ai-choice-owner">
-                                Travel decision: {getDecisionOwner('navigator') || storyControllerLabel}
+                                {getDecisionOwnerDisplay(aiAttribute || 'politician', 'politician')}
                             </div>
-                            <button onClick={handleNextEncounter} disabled={aiBusy || !canPlayerDecide('navigator')}>Next Encounter</button>
+                            <button onClick={() => handleStoryPointChoice('Push the story forward')} disabled={aiBusy || !canPlayerDecide(effectiveAiDecisionAttribute)}>Push the story forward</button>
                         </div>
                     )}
                     {/* <button style={{ width: '150px' }} onClick={handleLevelUp}>Level Up</button> */}
@@ -5284,16 +5592,14 @@ function Main() {
                         </div>
                         {hasDynamicAiChoices && (
                             <div className="mobile-ai-overlay-choices">
-                                {aiAttribute && (
-                                    <div className="mobile-ai-choice-owner">
-                                        Decision owner: {getDecisionOwner(aiAttribute) || storyControllerLabel}
-                                    </div>
-                                )}
+                                <div className="mobile-ai-choice-owner">
+                                    {getDecisionOwnerDisplay(aiAttribute, 'politician')}
+                                </div>
                                 {aiOptions.map((option, idx) => (
                                     <button
                                         key={`mobile-ai-option-${idx}`}
                                         onClick={() => handleAiOptionClick(option)}
-                                        disabled={aiBusy || (aiAttribute && !canPlayerDecide(aiAttribute))}
+                                        disabled={aiBusy || !canPlayerDecide(effectiveAiDecisionAttribute)}
                                     >
                                         {option}
                                     </button>
@@ -5303,27 +5609,27 @@ function Main() {
                         {hasFallbackFactionChoices && (
                             <div className="mobile-ai-overlay-choices">
                                 <div className="mobile-ai-choice-owner">
-                                    Decision owner: {getDecisionOwner('politician') || storyControllerLabel}
+                                    {getDecisionOwnerDisplay('politician', 'politician')}
                                 </div>
-                                <button onClick={() => handleFactionChoice('the Enforcers')} disabled={aiBusy || !canPlayerDecide('politician')}>Fight with Enforcers</button>
-                                <button onClick={() => handleFactionChoice('the People of the City')} disabled={aiBusy || !canPlayerDecide('politician')}>Fight with the People of the City</button>
+                                <button onClick={() => handleFactionChoice('the Enforcers')} disabled={aiBusy || !canPlayerDecide('politician')}>Fight with the Enforcers</button>
+                                <button onClick={() => handleFactionChoice('the Rebels')} disabled={aiBusy || !canPlayerDecide('politician')}>Fight with the Rebels</button>
                             </div>
                         )}
                         {hasFallbackPostEncounterChoices && (
                             <div className="mobile-ai-overlay-choices">
                                 <div className="mobile-ai-choice-owner">
-                                    Shop decision: {getDecisionOwner('banker') || storyControllerLabel} | Travel decision: {getDecisionOwner('navigator') || storyControllerLabel}
+                                    {getDecisionOwnerDisplay(aiAttribute || 'politician', 'politician')}
                                 </div>
-                                <button onClick={() => handlePostEncounterChoice('shop')} disabled={aiBusy || !canPlayerDecide('banker')}>Go to Shop</button>
-                                <button onClick={() => handlePostEncounterChoice('next_encounter')} disabled={aiBusy || !canPlayerDecide('navigator')}>Next Encounter</button>
+                                <button onClick={() => handleStoryPointChoice('Investigate the nearest lead')} disabled={aiBusy || !canPlayerDecide(effectiveAiDecisionAttribute)}>Investigate the nearest lead</button>
+                                <button onClick={() => handleStoryPointChoice('Take a cautious route forward')} disabled={aiBusy || !canPlayerDecide(effectiveAiDecisionAttribute)}>Take a cautious route forward</button>
                             </div>
                         )}
                         {hasFallbackNextEncounterChoices && (
                             <div className="mobile-ai-overlay-choices">
                                 <div className="mobile-ai-choice-owner">
-                                    Travel decision: {getDecisionOwner('navigator') || storyControllerLabel}
+                                    {getDecisionOwnerDisplay(aiAttribute || 'politician', 'politician')}
                                 </div>
-                                <button onClick={handleNextEncounter} disabled={aiBusy || !canPlayerDecide('navigator')}>Next Encounter</button>
+                                <button onClick={() => handleStoryPointChoice('Push the story forward')} disabled={aiBusy || !canPlayerDecide(effectiveAiDecisionAttribute)}>Push the story forward</button>
                             </div>
                         )}
                     </div>

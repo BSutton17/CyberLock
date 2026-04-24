@@ -249,12 +249,13 @@ function Events(){
             ...prev,
             [damagedPlayer]: {
               ...prev[damagedPlayer],
-              stats: { ...prev[damagedPlayer].stats, health: newHealth }
+              stats: { ...prev[damagedPlayer]?.stats, health: newHealth }
             }
           }));
         });
         
         socket.on("level_up", () => {
+          console.log('[EVENTS] Received level_up event, setting screen to levelup');
           setScreen("levelup");
         });
 

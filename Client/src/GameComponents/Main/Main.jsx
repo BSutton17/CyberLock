@@ -317,7 +317,8 @@ function Main() {
         chat,
         setChat,
         getIsBonusAction,
-        allPlayerAttributes
+        allPlayerAttributes,
+        setAllPlayerAttributes
     } = useGameContext();
     const [currentPlayerCharacter, setCurrentPlayerCharacter] = useState(null);
     const [ultimateReady, setUltimateReady] = useState(false);
@@ -338,6 +339,7 @@ function Main() {
     const [turnStartLockRemainingMs, setTurnStartLockRemainingMs] = useState(0);
     const [aiLog, setAiLog] = useState([]);
     const [aiBusy, setAiBusy] = useState(false);
+    const [aiNarrationComplete, setAiNarrationComplete] = useState(false);
     const [pendingFactionChoice, setPendingFactionChoice] = useState(false);
     const [selectedFaction, setSelectedFaction] = useState(null);
     const [pendingPostEncounterChoice, setPendingPostEncounterChoice] = useState(false);
@@ -375,6 +377,7 @@ function Main() {
     const cooldownStorageKey = room && playerName ? `cooldowns_${room}_${playerName}` : null;
     const storyProgressStorageKey = room ? `storyProgress_${room}` : null;
     const pendingEncounterNarrationStorageKey = room ? `pendingEncounterEndAfterLevelUp_${room}` : null;
+    const attributesStorageKey = room ? `allPlayerAttributes_${room}` : null;
     const isQuietLogs = debugLogLevel === 'quiet';
     const isVerboseLogs = debugLogLevel === 'verbose';
     const [isStoryStateHydrated, setIsStoryStateHydrated] = useState(false);
@@ -468,13 +471,14 @@ function Main() {
     const [allowFallbackNextEncounterChoice, setAllowFallbackNextEncounterChoice] = useState(false);
 
     const livingStoryController = players.find(player => (playerCharacters[player]?.stats?.health || 0) > 0) || players[0] || null;
+    const previousStoryControllerRef = useRef(livingStoryController);
     const isStoryController = livingStoryController === playerName;
     const storyControllerLabel = livingStoryController || 'Admin';
     const currentAiSentence = aiSentences[currentSentenceIndex] || '';
-    const isAiNarrationComplete = !aiBusy && (
+    const isAiNarrationComplete = aiNarrationComplete || (!aiBusy && (
         !aiText?.trim() ||
         (aiSentences.length > 0 && currentSentenceIndex >= aiSentences.length - 1 && typingIndex >= currentAiSentence.length)
-    );
+    ));
 
     const getDecisionOwner = (requiredAttribute) => {
         const normalizedAttribute = normalizeDecisionAttribute(requiredAttribute);
@@ -851,7 +855,8 @@ function Main() {
             aiAttribute: null,
             allowFallbackFactionChoices: false,
             allowFallbackPostEncounterChoices: false,
-            allowFallbackNextEncounterChoice: false
+            allowFallbackNextEncounterChoice: false,
+            aiNarrationComplete: false
         };
 
         let nextStoryState = defaultStoryState;
@@ -885,7 +890,8 @@ function Main() {
                     hasRequestedIntro:
                         Boolean(parsedStoryState?.hasRequestedIntro) ||
                         !!normalizedSelectedFaction ||
-                        normalizedCombatFlowIndex > 0
+                        normalizedCombatFlowIndex > 0,
+                    aiNarrationComplete: Boolean(parsedStoryState?.aiNarrationComplete)
                 };
             } catch (error) {
                 console.error('[STORY FLOW] Failed to parse stored story progress:', error);
@@ -903,6 +909,7 @@ function Main() {
         setAiText(nextStoryState.aiText);
         setAiOptions(nextStoryState.aiOptions);
         setAiAttribute(nextStoryState.aiAttribute);
+        setAiNarrationComplete(nextStoryState.aiNarrationComplete);
         setAllowFallbackFactionChoices(nextStoryState.allowFallbackFactionChoices);
         setAllowFallbackPostEncounterChoices(nextStoryState.allowFallbackPostEncounterChoices);
         setAllowFallbackNextEncounterChoice(nextStoryState.allowFallbackNextEncounterChoice);
@@ -926,7 +933,8 @@ function Main() {
             allowFallbackFactionChoices,
             allowFallbackPostEncounterChoices,
             allowFallbackNextEncounterChoice,
-            hasRequestedIntro: hasRequestedIntroRef.current
+            hasRequestedIntro: hasRequestedIntroRef.current,
+            aiNarrationComplete
         }));
     }, [
         storyProgressStorageKey,
@@ -942,12 +950,59 @@ function Main() {
         aiAttribute,
         allowFallbackFactionChoices,
         allowFallbackPostEncounterChoices,
-        allowFallbackNextEncounterChoice
+        allowFallbackNextEncounterChoice,
+        aiNarrationComplete
     ]);
+
+    // Load attributes from localStorage on mount
+    useEffect(() => {
+        if (!attributesStorageKey) return;
+        
+        const storedAttributes = sessionStorage.getItem(attributesStorageKey);
+        if (storedAttributes) {
+            try {
+                const parsedAttributes = JSON.parse(storedAttributes);
+                setAllPlayerAttributes(parsedAttributes);
+                logVerbose('[ATTRIBUTES] Loaded from storage:', parsedAttributes);
+            } catch (error) {
+                console.error('[ATTRIBUTES] Failed to parse stored attributes:', error);
+            }
+        }
+    }, [attributesStorageKey]);
+
+    // Save attributes to localStorage whenever they change
+    useEffect(() => {
+        if (!attributesStorageKey || Object.keys(allPlayerAttributes).length === 0) return;
+        
+        sessionStorage.setItem(attributesStorageKey, JSON.stringify(allPlayerAttributes));
+        logVerbose('[ATTRIBUTES] Saved to storage:', allPlayerAttributes);
+    }, [attributesStorageKey, allPlayerAttributes]);
 
     useEffect(() => {
         combatFlowIndexRef.current = combatFlowIndex;
     }, [combatFlowIndex]);
+
+    // Handle story controller death - reset AI flow to prevent freeze
+    useEffect(() => {
+        const previousController = previousStoryControllerRef.current;
+        const currentController = livingStoryController;
+        
+        // If story controller changed (someone died or changed roles)
+        if (previousController && previousController !== currentController) {
+            logImportant(`[STORY CONTROLLER] Changed from ${previousController} to ${currentController}`);
+            
+            // If we're waiting for AI choices from dead controller, clear them
+            if (aiBusy && !isStoryController) {
+                logImportant(`[STORY CONTROLLER] Clearing AI state from dead controller`);
+                setAiBusy(false);
+                setAiText('');
+                setAiOptions(null);
+                setAiAttribute(null);
+            }
+        }
+        
+        previousStoryControllerRef.current = currentController;
+    }, [livingStoryController, aiBusy, isStoryController]);
 
     useEffect(() => {
         lastCombatConfigRef.current = null;
@@ -1178,6 +1233,7 @@ function Main() {
 
         const requestId = options.requestId || `${eventType}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         setAiBusy(true);
+        setAiNarrationComplete(false);
         setAiOptions(null);
         setAiAttribute(null);
 
@@ -1634,6 +1690,7 @@ function Main() {
         }
 
         if (currentSentenceIndex >= aiSentences.length - 1) {
+            setAiNarrationComplete(true);
             return;
         }
 
@@ -2196,6 +2253,7 @@ function Main() {
 
             const completedEncounter = lastCombatConfigRef.current;
             const postCombatAction = completedEncounter?.postCombat || 'none';
+            logImportant('[POST-COMBAT] Combat ended. completedEncounter:', completedEncounter, 'postCombatAction:', postCombatAction, 'isStoryController:', isStoryController);
             const isFinalBossEncounter =
                 completedEncounter?.combatType === 'boss' &&
                 combatFlowIndexRef.current >= STORY_COMBAT_FLOW.length;
@@ -2227,7 +2285,10 @@ function Main() {
                 setShowEnemiesDefeatedScreen(false);
                 postCombatOverlayTimeoutRef.current = null;
 
-                if (!isStoryController) return;
+                if (!isStoryController) {
+                    logImportant('[POST-COMBAT] Not story controller, skipping level up trigger. isStoryController:', isStoryController);
+                    return;
+                }
 
                 const narrationMessage =
                     postCombatAction === 'levelUp'
@@ -2237,6 +2298,7 @@ function Main() {
                             : 'All enemies have been defeated. The team regroups and pushes forward.';
 
                 if (postCombatAction === 'levelUp') {
+                    logImportant('[POST-COMBAT] Triggering level up! Emitting level_up event.');
                     persistPendingEncounterNarration({
                         postCombatAction,
                         narrationMessage
@@ -2244,6 +2306,7 @@ function Main() {
                     socket.emit('level_up', { room });
                     return;
                 }
+                logImportant('[POST-COMBAT] postCombatAction is not levelUp, value:', postCombatAction);
 
                 queueEncounterEndNarration(postCombatAction, narrationMessage);
             }, 2000);
@@ -3554,6 +3617,21 @@ function Main() {
                                         setTimeout(() => {
                                             setShowYouDiedScreen(false);
                                         }, 2500); // Show for 2.5 seconds
+                                    }
+                                    
+                                    // If the dead player was the current turn, notify server to advance
+                                    const wasCurrentTurn = currentTurn?.id === turnAction.target;
+                                    if (wasCurrentTurn && isStoryController) {
+                                        logImportant(`[TURN_ADVANCE] Current player died, advancing turn`);
+                                        setTimeout(() => {
+                                            socket.emit('end_turn', {
+                                                room,
+                                                playerName: turnAction.target,
+                                                updatedEnemies: enemies,
+                                                updatedPlayerCharacters: updatedPlayerCharacters,
+                                                updatedActiveEffects: filteredEffects
+                                            });
+                                        }, 100);
                                     }
                                 }
                             }

@@ -566,7 +566,7 @@
     display: none;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
     .character-select-container {
         overflow-x: auto;
         overflow-y: auto;
@@ -636,7 +636,6 @@
     .header h2,
     .ready-status,
     .empty-slot,
-    .team-character span,
     .weapon-stat-label,
     .weapon-stat-value,
     .cooldown,
@@ -646,6 +645,11 @@
     .stat-row,
     .weapon-stats {
         font-size: 2.2vmin;
+    }
+
+    
+    .team-character span{
+        font-size: 5vmin !important;
     }
 
     .selected-team h3,

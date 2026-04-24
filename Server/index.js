@@ -247,6 +247,13 @@ function emitEnemyDefeatVictoryIfNeeded(io, room, combat) {
   clearEnemyTurnWatchdog(room);
   clearAllyTurnAdvanceDelay(room);
   io.to(room).emit('combat_ended', { result: 'enemies_defeated' });
+  // Clear combat session after a delay to prevent reconnect restore issues
+  setTimeout(() => {
+    if (combatSessions[room]?.endedResult === 'enemies_defeated') {
+      console.log(`[COMBAT] Clearing combat session for room ${room} after combat ended`);
+      delete combatSessions[room];
+    }
+  }, 5000);
   return true;
 }
 
@@ -1957,6 +1964,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on("level_up",({room}) => {
+    console.log(`[SERVER] Received level_up event for room: ${room}`);
     if (rooms[room]) {
       rooms[room].levelUpReadyPlayers = [];
       if (!rooms[room].playerScreens) {
@@ -1965,6 +1973,7 @@ io.on('connection', (socket) => {
       (rooms[room].players || []).forEach((player) => {
         rooms[room].playerScreens[player] = 'levelup';
       });
+      console.log(`[SERVER] Emitting level_up to all clients in room ${room}`);
       io.to(room).emit('level_up_ready_status', []);
     }
     io.to(room).emit('level_up');

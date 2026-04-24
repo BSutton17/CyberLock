@@ -516,7 +516,7 @@
 }
 
 
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
 	.choose-abilities-wrapper {
 		overflow-x: auto;
 		overflow-y: auto;
@@ -526,20 +526,20 @@
 		transform-origin: top left;
 	}
 
-	.character-name{
-		font-size: 2.178vmin;
-	}
-
-	.character-level{
-		font-size: 1.782vmin;
+	.character-name, .character-level, .character-role{
+		font-size: 4vmin !important;
 	}
 	.ability-description{
-		font-size: 0.9vmin;
+		font-size: 4vmin;
 		gap: 1vmin;
 	}
 
+	.dropdown-title{
+		font-size: 5vmin !important;
+	}
+
 	.ability-description-drop{
-		font-size: 0.9vmin;
+		font-size: 3vmin;
 		gap: 1vmin;
 		font-weight: 100;
 	}
@@ -559,7 +559,7 @@
 	}
 
 	.ability-name-drop{
-		font-size: 2vmin;
+		font-size: 4vmin;
 		font-weight: 600;
 	}
 
@@ -568,9 +568,14 @@
 		white-space: nowrap;
 	}
 
+	.character-section h3,
+	.current-abilities-section h3 {
+		font-size: 5vmin;
+	}
+
 	.ability-level{
 		width: auto;
-		font-size: 1.75vmin;
+		font-size: 3vmin;
 		margin-right: 5vmin;
 	}
 
@@ -600,6 +605,12 @@
 	}
 
 	.ready-button {
-		width: auto;
+		width: 25vmin;
+		height: 15vmin;
+		font-size: 5vmin;
+	}
+
+	.ready-status{
+		font-size: 3.5vmin;
 	}
 }

@@ -179,12 +179,15 @@
     border-radius: 999px;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
     .chatbot-container {
-        width: 95vw;
-        height: 75vh;
-        margin-top: 200vmin;
-    }
+     	overflow-x: auto;
+		overflow-y: auto;
+		width: 375vmin;
+		height: 158vmin;
+		transform: scale(0.5);
+		transform-origin: top left;
+	}
 
     .send-button {
         min-height: 44px;

@@ -1,6 +1,6 @@
 import "../App.css";
 import "./HomeScreen.css";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../Components/AuthContext";
 import WaitingRoom from "./WaitingRoom";
@@ -13,6 +13,7 @@ import CharacterBuilderPart2 from "./CharacterBuilder/CharacterBuilderPart2";
 import LevelUp from "./LevelUp/LevelUp.jsx"
 import ChooseAbilities from "./ChooseAbilities/ChooseAbilities.jsx"
 import ChatBot from "./ChatBot/ChatBot.jsx";
+import SettingsMenu from "../Components/SettingsMenu";
 import { FaRotate } from "react-icons/fa6";
 
 const getIsMobilePortrait = () => {
@@ -35,7 +36,7 @@ function HomeScreen() {
     const savedRoom = localStorage.getItem('room');
     return !!(savedName && savedRoom);
   });
-  const { socket, room, setRoom, screen, setPlayerName, setAdmin, setScreen } = useGameContext();
+  const { socket, room, setRoom, screen, setPlayerName, setAdmin, setScreen, musicVolume, isMuted } = useGameContext();
   const navigate = useNavigate();
   const { user, logout: logoutAuth } = useAuth();
   const [name] = useState(() => {
@@ -43,6 +44,53 @@ function HomeScreen() {
     const savedRoom = localStorage.getItem('room');
     return (savedName && savedRoom) ? savedName : user?.username;
   });
+
+  const titleMusicRef = useRef(null);
+
+  useEffect(() => {
+    if (!titleMusicRef.current) {
+      titleMusicRef.current = new Audio('/audio/Title.mp3');
+      titleMusicRef.current.loop = true;
+    }
+
+    const screensWithTitleMusic = [
+      "waiting", 
+      "characterSelect", 
+      "characterBuilder", 
+      "characterBuilderPart2",
+      "chooseAbilities"
+    ];
+    
+    const shouldPlayTitleMusic = !isJoining || screensWithTitleMusic.includes(screen);
+
+    if (shouldPlayTitleMusic) {
+      const playPromise = titleMusicRef.current.play();
+      if (playPromise !== undefined) {
+          playPromise.catch(error => {
+              console.log("Audio autoplay prevented or failed:", error);
+          });
+      }
+    } else {
+      titleMusicRef.current.pause();
+      titleMusicRef.current.currentTime = 0;
+    }
+  }, [screen, isJoining]);
+
+  useEffect(() => {
+    return () => {
+      if (titleMusicRef.current) {
+        titleMusicRef.current.pause();
+        titleMusicRef.current.currentTime = 0;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (titleMusicRef.current) {
+      titleMusicRef.current.volume = musicVolume * (2 / 3);
+      titleMusicRef.current.muted = isMuted;
+    }
+  }, [musicVolume, isMuted]);
 
   useEffect(() => {
     const updateOrientationState = () => {
@@ -162,6 +210,7 @@ function HomeScreen() {
   return (
     <div className="home-screen-container">
       <Events />
+      {screen !== 'main' && <SettingsMenu />}
       {isMobilePortrait && (
         <div className="rotate-device-overlay">
           <div className="rotate-device-card">
@@ -172,7 +221,7 @@ function HomeScreen() {
       )}
       {screen == "waiting" && <>
         <div className="home-title-card-wrap">
-          <img className="home-title-card" src="/TitleCard.png" alt="Cyber Lock" />
+          <img className="home-title-card" src="/ui/TitleCard.png" alt="Cyber Lock" />
         </div>
       </>}
 

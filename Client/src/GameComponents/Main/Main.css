@@ -35,7 +35,7 @@
     width: 100vw;
     max-width: 100vw;
     margin: 0 auto;
-    background-image: url('/AttributesBackground.jpg');
+    background-image: url('/backgrounds/AttributesBackground.jpg');
     background-size: cover;
     background-position: center;
     background-attachment: scroll;
@@ -120,15 +120,22 @@ p {
     transform: translateX(-50%);
 }
 
-.leave-main, .leave-main-help {
+.scene-actions-left {
     position: absolute;
     left: 1.5rem;
     top: 50%;
     transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    gap: 1.5vmin;
+    z-index: 10;
+}
+
+.leave-main, .leave-main-help {
     min-width: 3vmin;
     min-height: 1.5vmin;
     border: 1.5px solid var(--neon-cyan);
-    font-size: 1.1vmin;
+    font-size: 1.25vmin;
     padding: 0.7rem 1rem;
     border-radius: 0.5rem;
     background: rgba(16, 16, 25, 0.75);
@@ -141,11 +148,6 @@ p {
     font-weight: 600;
     letter-spacing: 0.1em;
     transition: all 0.2s ease;
-    z-index: 10;
-}
-
-.leave-main-help{
-    left: 20vmin;
 }
 
 .leave-main:hover,
@@ -293,7 +295,7 @@ p {
     padding: 0.5rem;
     border-radius: 18px;
     box-sizing: border-box;
-    background-image: url('/Background-City Square.png');
+    background-image: url('/backgrounds/Background-City Square.png');
     background-size: 100% 100%;
     background-position: center;
     background-repeat: no-repeat;

@@ -10,17 +10,18 @@ import { FaRegSnowflake, FaSkullCrossbones, FaFireAlt, FaShieldAlt } from 'react
 import { assignEnemyAbilities } from '../../Utils/enemyAbilityUtils';
 import './Main.css';
 import ChatBot from '../ChatBot/ChatBot';
+import SettingsMenu from '../../Components/SettingsMenu';
 
 const SCENE_BACKGROUNDS = {
-    city_square: '/Background-City Square.png',
-    warehouse: '/Background-Warehouse.png',
-    club: '/Background-Club.png',
-    hospital: '/Background-Hospital.png',
-    office: '/Background-office.png',
-    sewer: '/Background-sewer.png',
-    shop: '/Background-shop.png',
-    boss: '/Background-boss.png',
-    street: './Cyberpunk City Street.png'
+    city_square: '/backgrounds/Background-City Square.png',
+    warehouse: '/backgrounds/Background-Warehouse.png',
+    club: '/backgrounds/Background-Club.png',
+    hospital: '/backgrounds/Background-Hospital.png',
+    office: '/backgrounds/Background-office.png',
+    sewer: '/backgrounds/Background-sewer.png',
+    shop: '/backgrounds/Background-shop.png',
+    boss: '/backgrounds/Background-boss.png',
+    street: '/backgrounds/Cyberpunk City Street.png'
 };
 
 const SCENE_LABELS = {
@@ -322,7 +323,7 @@ function Main() {
 
     useEffect(() => {
         if (!battleMusicRef.current) {
-            battleMusicRef.current = new Audio('/BattleMusic.mp3');
+            battleMusicRef.current = new Audio('/audio/BattleMusic.mp3');
             battleMusicRef.current.loop = true;
         }
         
@@ -5100,23 +5101,26 @@ function Main() {
             )}
 
             <div className="scene-name">
-                <button
-                    className="leave-main"
-                    onClick={() => {
-                        if (window.confirm("Are you sure you want to leave the game? This will disconnect you from the current room.")) {
-                            localStorage.removeItem("name");
-                            localStorage.removeItem("room");
-                            localStorage.removeItem("isAdmin");
-                            localStorage.removeItem("screen");
-                            socket.emit('leave_room', { room, playerName });
-                            window.location.reload();
-                            socket.emit("disconnect");
-                        }
-                    }}
-                >
-                    LEAVE GAME
-                </button>
-                <button className='leave-main-help' onClick={() => setChat(true)}>Help</button>
+                <div className="scene-actions-left">
+                    <button
+                        className="leave-main"
+                        onClick={() => {
+                            if (window.confirm("Are you sure you want to leave the game? This will disconnect you from the current room.")) {
+                                localStorage.removeItem("name");
+                                localStorage.removeItem("room");
+                                localStorage.removeItem("isAdmin");
+                                localStorage.removeItem("screen");
+                                socket.emit('leave_room', { room, playerName });
+                                window.location.reload();
+                                socket.emit("disconnect");
+                            }
+                        }}
+                    >
+                        LEAVE GAME
+                    </button>
+                    <SettingsMenu />
+                    <button className='leave-main-help' onClick={() => setChat(true)}>Help</button>
+                </div>
                 <h2 className='title'>{SCENE_LABELS[currentSceneKey] || SCENE_LABELS.city_square}</h2>
                 <h2>
                     {isMyTurn ? (

@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { FaCog, FaTimes, FaVolumeUp, FaVolumeMute } from 'react-icons/fa';
 import { useGameContext } from './Context';
 import './SettingsMenu.css';
 
 const SettingsMenu = () => {
     const [isOpen, setIsOpen] = useState(false);
-    const { musicVolume, setMusicVolume, isMuted, setIsMuted } = useGameContext();
+    const { musicVolume, setMusicVolume, isMuted, setIsMuted, screen } = useGameContext();
 
     const toggleMenu = () => setIsOpen(!isOpen);
 
@@ -22,11 +23,11 @@ const SettingsMenu = () => {
 
     return (
         <>
-            <button className="settings-cog-btn" onClick={toggleMenu} aria-label="Settings">
+            <button className={`settings-cog-btn ${screen === 'main' ? 'battle-screen-cog' : ''}`} onClick={toggleMenu} aria-label="Settings">
                 <FaCog />
             </button>
 
-            {isOpen && (
+            {isOpen && createPortal(
                 <div className="settings-modal-overlay" onClick={toggleMenu}>
                     <div className="settings-modal-content" onClick={(e) => e.stopPropagation()}>
                         <button className="settings-close-btn" onClick={toggleMenu}>
@@ -52,7 +53,8 @@ const SettingsMenu = () => {
                             </span>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </>
     );

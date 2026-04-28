@@ -49,7 +49,7 @@ function HomeScreen() {
 
   useEffect(() => {
     if (!titleMusicRef.current) {
-      titleMusicRef.current = new Audio('/Title.mp3');
+      titleMusicRef.current = new Audio('/audio/Title.mp3');
       titleMusicRef.current.loop = true;
     }
 
@@ -210,7 +210,7 @@ function HomeScreen() {
   return (
     <div className="home-screen-container">
       <Events />
-      <SettingsMenu />
+      {screen !== 'main' && <SettingsMenu />}
       {isMobilePortrait && (
         <div className="rotate-device-overlay">
           <div className="rotate-device-card">
@@ -221,7 +221,7 @@ function HomeScreen() {
       )}
       {screen == "waiting" && <>
         <div className="home-title-card-wrap">
-          <img className="home-title-card" src="/TitleCard.png" alt="Cyber Lock" />
+          <img className="home-title-card" src="/ui/TitleCard.png" alt="Cyber Lock" />
         </div>
       </>}
 

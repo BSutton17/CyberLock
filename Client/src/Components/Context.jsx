@@ -64,45 +64,45 @@ export const GameProvider = ({ children }) => {
       localStorage.setItem('isMuted', isMuted.toString());
     }, [isMuted]);
     const characterImageMap = {
-      offensive_tank_1: '/Offensive_Tank_1.png',
-      defensive_tank_2: '/Defensive_Tank_2.png',
-      spellcaster_dps_1: '/Spell_Caster_DPS_1.png',
-      aggressive_dps_2: '/Aggressive_DPS_2.png',
-      traditional_warrior_dps_3: '/Traditional_Warrior_3.png',
-      healing_support_1: '/Healing_Support.png',
-      offensive_support_2: '/Offensive_Support.png',
-      jack_of_all_trades_support_3: '/Spell_Caster_DPS_2.png',
-      hacker_support_4: '/Hacker.png'
+      offensive_tank_1: '/characters/Offensive_Tank_1.png',
+      defensive_tank_2: '/characters/Defensive_Tank_2.png',
+      spellcaster_dps_1: '/characters/Spell_Caster_DPS_1.png',
+      aggressive_dps_2: '/characters/Aggressive_DPS_2.png',
+      traditional_warrior_dps_3: '/characters/Traditional_Warrior_3.png',
+      healing_support_1: '/characters/Healing_Support.png',
+      offensive_support_2: '/characters/Offensive_Support.png',
+      jack_of_all_trades_support_3: '/characters/Spell_Caster_DPS_2.png',
+      hacker_support_4: '/characters/Hacker.png'
     };
 
     const enemyImageMap = {
-      enforcer_soldier: '/Enforcer_Solider.png',
-      enforcer_drone: '/Enforcer_Drone.png',
-      rebel_initiate: '/Rebel_Initiate.png',
-      rebel_field_tech: '/Rebel_Field_Tech.png',
-      division_command: '/Enforcer_Division_Command.png',
-      division_strategist: '/Enforcer_Division_Strategist.png',
-      vanguard_captain: '/Enforcer_Vangaurd_Captain.png',
-      field_captain: '/Rebel_Field_Captain.png',
-      rebel_coordinator: '/Rebel_Coordinator.png',
-      operations_handler: '/Rebel_Field_Tech.png',
-      division_chief: '/Enforcer_Division_Command.png',
-      rebellion_chief: '/Rebel_Field_Captain.png',
-      enforcer_the_architect: '/The Architect.png',
-      enforcer_macro_hull: '/Macro Hull.png',
-      enforcer_genisis: '/Genisis.png',
-      rebel_garret_maxwell: '/Garret Maxwell.png',
-      rebel_levi_wicker: '/Levi Wicker.png',
-      rebel_virgil_wesley: '/Virgil Wesley.png'
+      enforcer_soldier: '/enemies/Enforcer_Solider.png',
+      enforcer_drone: '/enemies/Enforcer_Drone.png',
+      rebel_initiate: '/enemies/Rebel_Initiate.png',
+      rebel_field_tech: '/enemies/Rebel_Field_Tech.png',
+      division_command: '/enemies/Enforcer_Division_Command.png',
+      division_strategist: '/enemies/Enforcer_Division_Strategist.png',
+      vanguard_captain: '/enemies/Enforcer_Vangaurd_Captain.png',
+      field_captain: '/enemies/Rebel_Field_Captain.png',
+      rebel_coordinator: '/enemies/Rebel_Coordinator.png',
+      operations_handler: '/enemies/Rebel_Field_Tech.png',
+      division_chief: '/enemies/Enforcer_Division_Command.png',
+      rebellion_chief: '/enemies/Rebel_Field_Captain.png',
+      enforcer_the_architect: '/enemies/The Architect.png',
+      enforcer_macro_hull: '/enemies/Macro Hull.png',
+      enforcer_genisis: '/enemies/Genisis.png',
+      rebel_garret_maxwell: '/enemies/Garret Maxwell.png',
+      rebel_levi_wicker: '/enemies/Levi Wicker.png',
+      rebel_virgil_wesley: '/enemies/Virgil Wesley.png'
     };
 
     const enemyNameImageMap = {
-      'Garret Maxwell': '/Garret Maxwell.png',
-      'Genisis': '/Genisis.png',
-      'Levi Wicker': '/Levi Wicker.png',
-      'Macro Hull': '/Macro Hull.png',
-      'The Architect': '/The Architect.png',
-      'Virgil Wesley': '/Virgil Wesley.png'
+      'Garret Maxwell': '/enemies/Garret Maxwell.png',
+      'Genisis': '/enemies/Genisis.png',
+      'Levi Wicker': '/enemies/Levi Wicker.png',
+      'Macro Hull': '/enemies/Macro Hull.png',
+      'The Architect': '/enemies/The Architect.png',
+      'Virgil Wesley': '/enemies/Virgil Wesley.png'
     };
 
     const getCharacterImage = (character) => {

@@ -24,6 +24,18 @@
     text-shadow: 0 0 15px var(--accent-color, #eda5ff);
 }
 
+.settings-cog-btn.battle-screen-cog {
+    position: relative;
+    top: auto;
+    left: auto;
+    right: auto;
+    transform: none;
+}
+
+.settings-cog-btn.battle-screen-cog:hover {
+    transform: rotate(90deg) scale(1.1);
+}
+
 .settings-modal-overlay {
     position: fixed;
     top: 0;

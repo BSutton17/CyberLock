@@ -2,7 +2,7 @@
 
 A full-stack, multiplayer Tabletop RPG (TTRPG) game set in a cyberpunk universe, featuring AI-driven NPCs, real-time combat, character creation, and dynamic storytelling powered by machine learning.
 
-## 🎮 Project Overview
+## Project Overview
 
 This capstone project is a three-tier application that combines modern web technologies with AI/ML capabilities:
 
@@ -171,7 +171,7 @@ cd ../Server
 NODE_ENV=production npm start
 ```
 
-## 🔧 Technology Stack
+## Technology Stack
 
 ### Frontend
 
@@ -224,7 +224,7 @@ The project uses JWT (JSON Web Tokens) with:
 
 All game routes require valid authentication. Failed authentication redirects to login.
 
-## 📡 API Endpoints
+## API Endpoints
 
 ### Auth Endpoints (`/api/auth`)
 
@@ -245,7 +245,7 @@ All game routes require valid authentication. Failed authentication redirects to
 - `POST /memory/retrieve` - Fetch contextual memories
 - `GET /health` - Service health check
 
-## 📊 Database Schema
+## Database Schema
 
 ### Users Table
 

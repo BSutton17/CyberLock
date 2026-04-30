@@ -325,12 +325,17 @@ NODE_ENV=production npm start
 
 This is a senior capstone project developed as part of a computer science degree program. It demonstrates full-stack development, AI/ML integration, real-time communication, and game design principles.
 
-Bryson Sutton\n
-Aiden Carrera\n
-Angel Santiago-Molina\n
-Beau Lamoreaux\n
-Sean Scott\n
-Broderick Mains\n
+Bryson Sutton
+
+Aiden Carrera
+
+Angel Santiago-Molina
+
+Beau Lamoreaux
+
+Sean Scott
+
+Broderick Mains
 
 ## License
 

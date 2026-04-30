@@ -92,12 +92,12 @@
       "level": 1,
       "behavior": "defensive",
       "stats": {
-        "health": 50,
-        "maxHealth": 50,
-        "speed": 40,
-        "resistance": 50,
-        "strength": 30,
-        "ta": 55
+        "health": 70,
+        "maxHealth": 70,
+        "speed": 60,
+        "resistance": 60,
+        "strength": 40,
+        "ta": 65
       },
       "weapon": {
         "name": "Command Uplink",
@@ -117,8 +117,8 @@
         "maxHealth": 55,
         "speed": 30,
         "resistance": 55,
-        "strength": 25,
-        "ta": 60
+        "strength": 35,
+        "ta": 70
       },
       "weapon": {
         "name": "Tactical Railcaster",
@@ -136,10 +136,10 @@
       "stats": {
         "health": 90,
         "maxHealth": 90,
-        "speed": 25,
-        "resistance": 55,
-        "strength": 40,
-        "ta": 15
+        "speed": 55,
+        "resistance": 65,
+        "strength": 50,
+        "ta": 25
       },
       "weapon": {
         "name": "Siege Gauntlets",
@@ -155,8 +155,8 @@
       "level": 1,
       "behavior": "intelligent",
       "stats": {
-        "health": 80,
-        "maxHealth": 80,
+        "health": 100,
+        "maxHealth": 100,
         "speed": 40,
         "resistance": 60,
         "strength": 35,
@@ -176,8 +176,8 @@
       "level": 1,
       "behavior": "aggressive",
       "stats": {
-        "health": 75,
-        "maxHealth": 75,
+        "health": 95,
+        "maxHealth": 95,
         "speed": 45,
         "resistance": 45,
         "strength": 45,

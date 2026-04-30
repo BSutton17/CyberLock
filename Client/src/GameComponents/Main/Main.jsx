@@ -2770,7 +2770,7 @@ function Main() {
         // +10% resistance per player above 3; baseline 1.0 for parties of 1–3
         const resistanceMultiplier = 1 + Math.max(0, partySize - 3) * 0.1;
         const normalizedEnemyLevel = Math.max(1, partyLevel || 1);
-        const levelBonus = (normalizedEnemyLevel - 1) * 3;
+        const levelBonus = (normalizedEnemyLevel - 1) * 6;
 
         const scaledStats = {
             health: (enemyTemplate.stats.health || 0) + levelBonus,
@@ -4702,15 +4702,7 @@ function Main() {
 
         sessionStorage.removeItem(`enemyPositions_${room}`);
         sessionStorage.removeItem(`playerPositions_${room}`);
-        setCharacterPositions(prev => {
-            const next = {};
-            players.forEach((playerId) => {
-                if (prev[playerId]) {
-                    next[playerId] = prev[playerId];
-                }
-            });
-            return next;
-        });
+        setCharacterPositions({});
         setGamePhase('combat');
         socket.emit('start_combat', {
             room,

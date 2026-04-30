@@ -142,7 +142,7 @@
         "ta": 40
       },
       "weapon": {
-        "range": 2,
+        "range": 3,
         "name": "Electric Guitar",
         "damage": 3
       },

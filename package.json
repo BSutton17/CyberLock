@@ -1,0 +1,20 @@
+{
+  "name": "cyberlock",
+  "private": true,
+  "description": "CyberLock - a co-op cyberpunk tactics RPG with an AI game master",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "setup": "npm install && npm install --prefix Server && npm install --prefix Client",
+    "dev": "concurrently --kill-others-on-fail -n server,client -c cyan,magenta \"npm run dev --prefix Server\" \"npm run dev --prefix Client\"",
+    "test": "npm test --prefix Server && npm test --prefix Client",
+    "lint": "npm run lint --prefix Client",
+    "build": "npm run build --prefix Client",
+    "start": "npm start --prefix Server",
+    "heroku-postbuild": "npm ci --prefix Server --omit=dev"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5"
+  }
+}

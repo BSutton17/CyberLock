@@ -1,2 +1,20 @@
-# Keep AI service out of the main cs-capstone repository pushes
+# Dependencies and build output
+node_modules/
+dist/
+coverage/
+
+# Local environment files (never commit secrets)
+.env
+.env.*
+!.env.example
+
+# Python virtualenv from the old AI service
+.venv/
+
+# The old Python AI service is archived on the `archive/python-ai` branch and
+# replaced by Server/narrator. Keep any local copy out of the repo.
 SeniorCapstone-Ai-API/
+
+# OS / editor
+.DS_Store
+Thumbs.db

@@ -193,9 +193,9 @@
       "id": "operations_handler",
       "name": "Operations Handler",
       "tier": "mid-tier",
-      "role": "DPS",
+      "role": "Support",
       "level": 1,
-      "behavior": "DPS",
+      "behavior": "support",
       "stats": {
         "health": 60,
         "maxHealth": 60,

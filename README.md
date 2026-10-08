@@ -15,7 +15,7 @@ You need **Node.js 24**. No accounts or API keys are required to play locally.
 
 ```bash
 npm run setup     # installs everything (root, Server, Client)
-npm run dev       # starts the server (port 5000) and the client (port 5180)
+npm run dev       # starts the server (port 3001) and the client (port 5180)
 ```
 
 Open **http://localhost:5180**, choose **Play as guest**, and start a room. To test multiplayer
@@ -52,15 +52,20 @@ cs-capstone/
 │   └── src/
 │       ├── Components/         Auth, socket context, global socket events, login
 │       ├── GameComponents/     Lobby, character select/builder, level up, main game
-│       │   └── Main/           Combat board, abilities (AbilityStore/AbilityLogic), enemy AI
+│       │   └── Main/           The game screen: story panel and the combat board
 │       └── Utils/
+├── shared/                     Game rules used by both sides (see docs/COMBAT.md)
+│   ├── combat/                 Abilities, effects, enemy AI, encounters, the combat engine
+│   └── data/                   Characters and enemies
 ├── Server/
 │   ├── index.js                Entry point
 │   ├── app.js                  Builds the HTTP + Socket.IO server
 │   ├── config.js               Every environment variable, documented
 │   ├── auth/                   Google sign-in verification and session tokens
-│   ├── game/                   Pure game rules: rooms, turn order, spawning, level ups
-│   ├── sockets/                Socket event handlers and turn control
+│   ├── game/                   Rooms, spawning, level ups
+│   ├── combat/                 Tests for the shared combat rules
+│   ├── sockets/                Socket event handlers; combat.js runs each room's fight
+│   ├── scripts/botFight.js     Bots play story fights over real sockets (stall + balance checks)
 │   └── narrator/               The AI game master (see docs/AI_NARRATOR.md)
 ├── docs/                       Roadmap, deployment guide, narrator guide, reports
 ├── netlify.toml                Client deploy settings

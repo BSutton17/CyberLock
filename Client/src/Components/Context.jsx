@@ -91,6 +91,9 @@ export const GameProvider = ({ children }) => {
     const [chat, setChat] = useState(false);
     // Latest story snapshot from the server (encounter number, side, last decision), used to restore after a reconnect.
     const [serverStoryState, setServerStoryState] = useState(null);
+    // Latest fight snapshot from the server (board, effects, cooldowns, whose turn). The server runs
+    // the fight; the client only draws it and sends intents.
+    const [combatState, setCombatState] = useState(null);
 
     const [musicVolume, setMusicVolume] = useState(() => {
       const savedVolume = localStorage.getItem('musicVolume');
@@ -134,6 +137,7 @@ export const GameProvider = ({ children }) => {
         connectionStatus,
         connectedPlayers,
         serverStoryState, setServerStoryState,
+        combatState, setCombatState,
         gamePhase, setGamePhase,
         storyText, setStoryText,
         combatRewards, setCombatRewards,

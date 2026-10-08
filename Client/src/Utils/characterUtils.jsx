@@ -1,4 +1,4 @@
-import { ABILITIES } from '../GameComponents/Main/AbilityStore';
+import { ABILITIES } from '@shared/combat/abilities.js';
 
 //load in data from Ability Store
 export const enrichCharacterAbilities = (character) => {
@@ -11,7 +11,7 @@ export const enrichCharacterAbilities = (character) => {
             const abilityId = typeof abilityItem === 'string' ? abilityItem : abilityItem?.id;
             const abilityData = abilityId ? ABILITIES[abilityId] : null;
             if (!abilityData) {
-                console.error(`Ability not found in AbilityStore: ${abilityId}`);
+                console.error(`Ability not found in the ability catalog: ${abilityId}`);
                 return {
                     id: abilityId,
                     name: 'Unknown Ability',
@@ -36,7 +36,7 @@ export const enrichCharacterAbilities = (character) => {
         const ultimateId = typeof character.ultimate === 'string' ? character.ultimate : character.ultimate?.id;
         const ultimateData = ultimateId ? ABILITIES[ultimateId] : null;
         if (!ultimateData) {
-            console.error(`Ultimate not found in AbilityStore: ${ultimateId}`);
+            console.error(`Ultimate not found in the ability catalog: ${ultimateId}`);
             enrichedCharacter.ultimate = {
                 id: ultimateId,
                 name: 'Unknown Ultimate',

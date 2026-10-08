@@ -14,12 +14,19 @@ const testConfig = {
   allowedOrigins: [],
   timing: {
     allyTurnAdvanceDelayMs: 0,
+    autoEndTurnDelayMs: 0,
     combatStartEnemyDelayMs: 0,
-    enemyTurnTimeoutMs: 400,
+    enemyThinkMs: 0,
+    enemyAttackDelayMs: 0,
+    enemyTurnEndDelayMs: 0,
+    animationScale: 0,
     allyTurnTimeoutMs: 600,
     disconnectGraceMs: 150
   }
 };
+
+// The enemies the next fight will have (the real game builds them from the campaign).
+let nextEnemies = [];
 
 let game;
 let baseUrl;
@@ -33,7 +40,8 @@ beforeEach(async () => {
       if (credential !== 'good-google-token') throw new Error('bad token');
       return { id: 'google:123', name: 'Bryson', provider: 'google' };
     },
-    logger: quiet
+    logger: quiet,
+    combatOptions: { generateEnemies: () => JSON.parse(JSON.stringify(nextEnemies)), random: () => 0 }
   });
   await new Promise(resolve => game.server.listen(0, resolve));
   baseUrl = `http://127.0.0.1:${game.server.address().port}`;
@@ -281,134 +289,177 @@ describe('rooms', () => {
 // ---------------------------------------------------------------------------
 
 describe('combat turns', () => {
+  // Fight with A (fast) and B (slow) against the enemies in `nextEnemies`. Characters, positions
+  // and stats can be adjusted through game.state before acting.
   async function startFight(enemies, chars = { A: character('a', 40), B: character('b', 10) }) {
     const { room, sockets } = await createRoomWith([['u1', 'A'], ['u2', 'B']]);
     seedCharacters(room, chars);
-    const phase = waitFor(sockets[0], 'phase_changed_combat');
-    sockets[0].emit('start_combat', { room, generatedEnemies: enemies, sceneKey: 'street' });
-    return { room, sockets, phase: await phase };
+    nextEnemies = enemies;
+    const first = waitFor(sockets[0], 'combat_state');
+    sockets[0].emit('start_combat', { room, sceneKey: 'street', playerPositions: { A: { row: 6, col: 3 }, B: { row: 6, col: 6 } } });
+    return { room, sockets, state: await first };
   }
 
-  it('orders turns by speed and runs enemy turns through a client', async () => {
-    const { room, sockets: [a], phase } = await startFight([enemy('e1', 20)]);
-    expect(phase.turnOrder.map(t => t.id)).toEqual(['A', 'e1', 'B']);
-    expect(phase.encounterIndex).toBe(0);
+  const fight = (room) => game.state.combat[room];
+  const turnOf = (snapshot) => snapshot?.currentTurn?.id;
+  const stateWhere = (socket, predicate, timeoutMs) => waitFor(socket, 'combat_state', predicate, timeoutMs);
 
-    const enemyTurn = waitFor(a, 'execute_enemy_turn');
-    a.emit('end_turn', { room });
-    const { enemyId, executionId, allies } = await enemyTurn;
-    expect(enemyId).toBe('e1');
-    expect(allies).toEqual(['A', 'B']);
-
-    const backToB = waitFor(a, 'turn_changed', ({ currentTurn }) => currentTurn.id === 'B');
-    a.emit('enemy_turn_complete', { room, enemyId, executionId });
-    await backToB;
+  it('builds the fight on the server and orders turns by speed', async () => {
+    const { room, state } = await startFight([enemy('e1', 20)]);
+    expect(state.turnOrder.map(t => t.id)).toEqual(['A', 'e1', 'B']);
+    expect(state.encounterIndex).toBe(0);
+    expect(state.positions).toMatchObject({ A: { row: 6, col: 3 }, B: { row: 6, col: 6 } });
+    expect(state.positions.e1.row).toBeLessThan(2);
+    expect(state.turn).toMatchObject({ id: 'A', actionUsed: false });
+    expect(game.state.rooms[room].encountersStarted).toBe(1);
   });
 
-  it('ignores an end-turn from someone whose turn it is not', async () => {
-    const { room, sockets: [, b] } = await startFight([enemy('e1', 20)]);
-    const correction = waitFor(b, 'turn_changed', ({ currentTurn }) => currentTurn.id === 'A');
-    b.emit('end_turn', { room });
-    await correction;
-    expect(game.state.combat[room].currentTurnIndex).toBe(0);
-  });
-
-  // Regression: killing a player who acted earlier this round used to stall combat.
-  it('keeps going when an enemy kills a player who already acted', async () => {
-    const { room, sockets: [a, b] } = await startFight([enemy('e1', 20), enemy('e2', 5)]);
-    const enemyTurn = waitFor(a, 'execute_enemy_turn');
-    a.emit('end_turn', { room });
-    const { executionId } = await enemyTurn;
-
-    a.emit('player_damaged', { room, playerName: 'A', newHealth: 0 });
-    await waitFor(b, 'turn_order_updated', ({ turnOrder }) => !turnOrder.some(t => t.id === 'A'));
-    expect(game.state.combat[room].turnOrder[game.state.combat[room].currentTurnIndex].id).toBe('e1');
-
-    const toB = waitFor(b, 'turn_changed', ({ currentTurn }) => currentTurn.id === 'B');
-    a.emit('enemy_turn_complete', { room, enemyId: 'e1', executionId });
-    await toB;
-  });
-
-  // Regression: an enemy dying during its own turn made the next player lose theirs.
-  it('does not skip the next player when the acting enemy dies on its own turn', async () => {
-    const { room, sockets: [a, b] } = await startFight([enemy('e1', 20), enemy('e2', 5)]);
-    const enemyTurn = waitFor(a, 'execute_enemy_turn');
-    a.emit('end_turn', { room });
-    const { executionId } = await enemyTurn;
-
-    const toB = waitFor(b, 'turn_changed', ({ currentTurn }) => currentTurn.id === 'B');
-    a.emit('enemy_turn_complete', {
-      room,
-      enemyId: 'e1',
-      executionId,
-      updatedEnemies: [enemy('e1', 20, 0), enemy('e2', 5)]
-    });
-    await toB;
-  });
-
-  it('removes a player killed by an end-of-turn effect and moves on', async () => {
-    const { room, sockets: [a, b] } = await startFight([enemy('e1', 20)]);
-    const enemyTurn = waitFor(b, 'execute_enemy_turn');
-    a.emit('end_turn', { room, updatedPlayerCharacters: { A: character('a', 40, 0) } });
-    await enemyTurn;
-    expect(game.state.combat[room].turnOrder.map(t => t.id)).toEqual(['e1', 'B']);
-  });
-
-  it('declares victory when the last enemy falls', async () => {
+  it('runs enemy turns itself: the enemy walks toward the party, then the next player is up', async () => {
     const { room, sockets: [a] } = await startFight([enemy('e1', 20)]);
+    const startRow = fight(room).positions.e1.row;
+    const toB = stateWhere(a, snapshot => turnOf(snapshot) === 'B');
+    a.emit('combat_end_turn', { room });
+    const snapshot = await toB;
+    expect(snapshot.positions.e1.row).toBeGreaterThan(startRow);
+  });
+
+  it('refuses actions from someone whose turn it is not', async () => {
+    const { room, sockets: [, b] } = await startFight([enemy('e1', 20)]);
+    const refused = waitFor(b, 'combat_error');
+    b.emit('combat_end_turn', { room });
+    expect(await refused).toMatchObject({ error: 'not_your_turn' });
+    expect(fight(room).turn.id).toBe('A');
+  });
+
+  it('works out attack damage itself', async () => {
+    const { room, sockets: [a] } = await startFight([enemy('e1', 20)]);
+    fight(room).positions.e1 = { row: 5, col: 3 };
+    const hit = stateWhere(a, snapshot => snapshot.events.some(event => event.type === 'damage'));
+    const result = await ack(a, 'combat_attack', { room, targetId: 'e1' });
+    expect(result).toEqual({ ok: true });
+    // strength 10 / 10 * weapon 5 - resistance 10 / 10 = 4
+    expect((await hit).enemies[0].stats.health).toBe(36);
+  });
+
+  it('moves players along real paths and enforces their movement', async () => {
+    const { room, sockets: [a] } = await startFight([enemy('e1', 20)]);
+    const moved = stateWhere(a, snapshot => snapshot.positions.A.col === 1);
+    expect(await ack(a, 'combat_move', { room, to: { row: 6, col: 1 } })).toEqual({ ok: true });
+    expect((await moved).turn.movementLeft).toBe(2);
+    expect(await ack(a, 'combat_move', { room, to: { row: 2, col: 1 } })).toMatchObject({ ok: false, error: 'too_far' });
+  });
+
+  it('only allows abilities the character actually has', async () => {
+    const { room, sockets: [a] } = await startFight([enemy('e1', 20)]);
+    const result = await ack(a, 'combat_ability', { room, abilityId: 'black_hole', targetPosition: { row: 1, col: 1 } });
+    expect(result).toMatchObject({ ok: false, error: 'not_owned' });
+  });
+
+  it('ends the turn by itself once the player has nothing left to do', async () => {
+    const chars = { A: character('a', 9), B: character('b', 1) };
+    const { room, sockets: [a] } = await startFight([enemy('e1', 5)], chars);
+    fight(room).positions.e1 = { row: 5, col: 3 };
+    const nextTurn = stateWhere(a, snapshot => turnOf(snapshot) !== 'A');
+    await ack(a, 'combat_attack', { room, targetId: 'e1' });
+    expect(turnOf(await nextTurn)).toBe('e1');
+  });
+
+  it('narrates each turn from the server', async () => {
+    const { room, sockets: [a, b] } = await startFight([enemy('e1', 20)]);
+    fight(room).positions.e1 = { row: 5, col: 3 };
+    const line = waitFor(b, 'combat_narration', ({ actor }) => actor === 'a');
+    await ack(a, 'combat_attack', { room, targetId: 'e1' });
+    a.emit('combat_end_turn', { room });
+    expect((await line).text.length).toBeGreaterThan(0);
+  });
+
+  it('declares victory when the last enemy falls and patches the party up', async () => {
+    const { room, sockets: [a] } = await startFight([enemy('e1', 20, 2)]);
+    game.state.rooms[room].characterSelections.B.stats.health = 5;
+    fight(room).positions.e1 = { row: 5, col: 3 };
     const ended = waitFor(a, 'combat_ended');
-    a.emit('enemy_damaged', { room, enemyId: 'e1', newHealth: 0 });
-    expect(await ended).toEqual({ result: 'enemies_defeated' });
+    await ack(a, 'combat_attack', { room, targetId: 'e1' });
+    const result = await ended;
+    expect(result).toMatchObject({ result: 'enemies_defeated', encounterIndex: 0, postCombat: 'levelUp', isFinalEncounter: false });
+    expect(result.characters.B.stats.health).toBe(80);
   });
 
   it('declares defeat only when every player is down', async () => {
-    const { room, sockets: [a] } = await startFight([enemy('e1', 20)]);
-    const noDefeat = expectNo(a, 'combat_ended');
-    a.emit('player_damaged', { room, playerName: 'B', newHealth: 0 });
-    await noDefeat;
-    const ended = waitFor(a, 'combat_ended');
-    a.emit('player_damaged', { room, playerName: 'A', newHealth: 0 });
-    expect(await ended).toEqual({ result: 'all_dead' });
+    const strong = { ...enemy('e1', 20), stats: { ...enemy('e1', 20).stats, strength: 500 } };
+    const { room, sockets: [a, b] } = await startFight([strong], { A: character('a', 40, 1), B: character('b', 10, 1) });
+    fight(room).positions.e1 = { row: 6, col: 4 };
+    fight(room).positions.B = { row: 6, col: 5 };
+
+    // The enemy can only kill one of them per turn, so the fight must continue after the first.
+    const firstDown = stateWhere(a, snapshot => snapshot.events.some(event => event.type === 'death'));
+    a.emit('combat_end_turn', { room });
+    const afterFirst = await firstDown;
+    expect(afterFirst.endedResult).toBeNull();
+
+    const ended = waitFor(a, 'combat_ended', () => true, 4000);
+    const survivor = Object.entries(afterFirst.characters).find(([, c]) => c.stats.health > 0)[0];
+    const survivorSocket = survivor === 'A' ? a : b;
+    if (fight(room).turn?.id !== survivor) await stateWhere(a, snapshot => turnOf(snapshot) === survivor);
+    survivorSocket.emit('combat_end_turn', { room });
+    expect(await ended).toMatchObject({ result: 'all_dead' });
+    expect(game.state.rooms[room].gameOver).toBe(true);
+  });
+
+  it('moves on when the acting player is killed by a reflected hit', async () => {
+    const { room, sockets: [a] } = await startFight([enemy('e1', 20)], { A: character('a', 40, 1), B: character('b', 10) });
+    fight(room).positions.e1 = { row: 5, col: 3 };
+    fight(room).activeEffects.push({ type: 'damage_reflection', target: 'e1', turnsRemaining: 1, ownerTurnId: 'e1' });
+    const toB = stateWhere(a, snapshot => turnOf(snapshot) === 'B');
+    await ack(a, 'combat_attack', { room, targetId: 'e1' });
+    const snapshot = await toB;
+    expect(snapshot.turnOrder.map(t => t.id)).toEqual(['e1', 'B']);
   });
 
   it('ends an AFK player\'s turn automatically', async () => {
     const { sockets: [a] } = await startFight([enemy('e1', 20)]);
-    const timedOut = waitFor(a, 'turn_timed_out', null ?? (() => true), 2000);
-    const enemyTurn = waitFor(a, 'execute_enemy_turn', () => true, 2000);
+    const timedOut = waitFor(a, 'turn_timed_out', () => true, 2000);
+    const toB = stateWhere(a, snapshot => turnOf(snapshot) === 'B', 2000);
     expect(await timedOut).toEqual({ playerName: 'A' });
-    await enemyTurn;
-  });
-
-  it('skips an enemy turn nobody completes after retrying', async () => {
-    const { room, sockets: [a] } = await startFight([enemy('e1', 20)]);
-    a.emit('end_turn', { room });
-    const toB = waitFor(a, 'turn_changed', ({ currentTurn }) => currentTurn.id === 'B', 3000);
     await toB;
   });
 
   it('ignores a second start_combat while a fight is running', async () => {
-    const { room, sockets: [a, b] } = await startFight([enemy('e1', 20)]);
-    const echo = waitFor(b, 'phase_changed_combat');
-    b.emit('start_combat', { room, generatedEnemies: [enemy('other', 99)] });
-    const payload = await echo;
-    expect(payload.enemies.map(e => e.id)).toEqual(['e1']);
+    const { room, sockets: [, b] } = await startFight([enemy('e1', 20)]);
+    nextEnemies = [enemy('other', 99)];
+    const echo = waitFor(b, 'combat_state');
+    b.emit('start_combat', { room });
+    expect((await echo).enemies.map(e => e.id)).toEqual(['e1']);
     expect(game.state.rooms[room].encountersStarted).toBe(1);
   });
 
   it('puts a reconnecting player back in the fight and restores their screen', async () => {
     const { room, sockets: [a, b] } = await startFight([enemy('e1', 20)]);
-    const removed = waitFor(a, 'turn_order_updated', ({ turnOrder }) => !turnOrder.some(t => t.id === 'B'));
+    const removed = stateWhere(a, snapshot => !snapshot.turnOrder.some(t => t.id === 'B'));
     b.disconnect();
     await removed;
 
     const b2 = await connect('u2', 'B');
-    const phase = waitFor(b2, 'phase_changed_combat');
+    const back = stateWhere(b2, snapshot => snapshot.turnOrder.some(t => t.id === 'B'));
+    const screen = waitFor(b2, 'start_game');
     const story = waitFor(b2, 'story_state');
-    const restored = waitFor(a, 'turn_order_updated', ({ turnOrder }) => turnOrder.some(t => t.id === 'B'));
     await ack(b2, 'join_room', room, 'B');
-    expect((await phase).turnOrder.map(t => t.id)).toContain('B');
+    await back;
+    await screen;
     expect(await story).toMatchObject({ combatFlowIndex: 1 });
-    await restored;
+  });
+
+  it('pauses enemy turns while nobody is connected and resumes when someone returns', async () => {
+    const { room, sockets: [a, b] } = await startFight([enemy('e1', 20)]);
+    b.disconnect();
+    a.disconnect();
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(fight(room).paused).toBe(true);
+    expect(fight(room).turn.id).toBe('e1');
+
+    const a2 = await connect('u1', 'A');
+    const resumed = stateWhere(a2, snapshot => turnOf(snapshot) === 'A' && !snapshot.paused);
+    await ack(a2, 'join_room', room, 'A');
+    await resumed;
   });
 });
 

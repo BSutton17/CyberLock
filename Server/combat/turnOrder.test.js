@@ -10,7 +10,7 @@ import {
   advanceTurn,
   removeAllyFromTurnOrder,
   insertAllyIntoTurnOrder
-} from './combatSession.js';
+} from '../../shared/combat/turnOrder.js';
 
 const enemy = (id, health = 40, extra = {}) => ({
   id,

@@ -42,16 +42,17 @@ const character = (id, name, speed) => ({
   weapon: { name: 'Energy Sword', damage: 9, range: 1 }
 });
 
-function Harness({ socket, playerName = 'bryson', serverStoryState = null }) {
+function Harness({ socket, playerName = 'bryson', serverStoryState = null, initialCombat = null }) {
   const [playerCharacters, setPlayerCharacters] = useState({
     bryson: character('aggressive_dps_2', 'Leo', 40),
     sean: character('hacker_support_4', 'Ghost Shell', 25)
   });
-  const [enemies, setEnemies] = useState([]);
-  const [turnOrder, setTurnOrder] = useState([]);
-  const [currentTurn, setCurrentTurn] = useState(null);
-  const [isMyTurn, setIsMyTurn] = useState(false);
-  const [gamePhase, setGamePhase] = useState('story');
+  const [enemies, setEnemies] = useState(initialCombat?.enemies || []);
+  const [turnOrder, setTurnOrder] = useState(initialCombat?.turnOrder || []);
+  const [currentTurn, setCurrentTurn] = useState(initialCombat?.currentTurn || null);
+  const [isMyTurn, setIsMyTurn] = useState(initialCombat?.currentTurn?.id === playerName && !!initialCombat?.turn);
+  const [gamePhase, setGamePhase] = useState(initialCombat ? 'combat' : 'story');
+  const [combatState] = useState(initialCombat);
   const [allPlayerAttributes, setAllPlayerAttributes] = useState({
     bryson: ['Politician', 'Spy'],
     sean: ['Electrician', 'Banker', 'Politician']
@@ -81,7 +82,8 @@ function Harness({ socket, playerName = 'bryson', serverStoryState = null }) {
     musicVolume: 0,
     isMuted: true,
     connectedPlayers: ['bryson', 'sean'],
-    serverStoryState
+    serverStoryState,
+    combatState
   };
 
   return <GameContext.Provider value={value}><Main /></GameContext.Provider>;
@@ -194,8 +196,105 @@ describe('Main (story flow)', () => {
     const { unmount } = render(<Harness socket={socket} />);
     expect(socket.listenerCount('ai_message')).toBeGreaterThan(0);
     unmount();
-    for (const event of ['ai_message', 'combat_ended', 'execute_enemy_turn', 'enemies_updated', 'faction_selected']) {
+    for (const event of ['ai_message', 'combat_ended', 'combat_error', 'combat_narration', 'turn_timed_out', 'faction_selected']) {
       expect(socket.listenerCount(event), event).toBe(0);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Fights: the server runs them; Main draws the board and sends intents.
+// ---------------------------------------------------------------------------
+
+const enemy = (id) => ({
+  id,
+  name: 'Enforcer Soldier',
+  tier: 'generic',
+  stats: { health: 40, maxHealth: 40, speed: 30, resistance: 20, strength: 40, ta: 20 },
+  weapon: { name: 'Baton', damage: 6, range: 1 },
+  isDeadBody: false
+});
+
+const fightSnapshot = (overrides = {}) => ({
+  encounterIndex: 0,
+  sceneKey: 'street',
+  enemies: [enemy('e1')],
+  positions: { bryson: { row: 6, col: 3 }, sean: { row: 6, col: 6 }, e1: { row: 5, col: 3 } },
+  activeEffects: [],
+  turnOrder: [{ type: 'ally', id: 'bryson', speed: 40 }, { type: 'enemy', id: 'e1', speed: 30 }, { type: 'ally', id: 'sean', speed: 25 }],
+  currentTurn: { type: 'ally', id: 'bryson', speed: 40 },
+  turn: { type: 'ally', id: 'bryson', number: 1, movementUsed: 0, movementLeft: 4, actionUsed: false, bonusActionUsed: false, extraWeaponAttacks: 0 },
+  cooldowns: {},
+  characters: {},
+  events: [],
+  turnMsRemaining: 40000,
+  endedResult: null,
+  ...overrides
+});
+
+const storyInProgress = { combatFlowIndex: 1, selectedFaction: 'rebels', lastStoryMessage: null };
+const cell = (container, row, col) => container.querySelectorAll('.grid-cell')[row * 10 + col];
+const emitsOf = (socket, name) => socket.emitted.filter(({ event }) => event === name).map(({ args }) => args[0]);
+// The first half second of a turn ignores clicks (stops double-clicks carrying over).
+const waitForTurnLock = () => new Promise(resolve => setTimeout(resolve, 600));
+
+describe('Main (combat)', () => {
+  it('draws the board from the server and shows how much movement is left', async () => {
+    const socket = createFakeSocket();
+    const { container } = render(<Harness socket={socket} serverStoryState={storyInProgress} initialCombat={fightSnapshot()} />);
+    await waitFor(() => expect(cell(container, 5, 3).className).toContain('enemy-cell'));
+    expect(cell(container, 6, 3).className).toContain('player-controlled');
+    expect(screen.getByText('4 moves left')).toBeTruthy();
+  });
+
+  it('asks the server to move when an empty tile is clicked', async () => {
+    const socket = createFakeSocket();
+    const { container } = render(<Harness socket={socket} serverStoryState={storyInProgress} initialCombat={fightSnapshot()} />);
+    await waitForTurnLock();
+    fireEvent.click(cell(container, 6, 1));
+    expect(emitsOf(socket, 'combat_move')).toEqual([{ room: '1234', to: { row: 6, col: 1 } }]);
+  });
+
+  it('attacks with the weapon: pick the weapon, then the enemy', async () => {
+    const socket = createFakeSocket();
+    const { container } = render(<Harness socket={socket} serverStoryState={storyInProgress} initialCombat={fightSnapshot()} />);
+    await waitForTurnLock();
+    fireEvent.click(screen.getByText('Energy Sword'));
+    fireEvent.click(cell(container, 5, 3));
+    expect(emitsOf(socket, 'combat_attack')).toEqual([{ room: '1234', targetId: 'e1' }]);
+    expect(emitsOf(socket, 'combat_move')).toHaveLength(0);
+  });
+
+  it('ends the turn through the server', async () => {
+    const socket = createFakeSocket();
+    render(<Harness socket={socket} serverStoryState={storyInProgress} initialCombat={fightSnapshot()} />);
+    await waitForTurnLock();
+    fireEvent.click(screen.getByText('End Turn'));
+    expect(emitsOf(socket, 'combat_end_turn')).toEqual([{ room: '1234' }]);
+  });
+
+  it('shows why the server refused an action', async () => {
+    const socket = createFakeSocket();
+    render(<Harness socket={socket} serverStoryState={storyInProgress} initialCombat={fightSnapshot()} />);
+    act(() => socket.serverSends('combat_error', { message: 'Not enough movement left.' }));
+    expect(await screen.findByText('Not enough movement left.')).toBeTruthy();
+  });
+
+  it('does nothing on another player turn', async () => {
+    const socket = createFakeSocket();
+    const snapshot = fightSnapshot({ currentTurn: { type: 'ally', id: 'sean', speed: 25 }, turn: { type: 'ally', id: 'sean', movementLeft: 2 } });
+    const { container } = render(<Harness socket={socket} serverStoryState={storyInProgress} initialCombat={snapshot} />);
+    await waitForTurnLock();
+    fireEvent.click(cell(container, 6, 1));
+    expect(emitsOf(socket, 'combat_move')).toHaveLength(0);
+    expect(screen.queryByText('End Turn')).toBeNull();
+  });
+
+  it('shows combat narration from the server', async () => {
+    const socket = createFakeSocket();
+    render(<Harness socket={socket} serverStoryState={storyInProgress} initialCombat={fightSnapshot()} />);
+    act(() => socket.serverSends('combat_narration', { text: 'Leo ducks under the baton.' }));
+    // Typed out letter by letter; every letter must arrive exactly once.
+    await waitFor(() => expect(document.querySelector('.ai-text').textContent).toBe('Leo ducks under the baton.'), { timeout: 3000 });
   });
 });

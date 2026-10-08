@@ -1,0 +1,6 @@
+{
+  "name": "cyberlock-shared",
+  "private": true,
+  "type": "module",
+  "description": "Game rules shared by the server and the client: abilities, effects, enemy AI, encounters and the combat engine."
+}

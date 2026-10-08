@@ -29,7 +29,7 @@ attribute, and returns them as JSON.
 | `fallbacks.js` | Pre-written text and options used when the AI is unavailable |
 
 Boss bios and NPCs marked **DRAFT** were written to fill gaps. Rewrite them however you like.
-Character names in `lore.js` must match the names players see in `Client/src/Components/Characters.json`.
+Character names in `lore.js` must match the names players see in `shared/data/characters.js`.
 
 ## Safety nets
 

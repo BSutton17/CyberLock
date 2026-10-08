@@ -10,7 +10,7 @@ function Events() {
   const {
     socket, setPlayers, setDisplayGame, setAdmin, setScreen, setPlayerCharacters,
     setReadyPlayers, setGamePhase, room, setEnemies, setTurnOrder, setCurrentTurn,
-    setIsMyTurn, playerName, setAllPlayerAttributes, setServerStoryState
+    setIsMyTurn, playerName, setAllPlayerAttributes, setServerStoryState, setCombatState
   } = useGameContext();
 
   const roomRef = useRef(room);
@@ -72,52 +72,25 @@ function Events() {
         setScreen(screen);
       },
 
-      phase_changed_combat: ({ enemies, enemyPositions, playerPositions, turnOrder, currentTurn, characterSelections } = {}) => {
-        const currentRoom = roomRef.current;
+      // The server runs every fight and sends the whole board after each action.
+      combat_state: (snapshot) => {
+        if (!snapshot) return;
+        setCombatState(snapshot);
+        if (snapshot.characters) mergeIntoCharacters(snapshot.characters);
+        if (snapshot.endedResult) {
+          setIsMyTurn(false);
+          return;
+        }
         setGamePhase('combat');
-        if (characterSelections) mergeIntoCharacters(characterSelections);
-        setEnemies(enemies || []);
-
-        const existingOverworld = sessionStorage.getItem(`overworldPlayerPositions_${currentRoom}`);
-        const currentPositions = sessionStorage.getItem(`playerPositions_${currentRoom}`);
-        if (!existingOverworld && currentPositions) {
-          try {
-            const parsed = JSON.parse(currentPositions);
-            if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
-              sessionStorage.setItem(`overworldPlayerPositions_${currentRoom}`, JSON.stringify(parsed));
-            }
-          } catch {
-            // ignore corrupt storage
-          }
-        }
-
-        if (enemyPositions) sessionStorage.setItem(`enemyPositions_${currentRoom}`, JSON.stringify(enemyPositions));
-        if (playerPositions) sessionStorage.setItem(`playerPositions_${currentRoom}`, JSON.stringify(playerPositions));
-
-        setTurnOrder(turnOrder || []);
-        setCurrentTurn(currentTurn || null);
-        setIsMyTurn(isMe(currentTurn));
+        setEnemies(snapshot.enemies || []);
+        setTurnOrder(snapshot.turnOrder || []);
+        setCurrentTurn(snapshot.currentTurn || null);
+        // Only while the turn is live: between a turn ending and the next starting, nobody acts.
+        setIsMyTurn(isMe(snapshot.currentTurn) && !!snapshot.turn);
       },
 
-      turn_changed: ({ currentTurn } = {}) => {
-        setCurrentTurn(currentTurn || null);
-        setIsMyTurn(isMe(currentTurn));
-      },
-
-      turn_order_updated: ({ turnOrder, currentTurnIndex } = {}) => {
-        setTurnOrder(turnOrder || []);
-        if (Array.isArray(turnOrder) && turnOrder.length > 0) {
-          const safeIndex = Math.max(0, Math.min(currentTurnIndex || 0, turnOrder.length - 1));
-          const currentTurn = turnOrder[safeIndex];
-          setCurrentTurn(currentTurn);
-          setIsMyTurn(isMe(currentTurn));
-        }
-      },
-
-      player_health_updated: ({ playerName: damagedPlayer, newHealth } = {}) => {
-        setPlayerCharacters(previous => (previous[damagedPlayer]
-          ? { ...previous, [damagedPlayer]: { ...previous[damagedPlayer], stats: { ...previous[damagedPlayer].stats, health: newHealth } } }
-          : previous));
+      characters_updated: (characters) => {
+        if (characters && typeof characters === 'object') mergeIntoCharacters(characters);
       },
 
       story_state: (storyState) => setServerStoryState(storyState || null),
@@ -140,6 +113,7 @@ function Events() {
         setAllPlayerAttributes({});
         setGamePhase('story');
         setServerStoryState(null);
+        setCombatState(null);
         const currentRoom = roomRef.current;
         ['storyProgress_', 'playerPositions_', 'enemyPositions_', 'overworldPlayerPositions_', 'pendingEncounterEndAfterLevelUp_', 'allPlayerAttributes_']
           .forEach(prefix => sessionStorage.removeItem(`${prefix}${currentRoom}`));
@@ -152,7 +126,7 @@ function Events() {
       for (const [event, handler] of Object.entries(handlers)) socket.off(event, handler);
     };
   }, [socket, setPlayers, setDisplayGame, setAdmin, setScreen, setPlayerCharacters, setReadyPlayers,
-    setGamePhase, setEnemies, setTurnOrder, setCurrentTurn, setIsMyTurn, setAllPlayerAttributes, setServerStoryState]);
+    setGamePhase, setEnemies, setTurnOrder, setCurrentTurn, setIsMyTurn, setAllPlayerAttributes, setServerStoryState, setCombatState]);
 
   return null;
 }

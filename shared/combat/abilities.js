@@ -1,3 +1,8 @@
+// Every ability in the game, used by players and (with a few exceptions) by enemies.
+// execute() works out what the ability does from the caster's point of view: "enemies" are the
+// caster's opponents and "playerCharacters" are the caster's own side, whichever side that is.
+// The combat engine applies the result.
+
 export const ABILITIES = {
     ability_boost: {
         id: 'ability_boost',
@@ -198,7 +203,7 @@ export const ABILITIES = {
          * @param {Object} params.playerCharacters - All player characters
          * @returns {Object} Effect data
          */
-        execute: ({ caster, target, playerCharacters }) => {
+        execute: ({ caster, target, playerCharacters, random = Math.random }) => {
             const ally = playerCharacters[target];
             
             if (!ally) {
@@ -210,7 +215,7 @@ export const ABILITIES = {
             const taBonus = Math.max(0, Math.floor((caster.stats.ta - 30) / 5));
             const successChance = Math.min(100, baseChance + taBonus);
             
-            const roll = Math.random() * 100;
+            const roll = random() * 100;
             
             if (roll >= successChance) {
                 return {
@@ -235,7 +240,7 @@ export const ABILITIES = {
     blizzard: {
         id: 'blizzard',
         name: 'Blizzard',
-        description: 'Create a blizzard that halves enemy speed for 3 turns',
+        description: 'Create a 3x3 blizzard for 3 turns. Enemies inside it move at half speed',
         role: "DPS",
         level: 3,
         cooldown: 5,
@@ -252,54 +257,29 @@ export const ABILITIES = {
          * @param {Object} params.characterPositions - Positions of all characters
          * @returns {Object} Effect data
          */
+        // Opponents move at half speed while they stand in the blizzard, and full speed once out.
         execute: ({ caster, targetPosition, enemies, characterPositions }) => {
             const { row, col } = targetPosition;
-            const effects = [];
-            const affectedEnemies = [];
-
-            // Create the blizzard field effect
-            effects.push({
-                type: 'blizzard_field',
-                center: { row, col },
-                radius: 1, // 3x3 area (1 square in each direction)
-                duration: 3,
-                tickOnCastTurn: true
-            });
-            
-            // Find all enemies currently in the 3x3 area and apply speed debuff
-            enemies.forEach(enemy => {
-                const enemyPos = characterPositions[enemy.id];
-                if (!enemyPos) return;
-                
-                const rowDiff = Math.abs(enemyPos.row - row);
-                const colDiff = Math.abs(enemyPos.col - col);
-                
-                // Within 1 square in any direction (3x3 grid)
-                if (rowDiff <= 1 && colDiff <= 1) {
-                    affectedEnemies.push(enemy.name);
-                    
-                    // Apply speed debuff (half their current speed)
-                    effects.push({
-                        type: 'stat_debuff',
-                        target: enemy.id,
-                        stat: 'speed',
-                        multiplier: 0.5,
-                        duration: 3,
-                        stackable: false,
-                        source: 'blizzard' // Track that this is from blizzard field
-                    });
-                }
-            });
-            
-            const affectedMessage = affectedEnemies.length > 0
-                ? `${affectedEnemies.join(', ')} caught in the blizzard!`
-                : 'The blizzard awaits its victims...';
+            const caught = enemies
+                .filter(enemy => {
+                    const pos = characterPositions?.[enemy.id];
+                    return pos && Math.abs(pos.row - row) <= 1 && Math.abs(pos.col - col) <= 1;
+                })
+                .map(enemy => enemy.name);
 
             return {
                 success: true,
-                effects: effects,
+                effects: [{
+                    type: 'blizzard_field',
+                    center: { row, col },
+                    radius: 1, // 3x3 area (1 square in each direction)
+                    duration: 3,
+                    tickOnCastTurn: true
+                }],
                 aoePosition: targetPosition,
-                message: `${caster.name} summons a Blizzard! ${affectedMessage}`
+                message: caught.length > 0
+                    ? `${caster.name} summons a Blizzard! ${caught.join(', ')} slow to half speed while inside.`
+                    : `${caster.name} summons a Blizzard. Anything that walks into it slows to half speed.`
             };
         }
     },
@@ -422,12 +402,6 @@ export const ABILITIES = {
                 if (!destination) return;
 
                 const source = characterPositions?.[enemy.id] || null;
-                console.log('[BLACK HOLE TELEPORT] Before teleport:', {
-                    enemyId: enemy.id,
-                    enemyName: enemy.name,
-                    from: source,
-                    to: destination
-                });
 
                 occupied.add(`${destination.row},${destination.col}`);
                 effects.push({
@@ -447,11 +421,6 @@ export const ABILITIES = {
                     });
                 }
 
-                console.log('[BLACK HOLE TELEPORT] After teleport assignment:', {
-                    enemyId: enemy.id,
-                    enemyName: enemy.name,
-                    finalTile: destination
-                });
             });
             
             if (affectedEnemies.length === 0) {
@@ -786,23 +755,10 @@ export const ABILITIES = {
          * @returns {Object} Effect data
          */
         execute: ({ caster, target, playerCharacters }) => {
-            console.log('[DEDICATING] Execute params:', {
-                casterName: caster?.name,
-                target,
-                playerCharacterKeys: Object.keys(playerCharacters || {})
-            });
             
             const ally = playerCharacters[target];
-            
-            console.log('[DEDICATING] Ally lookup:', {
-                target,
-                allyFound: !!ally,
-                allyName: ally?.name,
-                allyStats: ally?.stats
-            });
-            
+
             if (!ally) {
-                console.log('[DEDICATING] Target not found!');
                 return { success: false, message: 'Target not found' };
             }
 
@@ -853,7 +809,6 @@ export const ABILITIES = {
                 message: `${caster.name} gave ${ally.name} +20 to all stats for 1 turn!`
             };
             
-            console.log('[DEDICATING] Returning result with', result.effects.length, 'effects for', ally.name);
             return result;
         }
     },
@@ -972,7 +927,7 @@ export const ABILITIES = {
     feels_like_home: {
         id: 'feels_like_home',
         name: 'Feels Like Home',
-        description: 'Place a healing field that heals allies for two turns',
+        description: 'Place a 3x3 healing field for two turns. Allies standing in it heal at the end of each of your turns',
         role: "Support",
         level: 1,
         cooldown: 3,
@@ -990,57 +945,24 @@ export const ABILITIES = {
          * @param {Object} params.characterPositions - Positions of all characters
          * @returns {Object} Effect data
          */
-        execute: ({ caster, targetPosition, playerCharacters, characterPositions }) => {
+        // The field heals whoever is standing in it each time it ticks (at the end of the
+        // caster's turn), so allies can walk in to be healed and walking out stops it.
+        execute: ({ caster, targetPosition }) => {
             const { row, col } = targetPosition;
-            const effects = [];
-            const allyNames = [];
-
-            effects.push({
-                type: 'healing_field',
-                center: { row, col },
-                radius: 1,
-                duration: 2,
-                tickOnCastTurn: true
-            });
-
-             const finalHealing = Math.max(1, Math.round(
-                (caster.stats.ta / 8)
-            ));
-            
-            // Find all allies in 3x3 area
-            Object.keys(playerCharacters).forEach(playerName => {
-                const ally = playerCharacters[playerName];
-                if ((ally?.stats?.health || 0) <= 0) return;
-                const allyPos = characterPositions[playerName] || characterPositions[ally?.name];
-                if (!allyPos) return;
-                
-                const rowDiff = Math.abs(allyPos.row - row);
-                const colDiff = Math.abs(allyPos.col - col);
-                
-                // Within 1 square in any direction (3x3 grid)
-                if (rowDiff <= 1 && colDiff <= 1) {
-                    allyNames.push(ally.name);
-                    
-                    // Add healing effect for 2 turns
-                    effects.push({
-                        type: 'healing_over_time',
-                        target: playerName,
-                        amount: finalHealing,
-                        duration: 2,
-                        tickOnCastTurn: true
-                    });
-                }
-            });
-            
-            const healingMessage = allyNames.length > 0
-                ? `${allyNames.join(', ')} will heal +${finalHealing} HP for 2 turns!`
-                : 'No allies are currently in the field.';
+            const finalHealing = Math.max(1, Math.round(caster.stats.ta / 8));
 
             return {
                 success: true,
-                effects: effects,
+                effects: [{
+                    type: 'healing_field',
+                    center: { row, col },
+                    radius: 1,
+                    amount: finalHealing,
+                    duration: 2,
+                    tickOnCastTurn: true
+                }],
                 aoePosition: targetPosition,
-                message: `${caster.name} places a healing field! ${healingMessage}`
+                message: `${caster.name} places a healing field. Allies standing in it heal ${finalHealing} HP at the end of ${caster.name}'s next two turns.`
             };
         }
     },
@@ -1153,7 +1075,7 @@ export const ABILITIES = {
          * @param {Object} params.characterPositions - Positions of all characters
          * @returns {Object} Effect data
          */
-        execute: ({ caster, targetPosition, enemies, characterPositions }) => {
+        execute: ({ caster, targetPosition, enemies, characterPositions, random = Math.random }) => {
             const { row, col } = targetPosition;
             
             // Find all enemies in 3x3 area
@@ -1200,7 +1122,7 @@ export const ABILITIES = {
                 });
                 
                 // 20% chance to apply burn
-                if (Math.random() < 0.2) {
+                if (random() < 0.2) {
                     effects.push({
                         type: 'burn',
                         target: enemy.id,
@@ -1293,17 +1215,10 @@ export const ABILITIES = {
          * @returns {Object} Effect data
          */
         execute: ({ caster, target, playerCharacters }) => {
-            console.log('[GUARDED BREATH] Execute params:', {
-                casterName: caster?.name,
-                target,
-                playerCharacterKeys: Object.keys(playerCharacters || {})
-            });
             
             const ally = playerCharacters[target];
 
-            
             if (!ally) {
-                console.log('[GUARDED BREATH] Target not found!');
                 return { success: false, message: 'Target not found' };
             }
 
@@ -1322,7 +1237,6 @@ export const ABILITIES = {
                 message: `${caster.name} gave ${ally.name} doubled resistance for 1 turn!`
             };
             
-            console.log('[GUARDED BREATH] Returning result:', result);
             return result;
             }
     },
@@ -1497,22 +1411,10 @@ export const ABILITIES = {
          * @returns {Object} Effect data
          */
         execute: ({ caster, target, playerCharacters }) => {
-            console.log('[HURRY UP] Execute params:', {
-                casterName: caster?.name,
-                target,
-                playerCharacterKeys: Object.keys(playerCharacters || {})
-            });
             
             const ally = playerCharacters[target];
-            
-            console.log('[HURRY UP] Ally lookup:', {
-                target,
-                allyFound: !!ally,
-                allyName: ally?.name
-            });
-            
+
             if (!ally) {
-                console.log('[HURRY UP] Target not found!');
                 return { success: false, message: 'Target not found' };
             }
 
@@ -1530,7 +1432,6 @@ export const ABILITIES = {
                 message: `${caster.name} gave ${ally.name} +10 speed for 1 turn!`
             };
             
-            console.log('[HURRY UP] Returning result:', result);
             return result;
         }
     },
@@ -1928,7 +1829,7 @@ export const ABILITIES = {
         abilityDamage: 7,
         range: 3,
 
-        execute: ({ caster, target, enemies }) => {
+        execute: ({ caster, target, enemies, random = Math.random }) => {
             const enemy = enemies.find(e => e.id === target);
             if (!enemy) {
                 return { success: false, message: 'Target not found' };
@@ -1939,7 +1840,7 @@ export const ABILITIES = {
             ));
 
             const effects = [];
-            if (Math.random() < 0.35) {
+            if (random() < 0.35) {
                 effects.push({
                     type: 'stat_debuff',
                     target: enemy.id,
@@ -2136,7 +2037,7 @@ export const ABILITIES = {
     toxic_mist: {
         id: 'toxic_mist',
         name: 'Toxic Mist',
-        description: 'Place a toxic field that deals damage to enemies inside it for 2 turns',
+        description: 'Place a 3x3 toxic field for two turns. Enemies standing in it take damage at the end of each of your turns',
         role: "Tank",
         level: 3,
         cooldown: 2,
@@ -2153,51 +2054,25 @@ export const ABILITIES = {
          * @param {Object} params.characterPositions - Positions of all characters
          * @returns {Object} Effect data
          */
-        execute: ({ caster, targetPosition, enemies, characterPositions }) => {
+        // Like Feels Like Home, the mist hurts whoever is inside it each time it ticks.
+        execute: ({ caster, targetPosition, enemies }) => {
             const { row, col } = targetPosition;
-            const effects = [];
-            const affectedNames = [];
             const totalDamage = Math.max(1, Math.round(
                 (caster.stats.ta / 10) * 10  - (enemies.reduce((maxRes, enemy) => Math.max(maxRes, enemy.stats.resistance), 0) / 10)
             ));
 
-            effects.push({
-                type: 'toxic_mist_field',
-                center: { row, col },
-                radius: 1,
-                duration: 2,
-                amount: totalDamage,
-                tickOnCastTurn: true
-            });
-
-            enemies.forEach(enemy => {
-                const enemyPos = characterPositions?.[enemy.id];
-                if (!enemyPos) return;
-
-                const rowDiff = Math.abs(enemyPos.row - row);
-                const colDiff = Math.abs(enemyPos.col - col);
-
-                if (rowDiff <= 1 && colDiff <= 1) {
-                    affectedNames.push(enemy.name);
-                    effects.push({
-                        type: 'damage_over_time',
-                        target: enemy.id,
-                        amount: totalDamage,
-                        duration: 2,
-                        source: 'toxic_mist_field'
-                    });
-                }
-            });
-
-            const damageMessage = affectedNames.length > 0
-                ? `${affectedNames.join(', ')} will take ${totalDamage} damage for 2 turns!`
-                : 'No enemies are currently in the toxic field.';
-
             return {
                 success: true,
-                effects,
+                effects: [{
+                    type: 'toxic_mist_field',
+                    center: { row, col },
+                    radius: 1,
+                    duration: 2,
+                    amount: totalDamage,
+                    tickOnCastTurn: true
+                }],
                 aoePosition: targetPosition,
-                message: `${caster.name} releases Toxic Mist! ${damageMessage}`
+                message: `${caster.name} releases Toxic Mist. Anyone caught inside takes ${totalDamage} damage at the end of ${caster.name}'s next two turns.`
             };
         }
     },

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useGameContext } from '../../Components/Context';
-import charactersData from '../../Components/Characters.json';
+import charactersData from '@shared/data/characters.js';
 import { enrichAllCharacters } from '../../Utils/characterUtils';
 import './CharacterSelect.css';
 

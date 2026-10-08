@@ -1,4 +1,4 @@
-import { ABILITIES } from '../GameComponents/Main/AbilityStore';
+import { ABILITIES } from '@shared/combat/abilities.js';
 
 const NON_COMBAT_ATTRIBUTES = [
     { id: 'politician', name: 'Politician', description: 'Politicians excel at persuasion, negotiation, and public influence. They thrive in situations involving diplomacy, alliances, or shifting public opinion.' },

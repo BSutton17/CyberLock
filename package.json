@@ -6,7 +6,7 @@
     "node": "24.x"
   },
   "scripts": {
-    "setup": "npm install && npm install --prefix Server && npm install --prefix Client",
+    "setup": "npm install && cd Server && npm install && cd ../Client && npm install",
     "dev": "concurrently --kill-others-on-fail -n server,client -c cyan,magenta \"npm run dev --prefix Server\" \"npm run dev --prefix Client\"",
     "test": "npm test --prefix Server && npm test --prefix Client",
     "lint": "npm run lint --prefix Client",

@@ -1,9 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { executeEnemyTurn, selectAttackTarget } from './EnemyCombat';
-
-beforeEach(() => {
-  vi.spyOn(console, 'log').mockImplementation(() => {});
-});
+import { describe, it, expect } from 'vitest';
+import { planEnemyTurn, selectAttackTarget, isCellInDangerZone } from '../../shared/combat/enemyAI.js';
 
 const enemy = (overrides = {}) => ({
   id: 'e1',
@@ -23,22 +19,22 @@ describe('selectAttackTarget', () => {
   it('finishes off whoever it can kill, otherwise hits the most fragile target', () => {
     const positions = { e1: { row: 1, col: 1 }, weak: { row: 1, col: 2 }, tank: { row: 0, col: 1 } };
     const characters = { weak: player(5, 'Support'), tank: player(80, 'Tank') };
-    expect(selectAttackTarget(enemy(), ['weak', 'tank'], characters, positions, positions)).toBe('weak');
+    expect(selectAttackTarget(enemy(), ['weak', 'tank'], characters, positions)).toBe('weak');
   });
 });
 
-describe('executeEnemyTurn', () => {
+describe('planEnemyTurn', () => {
   // Regression: dead players (0 HP) looked like the easiest kill, so enemies kept hitting corpses.
   it('never targets a fallen player', () => {
     const positions = { e1: { row: 1, col: 1 }, dead: { row: 1, col: 2 }, alive: { row: 2, col: 1 } };
     const characters = { dead: player(0), alive: player(60) };
-    const action = executeEnemyTurn(enemy(), ['dead', 'alive'], [], [enemy()], characters, positions);
+    const action = planEnemyTurn(enemy(), ['dead', 'alive'], [], [enemy()], characters, positions);
     expect(action.target).toBe('alive');
   });
 
   it('does nothing when no living player is left', () => {
     const positions = { e1: { row: 1, col: 1 }, dead: { row: 1, col: 2 } };
-    const action = executeEnemyTurn(enemy(), ['dead'], [], [enemy()], { dead: player(0) }, positions);
+    const action = planEnemyTurn(enemy(), ['dead'], [], [enemy()], { dead: player(0) }, positions);
     expect(action.target).toBeFalsy();
     expect(action.movement).toBeFalsy();
   });
@@ -47,21 +43,21 @@ describe('executeEnemyTurn', () => {
   it('lets an aggressive ranged enemy shoot from where it stands', () => {
     const ranged = enemy({ weapon: { name: 'Rifle', damage: 6, range: 3 } });
     const positions = { e1: { row: 1, col: 1 }, p1: { row: 3, col: 1 } };
-    const action = executeEnemyTurn(ranged, ['p1'], [], [ranged], { p1: player() }, positions);
+    const action = planEnemyTurn(ranged, ['p1'], [], [ranged], { p1: player() }, positions);
     expect(action.movement).toBeNull();
     expect(action.target).toBe('p1');
   });
 
   it('moves toward players who are out of reach', () => {
     const positions = { e1: { row: 0, col: 0 }, p1: { row: 6, col: 9 } };
-    const action = executeEnemyTurn(enemy(), ['p1'], [], [enemy()], { p1: player() }, positions);
+    const action = planEnemyTurn(enemy(), ['p1'], [], [enemy()], { p1: player() }, positions);
     expect(action.movement).toBeTruthy();
   });
 
   it('stays put and skips its action while immobilized by chains', () => {
     const positions = { e1: { row: 1, col: 1 }, p1: { row: 1, col: 2 } };
     const effects = [{ type: 'status_effect', status: 'immobilized', target: 'e1', turnsRemaining: 1, preventMovement: true, preventActions: true }];
-    const action = executeEnemyTurn(enemy(), ['p1'], [], [enemy()], { p1: player() }, positions, effects);
+    const action = planEnemyTurn(enemy(), ['p1'], [], [enemy()], { p1: player() }, positions, effects);
     expect(action).toMatchObject({ immobilized: true, target: null, movement: null });
   });
 
@@ -69,7 +65,7 @@ describe('executeEnemyTurn', () => {
     const caster = enemy({ abilities: [{ id: 'humble', name: 'Humble', level: 1 }], cooldowns: { humble: 0 } });
     const positions = { e1: { row: 1, col: 1 }, p1: { row: 1, col: 2 } };
     const effects = [{ type: 'abilities_disabled', target: 'e1', turnsRemaining: 2 }];
-    const action = executeEnemyTurn(caster, ['p1'], [], [caster], { p1: player() }, positions, effects);
+    const action = planEnemyTurn(caster, ['p1'], [], [caster], { p1: player() }, positions, effects);
     expect(action.abilityToUse).toBeFalsy();
   });
 
@@ -85,15 +81,30 @@ describe('executeEnemyTurn', () => {
 
     it('does not waste a heal when everyone is healthy', () => {
       const buddy = enemy({ id: 'buddy' });
-      const action = executeEnemyTurn(healer, ['p1'], ['buddy'], [healer, buddy], { p1: player() }, positions);
+      const action = planEnemyTurn(healer, ['p1'], ['buddy'], [healer, buddy], { p1: player() }, positions);
       expect(action.abilityToUse).toBeFalsy();
     });
 
     it('heals a hurt ally in range', () => {
       const buddy = enemy({ id: 'buddy', stats: { ...enemy().stats, health: 10 } });
-      const action = executeEnemyTurn(healer, ['p1'], ['buddy'], [healer, buddy], { p1: player() }, positions);
+      const action = planEnemyTurn(healer, ['p1'], ['buddy'], [healer, buddy], { p1: player() }, positions);
       expect(action.abilityToUse?.id).toBe('the_show_must_go_on');
       expect(action.target).toBe('buddy');
     });
+  });
+});
+
+describe('hazard zones', () => {
+  const mist = (side) => ({ type: 'toxic_mist_field', center: { row: 3, col: 3 }, radius: 1, turnsRemaining: 2, side });
+
+  it('makes cautious enemies avoid zones the party placed, but not their own side\'s', () => {
+    const cautious = enemy({ behavior: 'defensive' });
+    expect(isCellInDangerZone({ row: 3, col: 4 }, [mist('ally')], cautious)).toBe(true);
+    expect(isCellInDangerZone({ row: 3, col: 4 }, [mist('enemy')], cautious)).toBe(false);
+    expect(isCellInDangerZone({ row: 0, col: 0 }, [mist('ally')], cautious)).toBe(false);
+  });
+
+  it('lets aggressive enemies charge straight through', () => {
+    expect(isCellInDangerZone({ row: 3, col: 3 }, [mist('ally')], enemy())).toBe(false);
   });
 });

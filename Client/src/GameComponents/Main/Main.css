@@ -190,6 +190,48 @@ p {
     line-height: 1;
 }
 
+.turn-moves {
+    font-size: 1.1vmin;
+    font-weight: 500;
+    color: #c4c4d4;
+    text-shadow: none;
+}
+
+/* Why the server turned an action down ("Out of range", "Not your turn"...). */
+.combat-notice {
+    position: absolute;
+    left: 50%;
+    top: calc(100% + 0.5rem);
+    transform: translateX(-50%);
+    z-index: 20;
+    padding: 0.4rem 0.9rem;
+    border-radius: 0.5rem;
+    background: rgba(40, 10, 30, 0.92);
+    border: 1px solid rgba(255, 90, 140, 0.7);
+    color: #ffd6e4;
+    font-size: 1.5vmin;
+    white-space: nowrap;
+    text-transform: none;
+    letter-spacing: normal;
+    font-weight: 500;
+    pointer-events: none;
+    animation: combat-notice-in 0.15s ease-out;
+}
+
+@keyframes combat-notice-in {
+    from { opacity: 0; transform: translate(-50%, -0.3rem); }
+    to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+@media (max-width: 768px) {
+    .combat-notice {
+        font-size: 3.5vmin;
+        white-space: normal;
+        width: max-content;
+        max-width: 90vw;
+    }
+}
+
 .party {
     grid-area: party;
     background: rgba(20, 20, 40, 0.7);

@@ -14,7 +14,8 @@ export function createGameServer({
   config = defaultConfig,
   narrator = null,
   verifyGoogleToken,
-  logger = console
+  logger = console,
+  combatOptions = {}
 } = {}) {
   const app = express();
   const allowAnyOrigin = !config.isProduction && config.allowedOrigins.length === 0;
@@ -56,7 +57,7 @@ export function createGameServer({
   });
 
   const state = createGameState();
-  const sockets = registerGameSockets({ io, state, narrator: gameNarrator, timing: config.timing, logger });
+  const sockets = registerGameSockets({ io, state, narrator: gameNarrator, timing: config.timing, logger, combatOptions });
 
   const close = () =>
     new Promise(resolve => {

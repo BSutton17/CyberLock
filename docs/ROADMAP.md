@@ -42,19 +42,17 @@ Step-by-step instructions with exact commands: [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ---
 
-## Phase 2: Combat that works by design (server-authoritative)
+## Phase 2: Combat that works by design (server-authoritative) ✅ code complete
 
-Tonight's fixes removed the known stalls, but the root cause remains: browsers compute combat and
-send whole-state snapshots. This phase moves the rules to the server.
-
-- [ ] Move the pure combat rules (`AbilityLogic`, `AbilityStore`, `EnemyCombat`) into `shared/` so both
-      sides import the same code (they're already covered by tests, which makes the move safe)
-- [ ] Server owns combat: clients send intents (`move`, `use_ability`, `end_turn`); the server validates
-      range/cooldowns/turn and broadcasts state. Enemy turns run on the server.
-- [ ] Remove the `updatedEnemies` / `updatedPlayerCharacters` snapshot events
-- [ ] Break up `Main.jsx` (~5,800 lines) into components and hooks; its socket effects currently
-      re-subscribe on almost every state change
-- [ ] Headless combat simulator for balance testing
+- [x] Combat rules moved to `shared/combat` (abilities, effects, enemy AI, encounters) plus a new engine
+- [x] Server owns combat: clients send intents (move, attack, ability, end turn); the server checks
+      turn, range, cooldowns and action economy, runs enemy turns, and broadcasts `combat_state`
+- [x] Snapshot events removed (clients can no longer send health or enemy state)
+- [x] Zones work by position when they tick (Feels Like Home, Toxic Mist, Blizzard)
+- [x] Every ability tested through the engine; bots play story fights over real sockets
+      (`Server/scripts/botFight.js`)
+- [ ] Break up `Main.jsx` (now ~2,900 lines, was ~5,800) into components and hooks
+- [ ] Grow the bot script into a balance simulator (Phase 4)
 
 ## Phase 3: A real story (partly started tonight)
 
@@ -85,8 +83,8 @@ send whole-state snapshots. This phase moves the rules to the server.
 
 | Question | Needed by |
 |---|---|
-| Keep 2 decisions between fights, or go back to 3? | Phase 3 |
+| ~~Keep 2 decisions between fights, or go back to 3?~~ Three (answered) | done |
 | Are the drafted boss bios and campaign acts the story you want? | Phase 3 |
-| Save/resume across sessions (needs a database)? | Phase 5 |
+| ~~Save/resume across sessions?~~ Not for now (answered) | — |
 | Do the two sides share a middle act or stay separate? | Phase 3 |
 | Mobile support? | Phase 5 |

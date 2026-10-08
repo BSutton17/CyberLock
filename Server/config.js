@@ -25,7 +25,7 @@ const DEV_JWT_SECRET = 'dev-only-secret-do-not-use-in-production';
 export const config = {
   isProduction,
   isTest,
-  port: toInt(env.PORT, 5000),
+  port: toInt(env.PORT, 3001),
 
   // Origins allowed to call the API and open sockets. In development every origin is allowed so
   // phones on the same Wi-Fi can join. In production list your Netlify URL (comma separated).
@@ -65,14 +65,20 @@ export const config = {
   },
 
   timing: {
-    // Pause after a player ends their turn so everyone can read the narration.
-    allyTurnAdvanceDelayMs: toInt(env.ALLY_TURN_ADVANCE_DELAY_MS, 2500),
+    // Pause after a player ends their turn so the turn's narration can be read.
+    allyTurnAdvanceDelayMs: toInt(env.ALLY_TURN_ADVANCE_DELAY_MS, 1200),
+    // A player whose action is spent and who cannot move is moved on after this pause.
+    autoEndTurnDelayMs: toInt(env.AUTO_END_TURN_DELAY_MS, 1500),
     // Pause before the first enemy acts when an enemy is fastest at combat start.
-    combatStartEnemyDelayMs: toInt(env.COMBAT_START_ENEMY_DELAY_MS, 6000),
-    // How long a client gets to run an enemy turn before the server retries / skips it.
-    enemyTurnTimeoutMs: toInt(env.ENEMY_TURN_TIMEOUT_MS, 25000),
-    // A player's turn is force-ended after this long (the client auto-ends at 30s).
-    allyTurnTimeoutMs: toInt(env.ALLY_TURN_TIMEOUT_MS, 45000),
+    combatStartEnemyDelayMs: toInt(env.COMBAT_START_ENEMY_DELAY_MS, 3000),
+    // Enemy pacing: "thinking" before acting, after walking before striking, and after the turn.
+    enemyThinkMs: toInt(env.ENEMY_THINK_MS, 700),
+    enemyAttackDelayMs: toInt(env.ENEMY_ATTACK_DELAY_MS, 350),
+    enemyTurnEndDelayMs: toInt(env.ENEMY_TURN_END_DELAY_MS, 1000),
+    // Multiplier for how long the server waits on movement animations (0 = don't wait).
+    animationScale: 1,
+    // A player's turn is ended automatically after this long.
+    allyTurnTimeoutMs: toInt(env.ALLY_TURN_TIMEOUT_MS, 40000),
     // How long a disconnected player keeps their seat before being removed.
     disconnectGraceMs: toInt(env.DISCONNECT_GRACE_MS, 60000)
   }

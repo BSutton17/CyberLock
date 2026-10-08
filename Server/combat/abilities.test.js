@@ -1,10 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ABILITIES } from './AbilityStore';
-import { applyAbilityEffects, calculateTotalStat } from './AbilityLogic';
-
-beforeEach(() => {
-  vi.spyOn(console, 'log').mockImplementation(() => {});
-});
+import { describe, it, expect } from 'vitest';
+import { ABILITIES } from '../../shared/combat/abilities.js';
+import { createActiveEffect, calculateTotalStat, INSTANT_EFFECT_TYPES } from '../../shared/combat/effects.js';
 
 const ROLES = ['DPS', 'Tank', 'Support'];
 const TARGET_TYPES = ['self', 'single-enemy', 'multi-enemy', 'ally', 'ground-target', 'all-enemies', 'all-allies', 'relocate'];
@@ -96,13 +92,10 @@ describe('ability catalog', () => {
       expect(typeof effect.type).toBe('string');
     }
 
-    // And the results can be applied to game state.
-    expect(() => applyAbilityEffects(result, {
-      enemies: params.enemies,
-      playerCharacters: params.playerCharacters,
-      activeEffects: [],
-      effectOwnerTurnId: 'p1'
-    })).not.toThrow();
+    // And every lasting effect can become an active effect.
+    for (const effect of (result.effects || []).filter(e => !INSTANT_EFFECT_TYPES.has(e.type))) {
+      expect(createActiveEffect(effect, { ownerId: 'p1' }).turnsRemaining).toBeGreaterThan(0);
+    }
   });
 });
 
@@ -116,7 +109,7 @@ describe('specific abilities', () => {
   it('Flash Step doubles speed on the turn it is used', () => {
     const params = fixture();
     const result = ABILITIES.flash_step.execute(params);
-    const { activeEffects } = applyAbilityEffects(result, { enemies: [], playerCharacters: params.playerCharacters, activeEffects: [], effectOwnerTurnId: 'p1' });
+    const activeEffects = result.effects.map(effect => createActiveEffect(effect, { ownerId: 'p1' }));
     expect(calculateTotalStat(params.caster, 'p1', 'speed', activeEffects)).toBe(60);
   });
 
@@ -147,5 +140,35 @@ describe('specific abilities', () => {
     for (const move of result.forcedMovement) {
       expect(occupiedByAllies.has(`${move.to.row},${move.to.col}`)).toBe(false);
     }
+  });
+});
+
+describe('zone abilities', () => {
+  it('Feels Like Home places one field that does the healing itself', () => {
+    const params = fixture();
+    const result = ABILITIES.feels_like_home.execute({ ...params, caster: { ...params.caster, stats: { ...params.caster.stats, ta: 40 } } });
+    expect(result.effects).toEqual([expect.objectContaining({ type: 'healing_field', amount: 5, duration: 2, tickOnCastTurn: true })]);
+    expect(result.healing).toBeUndefined();
+  });
+
+  it('Toxic Mist places one field instead of tagging whoever stood there', () => {
+    const result = ABILITIES.toxic_mist.execute(fixture());
+    expect(result.effects.map(effect => effect.type)).toEqual(['toxic_mist_field']);
+  });
+
+  it('Blizzard places a field and leaves the slowing to it', () => {
+    const result = ABILITIES.blizzard.execute(fixture());
+    expect(result.effects.map(effect => effect.type)).toEqual(['blizzard_field']);
+    expect(result.message).toContain('e1');
+  });
+
+  it('chance-based abilities use the random source they are given', () => {
+    const params = fixture();
+    const lucky = ABILITIES.blackjack.execute({ ...params, target: 'p2', random: () => 0 });
+    const unlucky = ABILITIES.blackjack.execute({ ...params, target: 'p2', random: () => 0.99 });
+    expect(lucky.healing).toEqual([{ target: 'p2', amount: 40 }]);
+    expect(unlucky.healing).toBeUndefined();
+    expect(ABILITIES.sparkshot.execute({ ...params, random: () => 0 }).effects).toHaveLength(1);
+    expect(ABILITIES.sparkshot.execute({ ...params, random: () => 0.9 }).effects).toHaveLength(0);
   });
 });

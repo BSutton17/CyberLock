@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import charactersData from './Characters.json';
-import enemiesData from './Enemies.json';
+import charactersData from '@shared/data/characters.js';
+import enemiesData from '@shared/data/enemies.js';
 import {
   CHARACTER_IMAGE_MAP,
   ENEMY_IMAGE_MAP,
@@ -20,7 +20,7 @@ const ROLES = ['DPS', 'Tank', 'Support'];
 const ENEMY_TIERS = ['generic', 'mid-tier', 'mini-boss', 'boss'];
 const ENEMY_BEHAVIORS = ['aggressive', 'defensive', 'support', 'intelligent'];
 
-describe('Characters.json', () => {
+describe('character data', () => {
   const characters = charactersData.characters;
 
   it('has unique ids', () => {
@@ -48,7 +48,7 @@ describe('Characters.json', () => {
   });
 });
 
-describe('Enemies.json', () => {
+describe('enemy data', () => {
   const enemies = enemiesData.enemies;
 
   it('has unique ids', () => {

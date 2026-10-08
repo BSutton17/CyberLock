@@ -1,4 +1,5 @@
-{
+// Enemy templates by tier. Encounters scale these by party size and level.
+export default {
   "enemies": [
     {
       "id": "enforcer_soldier",
@@ -379,4 +380,4 @@
       }
     }
   ]
-}
+};

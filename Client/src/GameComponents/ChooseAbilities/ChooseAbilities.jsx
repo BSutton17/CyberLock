@@ -3,7 +3,7 @@ import { FaFistRaised } from 'react-icons/fa';
 import { IoLogoElectron } from 'react-icons/io5';
 import { LuCirclePlus } from 'react-icons/lu';
 import { useGameContext } from '../../Components/Context';
-import { ABILITIES } from '../Main/AbilityStore';
+import { ABILITIES } from '@shared/combat/abilities.js';
 import './ChooseAbilities.css';
 
 function ChooseAbilities(){

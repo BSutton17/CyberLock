@@ -1,4 +1,5 @@
-{
+// Playable characters (base stats at level 1).
+export default {
   "characters": [
     {
       "id": "offensive_tank_1",
@@ -102,9 +103,7 @@
         "name": "Shotgun",
         "damage": 9
       },
-      "abilities": [
-        
-      ],
+      "abilities": [],
       "ultimate": ""
     },
     {
@@ -167,9 +166,7 @@
         "name": "Magic Energy",
         "damage": 3
       },
-      "abilities": [
-        
-      ],
+      "abilities": [],
       "ultimate": ""
     },
     {
@@ -194,4 +191,4 @@
       "ultimate": ""
     }
   ]
-}
+};

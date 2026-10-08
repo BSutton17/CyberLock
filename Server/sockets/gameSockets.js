@@ -10,25 +10,11 @@ import {
   isCharacterTaken,
   everyoneIn
 } from '../game/rooms.js';
-import {
-  normalizeEnemiesForCombat,
-  shouldApplyEnemyUpdateForEncounter,
-  removeDeadEnemiesFromTurnOrder,
-  removeAllyFromTurnOrder,
-  insertAllyIntoTurnOrder,
-  calculateTurnOrder,
-  markEnemyAsCorpse,
-  isEnemyAlive
-} from '../game/combatSession.js';
-import {
-  generateEnemySpawnPositions,
-  generatePlayerSpawnPositions,
-  sanitizeProposedPlayerPositions
-} from '../game/spawning.js';
+import { isEnemyAlive } from '../../shared/combat/turnOrder.js';
 import { applyLevelUp, isMaxLevel, getLevel } from '../game/progression.js';
 import { sanitizeDisplayName } from '../auth/session.js';
 import { normalizeAttribute } from '../narrator/decisions.js';
-import { createTurnController } from './turns.js';
+import { createCombatController } from './combat.js';
 
 const ROOM_CODE_PATTERN = /^\d{4,6}$/;
 const EMPTY_ROOM_TTL_MS = 2 * 60 * 1000;
@@ -42,17 +28,19 @@ export function createGameState() {
     combat: {},
     sockets: {},            // room -> { playerName: Set(socketId) }
     pendingDisconnects: {}, // room -> { playerName: timeoutId }
-    enemyWatchdogs: {},
-    allyWatchdogs: {},
-    allyDelays: {},
-    enemyStartDelays: {},
+    combatTimers: {},       // room -> the fight's next scheduled step
+    combatNarration: {},    // room -> Promise chain, so combat lines arrive in order
     storyQueues: {},        // room -> Promise chain, so story events run one at a time
     seenAiRequests: new Map()
   };
 }
 
-export function registerGameSockets({ io, state, narrator, timing, logger = console }) {
-  const turns = createTurnController({ io, state, timing, logger });
+/**
+ * @param combatOptions - optional { generateEnemies, random } overrides for the fight engine (tests)
+ */
+export function registerGameSockets({ io, state, narrator, timing, logger = console, combatOptions = {} }) {
+  // buildNarratorContext is a function declaration below, so it can be handed over here.
+  const combat = createCombatController({ io, state, timing, narrator, logger, buildNarratorContext, ...combatOptions });
 
   // -------------------------------------------------------------------------
   // Helpers
@@ -60,7 +48,7 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
 
   const emitPresence = (room) => {
     if (!state.rooms[room]) return;
-    io.to(room).emit('presence_updated', { connected: turns.connectedPlayers(room) });
+    io.to(room).emit('presence_updated', { connected: combat.connectedPlayers(room) });
   };
 
   const emitReadyStatuses = (room, target = io.to(room)) => {
@@ -92,7 +80,7 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
   };
 
   const deleteRoom = (room) => {
-    turns.clearRoomTimers(room);
+    combat.stopRoom(room);
     for (const timeoutId of Object.values(state.pendingDisconnects[room] || {})) clearTimeout(timeoutId);
     delete state.pendingDisconnects[room];
     delete state.rooms[room];
@@ -211,14 +199,8 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
     const newAdmin = removePlayer(roomState, playerName);
     delete state.sockets[room]?.[playerName];
 
-    const combat = state.combat[room];
-    if (combat && !combat.endedResult) {
-      const wasCurrentTurn = removeAllyFromTurnOrder(combat, playerName);
-      io.to(room).emit('turn_order_updated', { turnOrder: combat.turnOrder, currentTurnIndex: combat.currentTurnIndex });
-      if (!turns.checkDefeat(room) && wasCurrentTurn) {
-        turns.announceTurn(room);
-      }
-    }
+    delete roomState.cooldowns?.[playerName];
+    combat.removeFromFight(room, playerName, { leftForGood: true });
 
     if (roomState.players.length === 0) {
       deleteRoom(room);
@@ -247,7 +229,7 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
 
   function buildNarratorContext(room) {
     const roomState = state.rooms[room];
-    const combat = state.combat[room];
+    const fight = state.combat[room];
     const attributesByPlayer = {};
     for (const [player, attributes] of Object.entries(roomState?.attributes || {})) {
       attributesByPlayer[player] = (Array.isArray(attributes) ? attributes : []).map(normalizeAttribute);
@@ -272,10 +254,10 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
       party,
       players: roomState?.players || [],
       attributesByPlayer,
-      connectedPlayers: turns.connectedPlayers(room),
+      connectedPlayers: combat.connectedPlayers(room),
       partyFaction: roomState?.selectedFaction || null,
       encounterIndex: roomState?.encountersStarted || 0,
-      enemies: (combat?.enemies || []).map(enemy => ({ name: enemy.name, tier: enemy.tier, isDead: !isEnemyAlive(enemy) }))
+      enemies: (fight?.enemies || []).map(enemy => ({ name: enemy.name, tier: enemy.tier, isDead: !isEnemyAlive(enemy) }))
     };
   }
 
@@ -366,35 +348,9 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
       }
       socket.emit('story_state', storyStateFor(code));
 
-      const combat = state.combat[code];
-      if (combat && !combat.endedResult) {
-        const character = roomState.characterSelections[playerName];
-        const alive = (character?.stats?.health || 0) > 0;
-        if (alive) {
-          const before = combat.turnOrder.length;
-          insertAllyIntoTurnOrder(combat, { type: 'ally', id: playerName, speed: character?.stats?.speed || 0 });
-          if (combat.turnOrder.length !== before) {
-            io.to(code).emit('turn_order_updated', { turnOrder: combat.turnOrder, currentTurnIndex: combat.currentTurnIndex });
-          }
-        }
-
-        const currentTurn = combat.turnOrder[combat.currentTurnIndex] || null;
-        socket.emit('phase_changed_combat', {
-          enemies: combat.enemies,
-          enemyPositions: combat.enemyPositions,
-          playerPositions: combat.playerPositions,
-          turnOrder: combat.turnOrder,
-          currentTurn,
-          characterSelections: roomState.characterSelections,
-          encounterIndex: (roomState.encountersStarted || 1) - 1
-        });
+      if (combat.activeCombat(code)) {
         socket.emit('start_game');
-
-        if (currentTurn?.type === 'enemy' && !turns.hasEnemyWatchdogFor(code, currentTurn.id) && !state.enemyStartDelays[code]) {
-          turns.dispatchEnemyTurn(code, currentTurn.id);
-        } else if (currentTurn?.type === 'ally' && currentTurn.id === playerName) {
-          turns.startAllyWatchdog(code, playerName);
-        }
+        combat.rejoinFight(code, playerName);
       } else if (roomState.gameOver) {
         socket.emit('combat_ended', { result: 'all_dead' });
       }
@@ -423,21 +379,7 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
       clearReadyFlags(roomState, playerName);
       emitReadyStatuses(room);
 
-      const combat = state.combat[room];
-      if (combat && !combat.endedResult) {
-        const handlerBefore = turns.connectedPlayers(room)[0] ?? null;
-        const wasCurrentTurn = removeAllyFromTurnOrder(combat, playerName);
-        io.to(room).emit('turn_order_updated', { turnOrder: combat.turnOrder, currentTurnIndex: combat.currentTurnIndex });
-
-        const current = combat.turnOrder[combat.currentTurnIndex];
-        if (wasCurrentTurn) {
-          turns.announceTurn(room);
-        } else if (current?.type === 'enemy' && handlerBefore === playerName) {
-          // The player running this enemy's turn dropped: hand it to someone else.
-          turns.clearEnemyWatchdog(room);
-          turns.dispatchEnemyTurn(room, current.id);
-        }
-      }
+      combat.removeFromFight(room, playerName);
 
       emitPresence(room);
 
@@ -496,11 +438,13 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
         encountersStarted: 0,
         lastStoryMessage: null,
         gameOver: false,
+        cooldowns: {},
+        partyPositions: null,
         stage: 'lobby'
       });
       setScreens(room, 'waiting');
 
-      turns.clearRoomTimers(room);
+      combat.stopRoom(room);
       delete state.combat[room];
       narrator?.resetSession(room);
       io.to(room).emit('game_reset');
@@ -732,289 +676,35 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
 
     // ---------------- Combat ----------------
 
-    socket.on('start_combat', ({ room: payloadRoom, generatedEnemies, sceneKey, playerPositions } = {}) => {
+    // The story controller starts the next fight; the server builds it from the campaign.
+    socket.on('start_combat', ({ room: payloadRoom, sceneKey, playerPositions } = {}) => {
       const room = currentRoom(payloadRoom);
       if (!room) return;
-      const roomState = state.rooms[room];
-
-      const existing = state.combat[room];
-      if (existing && !existing.endedResult) {
-        // A fight is already running (e.g. two clients both tried to start it).
-        socket.emit('phase_changed_combat', {
-          enemies: existing.enemies,
-          enemyPositions: existing.enemyPositions,
-          playerPositions: existing.playerPositions,
-          turnOrder: existing.turnOrder,
-          currentTurn: existing.turnOrder[existing.currentTurnIndex] || null,
-          characterSelections: roomState.characterSelections,
-          encounterIndex: (roomState.encountersStarted || 1) - 1
-        });
-        return;
+      if (!combat.startCombat(room, { sceneKey, playerPositions })) {
+        // Already fighting (e.g. two clients tried to start it): just show this client the board.
+        combat.sendStateTo(socket, room);
       }
-
-      turns.clearRoomTimers(room);
-      const enemies = normalizeEnemiesForCombat(Array.isArray(generatedEnemies) ? generatedEnemies : [], []);
-      const encounterIndex = roomState.encountersStarted || 0;
-      roomState.encountersStarted = encounterIndex + 1;
-      roomState.gameOver = false;
-      roomState.lastStoryMessage = null;
-
-      // Only players who are here and standing get a turn; others are added back when they return.
-      const activePlayers = roomState.players.filter(player =>
-        turns.isConnected(room, player) && (roomState.characterSelections[player]?.stats?.health ?? 1) > 0
-      );
-
-      // Players are placed first so enemies never spawn on top of them.
-      const startingPlayerPositions =
-        sanitizeProposedPlayerPositions(roomState.players, playerPositions, sceneKey) ||
-        generatePlayerSpawnPositions(roomState.players, roomState.characterSelections, sceneKey);
-      const combat = {
-        encounterId: encounterIndex + 1,
-        enemies,
-        enemyPositions: generateEnemySpawnPositions(enemies, sceneKey, Object.values(startingPlayerPositions)),
-        playerPositions: startingPlayerPositions,
-        turnOrder: calculateTurnOrder(activePlayers, roomState.characterSelections, enemies),
-        currentTurnIndex: 0,
-        endedResult: null
-      };
-      state.combat[room] = combat;
-
-      logger.log?.(`[COMBAT] Room ${room} encounter ${encounterIndex}: ${enemies.length} enemies, ${activePlayers.length} players`);
-
-      io.to(room).emit('phase_changed_combat', {
-        enemies: combat.enemies,
-        enemyPositions: combat.enemyPositions,
-        playerPositions: combat.playerPositions,
-        turnOrder: combat.turnOrder,
-        currentTurn: combat.turnOrder[0] || null,
-        characterSelections: roomState.characterSelections,
-        encounterIndex
-      });
-
-      turns.beginCombat(room);
     });
 
-    // Merges client character updates and drops anyone who died (e.g. to a damage-over-time tick)
-    // from the turn order. Returns true if the player whose turn it was died.
-    const applyCharacterUpdates = (room, updatedPlayerCharacters) => {
-      if (!updatedPlayerCharacters || typeof updatedPlayerCharacters !== 'object') return false;
-      const roomState = state.rooms[room];
-      roomState.characterSelections = { ...roomState.characterSelections, ...updatedPlayerCharacters };
-      io.to(room).emit('characters_updated', updatedPlayerCharacters);
-
-      const combat = state.combat[room];
-      if (!combat || combat.endedResult) return false;
-      let currentDied = false;
-      let changed = false;
-      for (const turn of [...combat.turnOrder]) {
-        if (turn.type !== 'ally') continue;
-        if ((roomState.characterSelections[turn.id]?.stats?.health ?? 1) > 0) continue;
-        currentDied = removeAllyFromTurnOrder(combat, turn.id) || currentDied;
-        changed = true;
-      }
-      if (changed) {
-        io.to(room).emit('turn_order_updated', { turnOrder: combat.turnOrder, currentTurnIndex: combat.currentTurnIndex });
-      }
-      return currentDied;
+    // Player intents. The server checks and applies them; a refusal goes back to the sender only.
+    const intent = (kind) => (payload = {}, ack) => {
+      const room = currentRoom(payload?.room);
+      const result = room
+        ? combat.handleIntent(room, me(), kind, payload)
+        : { ok: false, error: 'no_room', message: 'You are not in a game.' };
+      if (!result.ok) socket.emit('combat_error', { action: kind, error: result.error, message: result.message });
+      if (typeof ack === 'function') ack(result.ok ? { ok: true } : { ok: false, error: result.error, message: result.message });
     };
+    socket.on('combat_move', intent('move'));
+    socket.on('combat_attack', intent('attack'));
+    socket.on('combat_ability', intent('ability'));
+    socket.on('combat_end_turn', intent('end_turn'));
 
-    // Applies a client's enemy snapshot if it belongs to this fight. Returns true if the fight ended.
-    const applyEnemyUpdates = (room, combat, updatedEnemies) => {
-      if (!Array.isArray(updatedEnemies)) return false;
-      if (!shouldApplyEnemyUpdateForEncounter(combat, updatedEnemies)) return false;
-      combat.enemies = normalizeEnemiesForCombat(updatedEnemies, combat.enemies || []);
-      removeDeadEnemiesFromTurnOrder(combat);
-      return turns.checkVictory(room);
-    };
-
-    socket.on('ability_used', ({ room: payloadRoom, updatedPlayerCharacters, updatedEnemies, updatedActiveEffects } = {}) => {
-      const room = currentRoom(payloadRoom);
-      if (!room) return;
-      const actingPlayerDied = applyCharacterUpdates(room, updatedPlayerCharacters);
-
-      const combat = state.combat[room];
-      if (Array.isArray(updatedEnemies) && combat && !combat.endedResult) {
-        if (applyEnemyUpdates(room, combat, updatedEnemies)) return;
-        io.to(room).emit('enemies_updated', { enemies: combat.enemies });
-      }
-
-      if (updatedActiveEffects) {
-        io.to(room).emit('active_effects_updated', updatedActiveEffects);
-      }
-
-      if (combat && !combat.endedResult && !turns.checkDefeat(room) && actingPlayerDied) {
-        turns.announceTurn(room);
-      }
-    });
-
-    socket.on('end_turn', ({ room: payloadRoom, updatedEnemies, updatedPlayerCharacters, updatedActiveEffects } = {}) => {
-      const room = currentRoom(payloadRoom);
-      if (!room) return;
-      const combat = state.combat[room];
-      if (!combat || combat.endedResult) return;
-      const playerName = me();
-
-      if (applyEnemyUpdates(room, combat, updatedEnemies)) return;
-      const actingPlayerDied = applyCharacterUpdates(room, updatedPlayerCharacters);
-      if (updatedActiveEffects) io.to(room).emit('active_effects_updated', updatedActiveEffects);
-      if (turns.checkDefeat(room)) return;
-      if (actingPlayerDied) {
-        // They fell to an end-of-turn effect; the order already points at the next combatant.
-        turns.clearAllyWatchdog(room);
-        turns.announceTurn(room);
-        return;
-      }
-
-      const current = combat.turnOrder[combat.currentTurnIndex];
-      if (!current) {
-        combat.currentTurnIndex = 0;
-        turns.announceTurn(room);
-        return;
-      }
-
-      if (current.type !== 'ally' || current.id !== playerName) {
-        // Stale end-turn: just tell this client whose turn it really is.
-        socket.emit('turn_changed', { currentTurn: current });
-        return;
-      }
-
-      if (state.allyDelays[room]) return;
-      turns.clearAllyWatchdog(room);
-
-      const finishedTurn = { ...current };
-      const advance = () => {
-        delete state.allyDelays[room];
-        const latest = state.combat[room];
-        if (!latest || latest.endedResult) return;
-        const latestTurn = latest.turnOrder[latest.currentTurnIndex];
-        if (latestTurn?.type === 'ally' && latestTurn.id === finishedTurn.id) {
-          turns.advanceAndAnnounce(room, finishedTurn);
-        } else {
-          // The turn already moved on (e.g. the player died to a reflected hit); just re-sync.
-          turns.announceTurn(room);
-        }
-      };
-
-      if (timing.allyTurnAdvanceDelayMs > 0) {
-        state.allyDelays[room] = setTimeout(advance, timing.allyTurnAdvanceDelayMs);
-      } else {
-        advance();
-      }
-    });
-
-    socket.on('enemy_turn_complete', ({ room: payloadRoom, enemyId, executionId, updatedEnemies, updatedPlayerCharacters, updatedActiveEffects, enemyFinalPosition } = {}) => {
-      const room = currentRoom(payloadRoom);
-      if (!room) return;
-      const combat = state.combat[room];
-      if (!combat || combat.endedResult) return;
-
-      const active = combat.turnOrder[combat.currentTurnIndex];
-      if (active?.type !== 'enemy' || active.id !== enemyId) return;
-
-      const watchdog = state.enemyWatchdogs[room];
-      if (watchdog?.enemyId === enemyId && executionId && watchdog.executionId && executionId !== watchdog.executionId) {
-        return; // a stale retry
-      }
-      turns.clearEnemyWatchdog(room);
-
-      const finishedTurn = { ...active };
-      if (Array.isArray(updatedEnemies)) {
-        if (applyEnemyUpdates(room, combat, updatedEnemies)) return;
-        io.to(room).emit('enemies_updated', { enemies: combat.enemies });
-      }
-      applyCharacterUpdates(room, updatedPlayerCharacters);
-      if (updatedActiveEffects) io.to(room).emit('active_effects_updated', updatedActiveEffects);
-
-      if (enemyFinalPosition && Number.isInteger(enemyFinalPosition.row) && Number.isInteger(enemyFinalPosition.col)) {
-        combat.enemyPositions[enemyId] = { row: enemyFinalPosition.row, col: enemyFinalPosition.col };
-      }
-
-      if (turns.checkDefeat(room)) return;
-      turns.advanceAndAnnounce(room, finishedTurn);
-    });
-
-    socket.on('enemy_moved', ({ room: payloadRoom, enemyId, path, stepDelay } = {}) => {
-      const room = currentRoom(payloadRoom);
-      if (!room) return;
-      const combat = state.combat[room];
-      const finalStep = Array.isArray(path) ? path[path.length - 1] : null;
-      if (combat && enemyId && finalStep && Number.isInteger(finalStep.row) && Number.isInteger(finalStep.col)) {
-        combat.enemyPositions[enemyId] = { row: finalStep.row, col: finalStep.col };
-      }
-      io.to(room).emit('enemy_moved', { enemyId, path, stepDelay });
-    });
-
-    socket.on('player_moved', ({ room: payloadRoom, playerName, position } = {}) => {
-      const room = currentRoom(payloadRoom);
-      if (!room) return;
-      const combat = state.combat[room];
-      if (combat && position && Number.isInteger(position.row) && Number.isInteger(position.col)) {
-        combat.playerPositions[playerName] = { row: position.row, col: position.col };
-      }
-      io.to(room).emit('player_moved', { playerName, position });
-    });
-
-    socket.on('reduce_cooldown', ({ room: payloadRoom, targetPlayer, value } = {}) => {
-      const room = currentRoom(payloadRoom);
-      if (!room) return;
-      io.to(room).emit('cooldown_reduced', { targetPlayer, value });
-    });
-
-    socket.on('reset_cooldowns', ({ room: payloadRoom, targetPlayer, excludeAbilityIds } = {}) => {
-      const room = currentRoom(payloadRoom);
-      if (!room) return;
-      io.to(room).emit('cooldowns_reset', { targetPlayer, excludeAbilityIds });
-    });
-
-    socket.on('enemy_damaged', ({ room: payloadRoom, enemyId, newHealth } = {}) => {
-      const room = currentRoom(payloadRoom);
-      if (!room) return;
-      const combat = state.combat[room];
-      if (!combat || combat.endedResult || !Number.isFinite(Number(newHealth))) return;
-
-      const health = Math.max(0, Number(newHealth));
-      const wasCurrentTurn = combat.turnOrder[combat.currentTurnIndex]?.id === enemyId;
-      combat.enemies = combat.enemies.map(enemy => {
-        if (enemy.id !== enemyId) return enemy;
-        if (health <= 0) return markEnemyAsCorpse(enemy);
-        return { ...enemy, stats: { ...enemy.stats, health }, isDeadBody: false, corpseTurnsRemaining: 0 };
-      });
-
-      if (health <= 0) {
-        delete combat.enemyPositions[enemyId];
-        removeDeadEnemiesFromTurnOrder(combat);
-        if (turns.checkVictory(room)) return;
-        if (wasCurrentTurn) {
-          turns.clearEnemyWatchdog(room);
-          turns.announceTurn(room);
-        }
-      }
-
-      io.to(room).emit('enemies_updated', { enemies: combat.enemies });
-    });
-
-    socket.on('player_damaged', ({ room: payloadRoom, playerName, newHealth, updatedActiveEffects } = {}) => {
-      const room = currentRoom(payloadRoom);
-      if (!room || !Number.isFinite(Number(newHealth))) return;
-      const roomState = state.rooms[room];
-      const character = roomState.characterSelections[playerName];
-      if (!character) return;
-
-      const health = Math.max(0, Number(newHealth));
-      roomState.characterSelections[playerName] = { ...character, stats: { ...character.stats, health } };
-      io.to(room).emit('characters_updated', { [playerName]: roomState.characterSelections[playerName] });
-      if (updatedActiveEffects) io.to(room).emit('active_effects_updated', updatedActiveEffects);
-      io.to(room).emit('player_health_updated', { playerName, newHealth: health });
-
-      const combat = state.combat[room];
-      if (health <= 0 && combat && !combat.endedResult) {
-        const wasCurrentTurn = removeAllyFromTurnOrder(combat, playerName);
-        io.to(room).emit('turn_order_updated', { turnOrder: combat.turnOrder, currentTurnIndex: combat.currentTurnIndex });
-        if (turns.checkDefeat(room)) return;
-        if (wasCurrentTurn) turns.announceTurn(room);
-      }
+    socket.on('request_combat_state', () => {
+      const room = currentRoom();
+      if (room) combat.sendStateTo(socket, room);
     });
   });
 
-  return { turns, finalizePlayer, buildNarratorContext };
+  return { combat, finalizePlayer, buildNarratorContext };
 }

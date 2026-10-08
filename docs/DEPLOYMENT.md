@@ -114,8 +114,9 @@ heroku config:set ALLOWED_ORIGINS=https://cyberlock.netlify.app -a cs-capstone
    ```
    And locally in `Server/.env`: `GOOGLE_CLIENT_ID=your-client-id`.
 
-The Google button appears automatically once the server has a client ID. Guest login stays
-available locally and is off in production (set `ALLOW_GUEST_LOGIN=true` on Heroku if you want it).
+The Google button appears automatically once the server has a client ID. Guest login is on
+everywhere by default so friends without Google accounts can play; set `ALLOW_GUEST_LOGIN=false`
+on Heroku to require Google.
 
 ## 5. Claude for production narration
 

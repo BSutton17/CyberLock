@@ -662,9 +662,14 @@ function Main() {
 
     const getDecisionOwnerDisplay = (rawAttribute, fallbackAttribute = 'politician') => {
         const normalizedAttribute = normalizeDecisionAttribute(rawAttribute || fallbackAttribute) || fallbackAttribute;
-        const ownerName = getDecisionOwner(normalizedAttribute) || storyControllerLabel;
+        const owner = getDecisionOwner(normalizedAttribute) || livingStoryController;
         const attributeLabel = formatDecisionAttributeLabel(normalizedAttribute);
-        return `Decision owner (${attributeLabel}): ${ownerName}`;
+        if (owner && owner === playerName) {
+            return `Your call (${attributeLabel}) - talk it over, then choose for the team`;
+        }
+        const characterName = owner ? playerCharacters?.[owner]?.name : null;
+        const ownerLabel = characterName ? `${characterName} (${owner})` : (owner || storyControllerLabel);
+        return `${ownerLabel} decides (${attributeLabel})`;
     };
 
     const effectiveAiDecisionAttribute = normalizeDecisionAttribute(aiAttribute || 'politician') || 'politician';

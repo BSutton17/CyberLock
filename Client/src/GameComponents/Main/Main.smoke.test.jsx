@@ -133,7 +133,7 @@ describe('Main (story flow)', () => {
     });
 
     const rebelsButtons = await screen.findAllByText('Fight with the Rebels', {}, { timeout: 3000 });
-    expect(screen.getAllByText(/Decision owner \(Politician\): bryson/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/^Your call \(Politician\)/).length).toBeGreaterThan(0);
 
     fireEvent.click(rebelsButtons[0]);
     expect(socket.emitted.some(({ event, args }) => event === 'faction_selected' && args[0].faction === 'rebels')).toBe(true);
@@ -157,6 +157,7 @@ describe('Main (story flow)', () => {
     });
 
     const buttons = await screen.findAllByText('Fight with the Rebels', {}, { timeout: 3000 });
+    expect(screen.getAllByText('Leo (bryson) decides (Politician)').length).toBeGreaterThan(0);
     expect(buttons.every(button => button.disabled)).toBe(true);
     fireEvent.click(buttons[0]);
     expect(socket.emitted.some(({ event }) => event === 'faction_selected')).toBe(false);
@@ -183,7 +184,7 @@ describe('Main (story flow)', () => {
 
     expect((await screen.findAllByText('Tail the courier quietly', {}, { timeout: 3000 })).length).toBeGreaterThan(0);
     // Bryson ranked Spy second, Sean never: Bryson owns it.
-    expect(screen.getAllByText('Decision owner (Spy): bryson').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/^Your call \(Spy\)/).length).toBeGreaterThan(0);
     // The story already started, so the opening must not be requested again.
     expect(aiRequests(socket, 'game_start')).toHaveLength(0);
   });

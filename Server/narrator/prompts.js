@@ -156,7 +156,7 @@ export function buildStateBlock(session, { party = [], partyFaction = null, enco
   }
 
   if (session?.decisions?.length) {
-    lines.push(`Recent decisions:\n${session.decisions.slice(-5).map(d => `- ${d.by} (${d.attribute}) chose: ${d.choice}`).join('\n')}`);
+    lines.push(`Recent decisions:\n${session.decisions.slice(-5).map(d => `- ${d.by}${d.attribute ? ` (${d.attribute})` : ''} chose: ${d.choice}`).join('\n')}`);
   }
 
   return lines.join('\n\n');

@@ -9,7 +9,7 @@ import {
   COMBAT_RESPONSE_SCHEMA,
   RULES_RESPONSE_SCHEMA
 } from './prompts.js';
-import { CHARACTERS, BOSSES, OPENING_SCENES, VALID_LOCATIONS, LOCATIONS } from './lore.js';
+import { CHARACTERS, BOSSES, OPENING_SCENES, VALID_LOCATIONS, LOCATIONS, DECISION_ATTRIBUTES } from './lore.js';
 import { getActFor, getCombatLocation, TOTAL_ENCOUNTERS, BOSS_ENCOUNTERS } from './campaign.js';
 import { chooseDecisionAttribute, getDecisionOwner, normalizeAttribute } from './decisions.js';
 import { FALLBACK_NARRATION, optionsForAttribute } from './fallbacks.js';
@@ -272,8 +272,8 @@ export function createNarrator({
     const owner = pending?.owner || null;
     session.decisions.push({
       owner,
-      by: pending?.ownerName || characterNameFor(owner, context),
-      attribute: pending?.attribute || 'unknown',
+      by: pending?.ownerName || (owner ? characterNameFor(owner, context) : 'The party'),
+      attribute: pending?.attribute || null,
       choice: String(choice || '').slice(0, 80)
     });
     if (session.decisions.length > 40) session.decisions.splice(0, session.decisions.length - 40);
@@ -353,8 +353,8 @@ export function createNarrator({
     const ownerName = characterNameFor(decision.owner, context);
     const instructions = [
       intro,
-      `Then present the next decision. It belongs to ${ownerName} because it calls for ${decision.attribute}.`,
-      `Write exactly two options a ${decision.attribute} would weigh, each under 9 words, leading in different directions.`,
+      `Then present the next decision. It is ${ownerName}'s call, because the situation calls for ${decision.attribute[0].toUpperCase()}${decision.attribute.slice(1)} skills: ${DECISION_ATTRIBUTES[decision.attribute] || 'their expertise'}.`,
+      'Write exactly two options that play to that skill, each under 9 words, leading in different directions.',
       'Set location to the location key where this scene happens (not "boss" or "shop"), or "none" to stay put.'
     ].join('\n');
 

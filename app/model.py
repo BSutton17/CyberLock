@@ -106,12 +106,17 @@ class ModelLoader:
             
             logger.info(f"Loading model from {self.model_name}")
             
-            # Configure quantization
-            quantization_config = self._get_quantization_config()
-            
-            # Model loading arguments
+            # Configure quantization (bitsandbytes requires CUDA, so skip it on CPU)
+            if self.device == "cpu":
+                if self.quantization in ("4bit", "8bit"):
+                    logger.warning(f"{self.quantization} quantization requires CUDA - loading unquantized on CPU")
+                quantization_config = None
+            else:
+                quantization_config = self._get_quantization_config()
+
+            # Model loading arguments (bfloat16 halves CPU RAM vs float32)
             model_kwargs = {
-                "torch_dtype": torch.float32 if self.device == "cpu" else torch.bfloat16,
+                "torch_dtype": torch.bfloat16,
                 "device_map": self.device if self.device == "cpu" else "auto",
                 "trust_remote_code": True,
             }

@@ -9,6 +9,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from typing import Optional
+import asyncio
 import time
 import json
 import re
@@ -792,8 +793,9 @@ async def game_event(
             messages=messages_for_prompt
         )
 
-        # Generate response
-        response_text = model_loader.generate(
+        # Generate response in a worker thread so a long generation doesn't block the event loop
+        response_text = await asyncio.to_thread(
+            model_loader.generate,
             prompt=formatted_prompt,
             temperature=temperature,
             top_p=settings.TOP_P,

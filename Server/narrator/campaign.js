@@ -40,7 +40,8 @@ const REBEL_PATH = {
     8: { location: 'hospital', setup: 'Crown Gene sublevels: a Division Chief guards the Project Ascension labs.' },
     9: { location: 'boss', setup: 'Final stand against Genisis in the heart of Crown Gene.' }
   },
-  ending: 'With all three founders broken, the city\'s systems go dark for the first time in a generation. Close on what the people do with the silence, and what the party had to become to get here.'
+  // Starting points only: the actual ending must grow out of the party's choices.
+  ending: 'Possible directions: the founders fall and the city goes dark for the first time in a generation; the rebellion wins but becomes what it fought; a fragile truce brokered by the party; or a pyrrhic victory where the party pays the price. Pick whatever the party\'s choices earned.'
 };
 
 const ENFORCER_PATH = {
@@ -77,7 +78,8 @@ const ENFORCER_PATH = {
     8: { location: 'club', setup: 'A Rebellion Chief guards the relay feeding Wesley\'s signal.' },
     9: { location: 'boss', setup: 'Final confrontation with Virgil Wesley at the broadcast core.' }
   },
-  ending: 'The uprising loses its voice. Order returns, but the party has seen the evidence about Division and Project Ascension. Close on that tension: did they protect the city, or the people who own it?'
+  // Starting points only: the actual ending must grow out of the party's choices.
+  ending: 'Possible directions: order is restored and the party becomes the corporations\' favorite weapon; the party exposes Division and Project Ascension from the inside; they turn on their employers at the last moment; or they walk away from both sides. Pick whatever the party\'s choices earned.'
 };
 
 export const CAMPAIGN = {

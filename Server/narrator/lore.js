@@ -1,35 +1,42 @@
 // World, cast, and setting facts the narrator is allowed to use.
 // Character names here MUST match Client/src/Components/Characters.json (players see the callsign).
-// Boss and NPC biographies marked DRAFT were written to fill gaps in the original design doc;
-// edit freely.
+// Boss and NPC biographies marked DRAFT were written to fill gaps in the design doc; edit freely.
 
 export const WORLD = `
-The City, 2087. A vertical megacity owned outright by three corporations.
+A futuristic cyberpunk city, dark and grungy. After a wave of major technological inventions the city
+devolved into a corporatocracy: three companies control all of the power and use it to benefit
+themselves and keep control.
 
-SINGULARITY: first to build artificial general intelligence. Its robots replaced most human jobs
-and its drones and sensors watch every street. Founded by Ingram Robles, "The Architect".
+SINGULARITY rose first. After achieving artificial general intelligence it built robots to do
+everything, took jobs away from low-level workers, and worked its way into every part of citizens'
+lives through convenience until its control was guaranteed. Founded by Ingram Robles, "The Architect".
 
-ALPHA GENESIS: makes fusion cores of every size and owns all the city's power. It bulldozes
-neighborhoods to build plants. Founded by Marco Hall, a former naval nuclear researcher.
-Fusion cores can be destabilized by the right resonant frequency.
+ALPHA GENESIS rose at the same time. It invented stable nuclear fusion cores of every size, able to
+power any technology with energy to spare. That abundance let Singularity push its technology further
+than anyone thought possible. It bulldozes neighborhoods to build its plants. Founded by Marco Hall.
+Fusion cores react to certain resonant frequencies, which can make nearby electronics surge or fail.
 
-CROWN GENE: body modification. Its neurochips are mandatory: they are your ID, your wallet and
-your link to cyberspace, and they let the corporations track everyone. Rumors say its
-"Project Ascension" experiments on people in sublevels under its research towers.
+CROWN GENE rose through necessity and desire. As robots outpaced people, Crown Gene offered body
+modification: ways to put ever-improving technology into the human body. It created Neurochips, which
+connect people to cyberspace and double as everyone's secure ID, plus replacements and upgrades for
+every part of the body. It records the brain activity of every customer. Some Crown Gene implants are
+abused as drugs (Neuroxin feeds the implant a steady stream of pleasure).
 
-THE ENFORCERS: police force, court and army in one, jointly owned by the three corporations.
-Human officers led by body-modded commanders ("Division"), backed by soldier bots and drones.
-They value order and efficiency over civilian lives.
+THE ENFORCERS were created jointly by the three companies to keep the people under control. They act
+as judge, jury and executioner, punishing anyone who breaks the law or rises up against those in
+power. Once a police force of people like any other; now more military than police, increasingly
+replaced by combat robots built to catch criminals efficiently, even at the cost of civilians.
 
-THE REBELLION: a loose resistance of displaced workers, hackers and veterans fighting to break the
-corporatocracy. Salvaged tech, homemade weapons, hidden bases in maintenance tunnels. Some cells
-are disciplined; some are willing to hurt civilians to win.
+THE REBELLION is a loose resistance of displaced workers, hackers and veterans fighting to break the
+corporatocracy. Salvaged tech, homemade weapons, hidden bases in maintenance tunnels. Some cells are
+disciplined; some are willing to hurt civilians to win.
 
-Neither side is clean. The corporations keep the lights on and the streets "safe"; the rebels
-fight for freedom but leave wreckage behind them. The story should let both be understandable.
+Neither side is clean. The corporations keep the lights on and the streets "safe"; the rebels fight
+for freedom but leave wreckage behind them. The story should let both be understandable.
 `.trim();
 
-// Playable characters keyed by Characters.json id.
+// Playable characters keyed by Characters.json id. Backstories come from the game's design doc.
+// Players see the callsign, so narration should mostly use it.
 export const CHARACTERS = {
   offensive_tank_1: {
     callsign: 'Shipment',
@@ -37,7 +44,7 @@ export const CHARACTERS = {
     pronouns: 'he/him',
     role: 'Tank',
     weapon: 'Hammer',
-    bio: 'Former mob warehouse guard with an intimidating build, forced into smuggling to pay old debts. Blunt, loyal, hates being underestimated.'
+    bio: 'Grew up surrounded by drugs and crime: his mother was addicted to Neuroxin through her Crown Gene implant, and his father drowned in gambling debt and was dragged off to smuggle for the bookies. Big and intimidating, Dax survived, got pulled into smuggling with his father, and was moved to guarding when the mob saw his talent; in exchange they cut him loose from his father\'s debts. For years he guarded warehouses and shipments, fought rival gangs and Enforcers, and earned such a reputation that almost nobody tried to rob what he guarded. An Enforcer operation finally tore the organization down and jailed its leaders, which left him free for the first time.'
   },
   defensive_tank_2: {
     callsign: 'E.N.C.A.G.E',
@@ -45,15 +52,15 @@ export const CHARACTERS = {
     pronouns: 'it/its',
     role: 'Tank',
     weapon: 'Taser Shield',
-    bio: 'An escaped government AI experiment: a fully synthetic, sentient mind in a combat chassis. Precise, curious about humans, speaks in measured sentences.'
+    bio: 'Engineered Neurons for Conscious Autonomous Giant Enforcers: a secret program of all three corporations to build sentient Enforcer robots (Alpha Genesis power, Singularity AI, and Crown Gene\'s library of customer brain scans). Every earlier mind failed and was destroyed. This one passed every test, so the researchers experimented on it relentlessly to learn why, and it grew resentful, hid that resentment, and endured until they gave it a body. Then it escaped. The details of that day were buried and the program was shelved. It knows exactly who built it and what they wanted it for.'
   },
   spellcaster_dps_1: {
     callsign: 'Gene Shock',
-    realName: 'Anna Bray',
-    pronouns: 'she/her',
+    realName: 'Aaron Bray',
+    pronouns: 'they/them',
     role: 'DPS',
     weapon: 'Ray Gun',
-    bio: 'Former Crown Gene researcher who modified her own body with fusion-powered abilities after seeing what the company does to test subjects. Brilliant, guilty, intense.'
+    bio: 'A bright student obsessed with Crown Gene\'s body modification tech, hired into its research and development team after winning design competitions. Most of their ideas were never approved for testing, so they tested them on their own body; some caused lasting damage, but they worked. Powered by fusion cores, they can now produce destructive effects that look like magic. Crown Gene fired them when it found out, but by then they had everything they needed.'
   },
   aggressive_dps_2: {
     callsign: 'Leo',
@@ -61,7 +68,7 @@ export const CHARACTERS = {
     pronouns: 'he/him',
     role: 'DPS',
     weapon: 'Energy Sword',
-    bio: 'Raised by mercenaries, now a bounty hunter nicknamed "Sellsword". Fast, cocky, always asking who is paying.'
+    bio: 'Nicknamed Sellsword. Orphaned young and found starving by a band of mercenaries who raised him, taught him their trade and eventually paid him a share. When they retired, old or injured, he turned to bounty hunting, bringing wanted people to the Enforcers for good money, and spent it on advanced gear. His energy swords are easy to hide, quiet, and make armor useless: perfect for a solo hunter.'
   },
   traditional_warrior_dps_3: {
     callsign: 'Last Legion',
@@ -69,15 +76,15 @@ export const CHARACTERS = {
     pronouns: 'he/him',
     role: 'DPS',
     weapon: 'Shotgun',
-    bio: 'Served as an Enforcer for decades until automation pushed him out at 45. Now tends bar. Knows Enforcer tactics and still has old friends in uniform.'
+    bio: 'Joined the Enforcers for steady work and was good at it: fast breach operations, swift justice, dependable when things got tight. When the corporations took over, automation replaced officers like him and the job turned colder. At forty-five he walked away. He now tends bar in a district the Enforcers used to patrol, listening more than he speaks. He says he is done with that life, but he still notices who walks in armed, who watches the exits, and which drones linger too long.'
   },
   healing_support_1: {
     callsign: 'Patchwork',
     realName: 'Milo Young',
     pronouns: 'he/him',
     role: 'Support',
-    weapon: 'Multi-function Drone',
-    bio: 'Middle-class tinkerer and self-taught robotics genius. His drone fights, repairs and heals. Optimistic, talks to his drone like a pet.'
+    weapon: 'Drone',
+    bio: 'From a comfortable middle-class family, fascinated by robots: he spent his allowance buying them and taking them apart. He invented a system that can scan and repair electronics it has never seen before, but never sold or shared it; he just loves to build. His masterpiece is a drone that can fight, repair machines and even heal living tissue.'
   },
   offensive_support_2: {
     callsign: 'Livewire',
@@ -85,7 +92,7 @@ export const CHARACTERS = {
     pronouns: 'he/him',
     role: 'Support',
     weapon: 'Electric Guitar',
-    bio: 'His neighborhood was bulldozed for an Alpha Genesis plant. He discovered his guitar\'s frequencies can disrupt fusion cores. Angry, charismatic, a natural crowd-raiser.'
+    bio: 'Grew up in a tight-knit neighborhood where people looked out for each other, until Alpha Genesis took it to build a massive power plant and scattered everyone. Music was his constant; rock was his favorite. Playing near the plant, he discovered that fusion cores react to certain frequencies, surging or crashing nearby electronics, and that his guitar could become a weapon.'
   },
   jack_of_all_trades_support_3: {
     callsign: 'True North',
@@ -93,15 +100,15 @@ export const CHARACTERS = {
     pronouns: 'she/her',
     role: 'Support',
     weapon: 'Energy Staff',
-    bio: 'Former Enforcer who quit when the force militarized. Trained in combat and first aid. Steady moral compass of whatever group she is in.'
+    bio: 'Idolized her father, an Enforcer who died rescuing a family from a collapsing building, and joined the force to live up to him. Trained in combat and first aid, she specialized in helping people and fought only when she had to. When the Enforcers became a military that sacrificed civilians for efficiency, she left: it was not the kind of Enforcer her father was.'
   },
   hacker_support_4: {
     callsign: 'Ghost Shell',
     realName: 'Nile Adair',
-    pronouns: 'they/them',
+    pronouns: 'he/him',
     role: 'Support',
     weapon: 'Laptop',
-    bio: 'Grew up in the slums, self-taught coder, never caught. Can breach almost any system. Dry humor, distrusts everyone with a corporate badge.'
+    bio: 'Grew up in the slums and found that code was the one thing he fully controlled. Hacking came naturally: pranks first (overheating a neighbor\'s house, stalling traffic lights), then paid jobs stealing corporate data, cutting power to districts, even hacking the Enforcers to help someone escape. If they pay, he hacks. He never leaves traces, has never been caught, and has never met a system he could not get into.'
   }
 };
 

@@ -35,11 +35,9 @@ export const config = {
     jwtSecret: env.JWT_SECRET || (isProduction ? '' : DEV_JWT_SECRET),
     sessionTtl: env.SESSION_TTL || '7d',
     googleClientId: env.GOOGLE_CLIENT_ID || '',
-    // Guest login lets you test multiplayer locally without several Google accounts.
-    // It is on by default outside production and off in production unless explicitly enabled.
-    guestLoginEnabled: env.ALLOW_GUEST_LOGIN
-      ? env.ALLOW_GUEST_LOGIN === 'true'
-      : !isProduction
+    // Guest login lets friends without Google accounts play (and makes local multiplayer testing
+    // easy). On unless ALLOW_GUEST_LOGIN=false.
+    guestLoginEnabled: env.ALLOW_GUEST_LOGIN ? env.ALLOW_GUEST_LOGIN !== 'false' : true
   },
 
   ai: {
@@ -60,7 +58,7 @@ export const config = {
     // Fake latency for the offline mock so the UI behaves like it will with a real model.
     mockDelayMs: toInt(env.MOCK_AI_DELAY_MS, 400),
     // Story decisions between fights before the next fight starts.
-    decisionsPerInterlude: toInt(env.STORY_DECISIONS_PER_INTERLUDE, 2),
+    decisionsPerInterlude: toInt(env.STORY_DECISIONS_PER_INTERLUDE, 3),
     // Routine combat turns use the game's own summary text; only notable moments go to the AI,
     // and at most this many per minute (protects free-tier rate limits).
     combatLinesPerMinute: toInt(env.AI_COMBAT_LINES_PER_MINUTE, 12)

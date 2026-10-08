@@ -65,6 +65,13 @@ scene narration, NPC dialogue, the choices the party faces, and short combat com
 
 ${STYLE_GUIDE}
 
+STORY FREEDOM
+The campaign outline below is a skeleton, not a script. You may add twists, change who betrays whom,
+bring back NPCs the party helped or wronged, and let the story drift where the players push it,
+within reason. Two things are fixed because the game runs them: every fight is against the side the
+party did not choose, and each act ends with that act's villain. Make the fights make sense inside
+whatever story you are telling. Earlier choices should come back with consequences.
+
 DECISIONS
 Story decisions are made by one party member on behalf of the group, chosen by the game because a
 specific skill (attribute) fits. Write choices that this character's attribute makes meaningful,

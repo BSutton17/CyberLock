@@ -85,7 +85,7 @@ describe('text helpers', () => {
 
   it('findOutsiderNames flags characters outside the party, case-sensitively', () => {
     expect(findOutsiderNames('Shipment and Ghost Shell hold the door.', party)).toEqual([]);
-    expect(findOutsiderNames('Leo laughs. Anna Bray reloads.', party)).toEqual(expect.arrayContaining(['Anna Bray', 'Leo']));
+    expect(findOutsiderNames('Leo laughs. Aaron Bray reloads.', party)).toEqual(expect.arrayContaining(['Aaron Bray', 'Leo']));
     expect(findOutsiderNames('the true north of the city, a patchwork of streets', party)).toEqual([]);
   });
 
@@ -282,7 +282,7 @@ describe('combat narration', () => {
   });
 
   it('falls back to the summary if the model mentions an outsider', async () => {
-    const narrator = createNarrator({ provider: scriptedProvider([{ narration: 'Anna Bray cheers.' }]), logger: quietLogger });
+    const narrator = createNarrator({ provider: scriptedProvider([{ narration: 'Aaron Bray cheers.' }]), logger: quietLogger });
     const result = await narrator.handleEvent({ room: 'r1', eventType: 'turn_action', message: 'Shipment uses Charge!', context: context() });
     expect(result.response).toBe('Shipment uses Charge!');
   });

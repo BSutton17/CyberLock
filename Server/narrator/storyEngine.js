@@ -429,7 +429,15 @@ export function createNarrator({
       beat = await writeStoryBeat({
         session,
         context,
-        instructions: 'The final boss is defeated. Write the ENDING in 5-8 sentences following the campaign ending for this side, with a last line of dialogue from a surviving NPC. Set options to [] and location to "none".',
+        instructions: [
+          'The final villain is defeated. Write the ENDING in 6-9 sentences.',
+          'The ending must grow out of the choices this party actually made; the campaign ending for this side lists possible directions, not a required one.',
+          session.decisions.length
+            ? 'Every decision this party made, in order:\n' + session.decisions.map(d => `- ${d.by}${d.attribute ? ` (${d.attribute})` : ''}: ${d.choice}`).join('\n')
+            : '',
+          "Name what their choices cost or saved, close each party member's arc in a phrase, and end with a line of dialogue from a surviving NPC.",
+          'Set options to [] and location to "none".'
+        ].filter(Boolean).join('\n'),
         hints: { eventType: 'ending', partyNames: partyNames(context) }
       });
     } catch {

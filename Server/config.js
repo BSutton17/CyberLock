@@ -72,7 +72,7 @@ export const config = {
     // Pause before the first enemy acts when an enemy is fastest at combat start.
     combatStartEnemyDelayMs: toInt(env.COMBAT_START_ENEMY_DELAY_MS, 6000),
     // How long a client gets to run an enemy turn before the server retries / skips it.
-    enemyTurnTimeoutMs: toInt(env.ENEMY_TURN_TIMEOUT_MS, 15000),
+    enemyTurnTimeoutMs: toInt(env.ENEMY_TURN_TIMEOUT_MS, 25000),
     // A player's turn is force-ended after this long (the client auto-ends at 30s).
     allyTurnTimeoutMs: toInt(env.ALLY_TURN_TIMEOUT_MS, 45000),
     // How long a disconnected player keeps their seat before being removed.

@@ -64,6 +64,12 @@ describe('generateEnemySpawnPositions', () => {
     expect(cells.every(cell => cell.row <= 2)).toBe(true);
   });
 
+  it('never spawns an enemy on a tile a player already holds', () => {
+    const occupied = [{ row: 1, col: 4 }, { row: 0, col: 5 }];
+    const cells = Object.values(generateEnemySpawnPositions(makeEnemies(12), null, occupied));
+    expect(cells.some(cell => occupied.some(taken => taken.row === cell.row && taken.col === cell.col))).toBe(false);
+  });
+
   it('never spawns enemies on blocked sewer tiles', () => {
     const cells = Object.values(generateEnemySpawnPositions(makeEnemies(14), 'sewer'));
     expect(cells.some(cell => isSewerSpawnBlockedTile('sewer', cell.row, cell.col))).toBe(false);
@@ -119,6 +125,7 @@ describe('sanitizeProposedPlayerPositions', () => {
     ['two players share a cell', { p1: { row: 6, col: 3 }, p2: { row: 6, col: 3 } }],
     ['a position is off the grid', { p1: { row: 7, col: 3 }, p2: { row: 6, col: 4 } }],
     ['a coordinate is not an integer', { p1: { row: 6.5, col: 3 }, p2: { row: 6, col: 4 } }],
+    ['a player is standing in the enemy half', { p1: { row: 1, col: 3 }, p2: { row: 6, col: 4 } }],
     ['the payload is not an object', 'nope']
   ])('rejects the proposal when %s', (_label, proposal) => {
     expect(sanitizeProposedPlayerPositions(players, proposal)).toBeNull();

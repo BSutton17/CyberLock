@@ -1,29 +1,15 @@
 import './App.css';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './Components/AuthContext';
+import { AuthProvider, useAuth } from './Components/AuthContext';
 import { GameProvider } from './Components/Context';
-import { useAuth } from './Components/AuthContext';
 import Login from './Components/Login';
+import LoadingScreen from './Components/LoadingScreen';
 import ProtectedRoute from './Components/ProtectedRoute';
 import HomeScreen from './GameComponents/HomeScreen';
 
 const RootRoute = () => {
   const { isAuthenticated, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh',
-        fontSize: '18px',
-      }}>
-        Loading...
-      </div>
-    );
-  }
-
+  if (loading) return <LoadingScreen />;
   return isAuthenticated ? <Navigate to="/home" replace /> : <Navigate to="/login" replace />;
 };
 
@@ -33,13 +19,8 @@ function App() {
       <GameProvider>
         <Router>
           <Routes>
-            {/* Default route - checks auth and redirects accordingly */}
             <Route path="/" element={<RootRoute />} />
-            
-            {/* Login route */}
             <Route path="/login" element={<Login />} />
-            
-            {/* Protected home route */}
             <Route
               path="/home"
               element={
@@ -48,8 +29,6 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            
-            {/* Catch all - redirect to home */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Router>

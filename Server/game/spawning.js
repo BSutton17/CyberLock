@@ -3,6 +3,8 @@
 
 export const GRID_ROWS = 7;
 export const GRID_COLS = 10;
+// Players start a fight on their side of the board (rows 4-6).
+export const PLAYER_ZONE_MIN_ROW = 4;
 
 export const SEWER_SLOW_TILE_KEYS = new Set([
   '3,0', '3,1', '3,2', '3,3', '3,4', '3,5', '3,6', '3,7', '3,8', '3,9',
@@ -60,13 +62,14 @@ export function getEnemySpawnColumnOrder(preferredRow, totalCols = GRID_COLS) {
   return [...orderedColumns, ...remainingColumns];
 }
 
-export function generateEnemySpawnPositions(enemies = [], sceneKey = null) {
+// `occupiedCells` are tiles already taken (player spawns) that enemies must not land on.
+export function generateEnemySpawnPositions(enemies = [], sceneKey = null, occupiedCells = []) {
   const sortedEnemies = [...enemies].sort((firstEnemy, secondEnemy) =>
     getEnemySpawnDepth(secondEnemy) - getEnemySpawnDepth(firstEnemy)
   );
 
   const positions = {};
-  const usedCells = new Set();
+  const usedCells = new Set(occupiedCells.map(cell => `${cell.row},${cell.col}`));
 
   const findOpenCell = (preferredRow, preferredCol) => {
     const withinBounds = (row, col) => row >= 0 && row < GRID_ROWS && col >= 0 && col < GRID_COLS;
@@ -191,7 +194,9 @@ export function generatePlayerSpawnPositions(players = [], characterSelections =
   return positions;
 }
 
-export function sanitizeProposedPlayerPositions(players = [], proposedPlayerPositions = {}, sceneKey = null) {
+// Accepts the positions players stood on before the fight, but only if every one is a free tile
+// on the players' side of the board. Otherwise returns null and fresh spawns are used.
+export function sanitizeProposedPlayerPositions(players = [], proposedPlayerPositions = {}, sceneKey = null, minRow = PLAYER_ZONE_MIN_ROW) {
   if (!proposedPlayerPositions || typeof proposedPlayerPositions !== 'object') return null;
 
   const sanitized = {};
@@ -205,7 +210,7 @@ export function sanitizeProposedPlayerPositions(players = [], proposedPlayerPosi
     const col = Number(position.col);
 
     if (!Number.isInteger(row) || !Number.isInteger(col)) return null;
-    if (row < 0 || row > GRID_ROWS - 1 || col < 0 || col > GRID_COLS - 1) return null;
+    if (row < minRow || row > GRID_ROWS - 1 || col < 0 || col > GRID_COLS - 1) return null;
     if (isSewerSpawnBlockedTile(sceneKey, row, col)) return null;
 
     const key = `${row},${col}`;

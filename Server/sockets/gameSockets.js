@@ -764,18 +764,19 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
         turns.isConnected(room, player) && (roomState.characterSelections[player]?.stats?.health ?? 1) > 0
       );
 
+      // Players are placed first so enemies never spawn on top of them.
+      const startingPlayerPositions =
+        sanitizeProposedPlayerPositions(roomState.players, playerPositions, sceneKey) ||
+        generatePlayerSpawnPositions(roomState.players, roomState.characterSelections, sceneKey);
       const combat = {
         encounterId: encounterIndex + 1,
         enemies,
-        enemyPositions: generateEnemySpawnPositions(enemies, sceneKey),
-        playerPositions: {},
+        enemyPositions: generateEnemySpawnPositions(enemies, sceneKey, Object.values(startingPlayerPositions)),
+        playerPositions: startingPlayerPositions,
         turnOrder: calculateTurnOrder(activePlayers, roomState.characterSelections, enemies),
         currentTurnIndex: 0,
         endedResult: null
       };
-      combat.playerPositions =
-        sanitizeProposedPlayerPositions(roomState.players, playerPositions, sceneKey) ||
-        generatePlayerSpawnPositions(roomState.players, roomState.characterSelections, sceneKey);
       state.combat[room] = combat;
 
       logger.log?.(`[COMBAT] Room ${room} encounter ${encounterIndex}: ${enemies.length} enemies, ${activePlayers.length} players`);

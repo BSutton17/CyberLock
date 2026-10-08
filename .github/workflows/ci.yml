@@ -32,3 +32,6 @@ jobs:
 
       - name: Client build
         run: npm run build --prefix Client
+
+      - name: Client lint
+        run: npm run lint --prefix Client

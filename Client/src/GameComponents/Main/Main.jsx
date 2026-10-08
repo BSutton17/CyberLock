@@ -241,7 +241,8 @@ const resolveSceneKey = (rawKeyword = '') => {
 const TYPEWRITER_CHAR_INTERVAL_MS = 20;
 const TYPEWRITER_SENTENCE_GAP_FACTOR_MS = 18;
 const TURN_ADVANCE_AFTER_TYPING_MS = 1000;
-const POST_COMBAT_NARRATION_TIMEOUT_MS = 8000;
+// Real models can take several seconds for a story beat; fall back only if the server is truly stuck.
+const POST_COMBAT_NARRATION_TIMEOUT_MS = 25000;
 
 const splitAiTextSegments = (message = '') => {
     const trimmedMessage = String(message || '').trim();

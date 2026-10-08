@@ -413,19 +413,7 @@ export function createNarrator({
     const nextAct = session.faction ? getActFor(session.faction, context.encounterIndex) : null;
 
     if (context.encounterIndex >= TOTAL_ENCOUNTERS) {
-      let beat;
-      try {
-        beat = await writeStoryBeat({
-          session,
-          context,
-          instructions: 'The final boss is defeated. Write the ENDING in 5-8 sentences following the campaign ending for this side, with a last line of dialogue from a surviving NPC. Set options to [] and location to "none".',
-          hints: { eventType: 'ending', partyNames: partyNames(context) }
-        });
-      } catch {
-        beat = { narration: FALLBACK_NARRATION.ending, fallback: true };
-      }
-      session.lastNarration = beat.narration;
-      return { response: beat.narration, location: null, attribute: null, startCombat: false, options: null, fallback: !!beat.fallback };
+      return ending(session, context);
     }
 
     const intro = defeatedBoss
@@ -433,6 +421,22 @@ export function createNarrator({
       : 'The fight is over. Describe the aftermath in 2-3 sentences (what the party finds, who is watching), moving the current act forward.';
 
     return presentDecision(session, context, { eventType: 'encounter_end', intro });
+  }
+
+  async function ending(session, context) {
+    let beat;
+    try {
+      beat = await writeStoryBeat({
+        session,
+        context,
+        instructions: 'The final boss is defeated. Write the ENDING in 5-8 sentences following the campaign ending for this side, with a last line of dialogue from a surviving NPC. Set options to [] and location to "none".',
+        hints: { eventType: 'ending', partyNames: partyNames(context) }
+      });
+    } catch {
+      beat = { narration: FALLBACK_NARRATION.ending, fallback: true };
+    }
+    session.lastNarration = beat.narration;
+    return { response: beat.narration, location: null, attribute: null, startCombat: false, options: null, fallback: !!beat.fallback };
   }
 
   async function storyChoice(session, context, choice) {
@@ -584,6 +588,9 @@ export function createNarrator({
 
         case 'encounter_end':
           return encounterEnd(session, safeContext);
+
+        case 'campaign_end':
+          return ending(session, safeContext);
 
         case 'choice_made':
         case 'story_choice':

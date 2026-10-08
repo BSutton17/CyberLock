@@ -731,3 +731,37 @@
         transform: translateX(-50%) translateY(-0.225vmin);
     }
 }
+.select-notice {
+  margin: 8px auto 0;
+  max-width: 520px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  text-align: center;
+  color: #ffd76a;
+  background: rgba(255, 200, 0, 0.1);
+  border: 1px solid rgba(255, 200, 0, 0.35);
+}
+
+.choose-character-button {
+  width: 100%;
+  margin: 10px 0 14px;
+  padding: 10px 14px;
+  border: 1px solid #00f0ff;
+  border-radius: 6px;
+  background: rgba(0, 240, 255, 0.12);
+  color: #e6faff;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: background 0.2s, box-shadow 0.2s;
+}
+
+.choose-character-button:hover:not(:disabled) {
+  background: rgba(0, 240, 255, 0.25);
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.35);
+}
+
+.choose-character-button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}

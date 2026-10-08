@@ -1,111 +1,120 @@
+/* Sign-in page. Dark panel over the city art to match the rest of the game. */
 .login-container {
   display: flex;
   justify-content: center;
-    align-items: center;
-    min-height: 100vh;
-  background-image: url('/backgrounds/CyberpunkCity.jpg');
+  align-items: center;
+  min-height: 100vh;
+  padding: 16px;
+  box-sizing: border-box;
+  background-image: linear-gradient(rgba(5, 5, 15, 0.45), rgba(5, 5, 15, 0.75)), url('/backgrounds/CyberpunkCity.jpg');
   background-size: cover;
   background-position: center;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 .login-card {
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-  padding: 40px;
+  background: rgba(12, 12, 24, 0.92);
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  border-radius: 10px;
+  box-shadow: 0 0 30px rgba(0, 240, 255, 0.12), 0 10px 40px rgba(0, 0, 0, 0.5);
+  padding: 32px;
   width: 100%;
   max-width: 400px;
+  color: #e6e6f0;
   animation: slideUp 0.3s ease-out;
 }
 
 @keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .login-card h1 {
   text-align: center;
-  color: #333;
-  margin-bottom: 30px;
-  font-size: 28px;
+  color: #e6e6f0;
+  margin: 0 0 20px;
+  font-size: 26px;
+  letter-spacing: 1px;
+}
+
+.login-title-card {
+  display: block;
+  width: min(280px, 80%);
+  margin: 0 auto 12px;
 }
 
 .form-group {
-  margin-bottom: 20px;
+  margin-bottom: 18px;
 }
 
 .form-group label {
   display: block;
   margin-bottom: 8px;
-  color: #555;
+  color: #b8b8c8;
   font-weight: 500;
-  font-size: max(16px, 14px);
+  font-size: 16px;
 }
 
 .form-group input {
   width: 100%;
   padding: 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: max(16px, 14px);
-  transition: border-color 0.3s, box-shadow 0.3s;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font-size: 16px;
   box-sizing: border-box;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .form-group input:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: #00f0ff;
+  box-shadow: 0 0 0 3px rgba(0, 240, 255, 0.15);
+}
+
+.error-message,
+.server-status-warning {
+  padding: 12px;
+  border-radius: 6px;
+  margin-bottom: 18px;
+  font-size: 15px;
+  line-height: 1.4;
 }
 
 .error-message {
-  background-color: #fee;
-  color: #c33;
-  padding: 12px;
-  border-radius: 4px;
-  margin-bottom: 20px;
-  border-left: 4px solid #c33;
-  font-size: max(16px, 14px);
+  background: rgba(255, 60, 90, 0.12);
+  color: #ff8fa3;
+  border-left: 4px solid #ff3c5a;
 }
 
 .server-status-warning {
-  background-color: #fff4d6;
-  color: #8a6d1d;
-  padding: 12px;
-  border-radius: 4px;
-  margin-bottom: 20px;
-  border-left: 4px solid #d6a700;
-  font-size: max(16px, 14px);
+  background: rgba(255, 200, 0, 0.1);
+  color: #ffd76a;
+  border-left: 4px solid #ffc800;
 }
 
 .btn {
   width: 100%;
   padding: 12px;
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: transform 0.2s, box-shadow 0.2s;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  background: linear-gradient(135deg, #00c6ff 0%, #ff2fd1 100%);
+  color: #fff;
 }
 
 .btn-primary:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 6px 20px rgba(0, 198, 255, 0.35);
 }
 
 .btn-primary:disabled {
@@ -113,85 +122,34 @@
   cursor: not-allowed;
 }
 
-.toggle-mode {
-  text-align: center;
-  margin-top: 20px;
-  border-top: 1px solid #eee;
-  padding-top: 20px;
-}
-
-.toggle-mode p {
-  color: #666;
-  font-size: max(16px, 14px);
-  margin: 0;
-}
-
-.link-button {
-  background: none;
-  border: none;
-  color: #667eea;
-  cursor: pointer;
-  font-weight: 600;
-  text-decoration: none;
-  padding: 0.5rem 0.75rem;
-  font-size: max(16px, 14px);
-  transition: color 0.3s;
-}
-
-.link-button:hover {
-  color: #764ba2;
-  text-decoration: underline;
-}
-
-.forgot-password-link {
-  text-align: center;
-  margin-top: 12px;
-}
-
-.success-message {
-  background-color: #e6f9ee;
-  color: #1a7a3a;
-  padding: 12px;
-  border-radius: 4px;
-  margin-bottom: 20px;
-  border-left: 4px solid #1a7a3a;
-  font-size: max(16px, 14px);
-}
-
 .setup-description {
   text-align: center;
-  color: #666;
-  margin-bottom: 24px;
-  font-size: max(16px, 14px);
+  color: #b8b8c8;
+  margin: 12px 0 0;
+  font-size: 15px;
   line-height: 1.5;
 }
 
-.form-select {
-  width: 100%;
-  padding: 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: max(16px, 14px);
-  transition: border-color 0.3s, box-shadow 0.3s;
-  box-sizing: border-box;
-  background-color: inherit;
-  /* color: inherit; */
-  appearance: auto;
+.google-login {
+  display: flex;
+  justify-content: center;
+  margin: 12px 0 16px;
+  min-height: 44px;
 }
 
-.form-select:focus {
-  outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+.login-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 0 12px;
+  color: #8a8a9a;
+  font-size: 0.85rem;
 }
 
-.security-question-display {
-  background-color: #f0f0ff;
-  padding: 14px;
-  border-radius: 4px;
-  margin-bottom: 20px;
-  font-weight: 600;
-  color: #444;
-  border-left: 4px solid #667eea;
-  font-size: max(16px, 14px);
+.login-divider::before,
+.login-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.15);
 }

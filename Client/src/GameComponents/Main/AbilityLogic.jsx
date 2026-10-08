@@ -141,6 +141,57 @@ export function hasDamageReflection(activeEffects = [], targetId) {
     );
 }
 
+export function isHealingPrevented(activeEffects = [], targetId) {
+    return (activeEffects || []).some(effect =>
+        effect?.type === 'healing_prevented' &&
+        effect.target === targetId &&
+        effect.turnsRemaining > 0
+    );
+}
+
+// Temporary "bonus health" buffs soak damage before real health does.
+// Returns { remainingDamage, effects } with the buffs reduced or removed.
+export function absorbWithBonusHealth(damage, activeEffects = [], targetId) {
+    let remainingDamage = Math.max(0, damage || 0);
+    const effects = [];
+
+    for (const effect of activeEffects || []) {
+        const isBonusHealth =
+            effect?.type === 'stat_buff' &&
+            effect.stat === 'health' &&
+            effect.target === targetId &&
+            effect.turnsRemaining > 0 &&
+            (Number(effect.value) || 0) > 0;
+
+        if (!isBonusHealth || remainingDamage <= 0) {
+            effects.push(effect);
+            continue;
+        }
+
+        const value = Number(effect.value) || 0;
+        if (value <= remainingDamage) {
+            remainingDamage -= value; // fully used up: drop the buff
+        } else {
+            effects.push({ ...effect, value: value - remainingDamage });
+            remainingDamage = 0;
+        }
+    }
+
+    return { remainingDamage, effects };
+}
+
+const applyHealingToUnit = (unit, amount) => {
+    const currentHealth = unit?.stats?.health || 0;
+    const maxHealth = unit?.stats?.maxHealth || unit?.stats?.max_health || currentHealth;
+    return {
+        ...unit,
+        stats: {
+            ...unit.stats,
+            health: Math.min(maxHealth, currentHealth + Math.max(0, amount || 0))
+        }
+    };
+};
+
 export function applyDamageKeywords(amount, activeEffects = [], targetId, { minimumDamage = 0 } = {}) {
     if (hasDamageImmunity(activeEffects, targetId)) {
         return 0;
@@ -192,9 +243,11 @@ export function applyAbilityEffects(result, gameState) {
             } else if (target in updates.playerCharacters) {
                 const incomingDamage = Math.max(0, amount || 0);
                 const finalDamage = applyDamageKeywords(incomingDamage, updates.activeEffects, target, { minimumDamage: 1 });
+                const absorbed = absorbWithBonusHealth(finalDamage, updates.activeEffects, target);
+                updates.activeEffects = absorbed.effects;
                 const character = updates.playerCharacters[target];
                 const currentHealth = character.stats.health;
-                const newHealth = Math.max(0, currentHealth - finalDamage);
+                const newHealth = Math.max(0, currentHealth - absorbed.remainingDamage);
 
                 updates.playerCharacters[target] = {
                     ...character,
@@ -210,26 +263,23 @@ export function applyAbilityEffects(result, gameState) {
     // Apply healing (restores actual HP, cannot exceed maxHealth)
     if (result.healing) {
         result.healing.forEach(({ target, amount }) => {
-            // Check if target is a player
+            if (isHealingPrevented(updates.activeEffects, target)) {
+                return;
+            }
+
             if (target in updates.playerCharacters) {
                 const character = updates.playerCharacters[target];
-                const currentHealth = character.stats.health;
-                if ((currentHealth || 0) <= 0) {
-                    console.log(`[HEAL] Skipping heal on dead target ${character.name} (${target})`);
-                    return;
-                }
-                const maxHealth = character.stats.maxHealth;
-                const newHealth = Math.min(maxHealth, currentHealth + amount);
-                
-                updates.playerCharacters[target] = {
-                    ...character,
-                    stats: {
-                        ...character.stats,
-                        health: newHealth
-                    }
-                };
-                
-                console.log(`${character.name} healed: ${currentHealth} → ${newHealth} (capped at ${maxHealth})`);
+                if ((character.stats.health || 0) <= 0) return; // no healing the dead
+                updates.playerCharacters[target] = applyHealingToUnit(character, amount);
+                return;
+            }
+
+            // Enemy support units heal each other with the same abilities.
+            const enemyIndex = updates.enemies.findIndex(e => e.id === target);
+            if (enemyIndex !== -1) {
+                const enemy = updates.enemies[enemyIndex];
+                if (enemy.isDeadBody || (enemy.stats?.health || 0) <= 0) return;
+                updates.enemies[enemyIndex] = applyHealingToUnit(enemy, amount);
             }
         });
     }
@@ -387,27 +437,43 @@ export function tickActiveEffects(activeEffects, playerCharacters, enemies, endi
             return;
         }
         
-        // Apply healing_over_time before decrementing
-        if (effect.type === 'healing_over_time' && effect.target in updatedCharacters) {
-            const character = updatedCharacters[effect.target];
-            if ((character.stats.health || 0) <= 0) {
-                console.log(`[HEALING OVER TIME] Removing effect on dead target ${effect.target}`);
-                updatedEffect.turnsRemaining = 0;
-            } else {
-            const oldHealth = character.stats.health;
-            const maxHealth = character.stats.maxHealth || character.stats.max_health;
-            const newHealth = Math.min(maxHealth, oldHealth + effect.amount);
-            updatedCharacters[effect.target] = {
-                ...character,
-                stats: {
-                    ...character.stats,
-                    health: newHealth
+        // Apply healing_over_time before decrementing (players and enemy support targets)
+        if (effect.type === 'healing_over_time' && !isHealingPrevented(activeEffects, effect.target)) {
+            if (effect.target in updatedCharacters) {
+                const character = updatedCharacters[effect.target];
+                if ((character.stats.health || 0) <= 0) {
+                    updatedEffect.turnsRemaining = 0;
+                } else {
+                    updatedCharacters[effect.target] = applyHealingToUnit(character, effect.amount);
                 }
-            };
-            console.log(`[HEALING OVER TIME] ${character.name} healed for ${effect.amount} HP (${oldHealth} -> ${newHealth})`);
+            } else if (enemies) {
+                const enemyIndex = updatedEnemies.findIndex(e => e.id === effect.target);
+                const enemy = updatedEnemies[enemyIndex];
+                if (!enemy || enemy.isDeadBody || (enemy.stats?.health || 0) <= 0) {
+                    updatedEffect.turnsRemaining = 0;
+                } else {
+                    updatedEnemies[enemyIndex] = applyHealingToUnit(enemy, effect.amount);
+                }
             }
         }
-        
+
+        // Burn and poison cast by enemies land on players.
+        if ((effect.type === 'burn' || effect.type === 'poison') && effect.target in updatedCharacters) {
+            const character = updatedCharacters[effect.target];
+            const currentHealth = character.stats.health || 0;
+            if (currentHealth <= 0) {
+                updatedEffect.turnsRemaining = 0;
+            } else {
+                const basis = effect.type === 'burn' ? currentHealth : (character.stats.maxHealth || currentHealth);
+                const rawDamage = Math.max(1, Math.floor(basis * (effect.damagePercent || 0)));
+                const damage = applyDamageKeywords(rawDamage, activeEffects, effect.target, { minimumDamage: 1 });
+                updatedCharacters[effect.target] = {
+                    ...character,
+                    stats: { ...character.stats, health: Math.max(0, currentHealth - damage) }
+                };
+            }
+        }
+
         // Apply burn damage before decrementing
         if (effect.type === 'burn' && enemies) {
             const enemyIndex = updatedEnemies.findIndex(e => e.id === effect.target);
@@ -678,16 +744,18 @@ export function updateBlizzardFieldEffects(activeEffects, enemies, characterPosi
                 stackable: false,
                 source: 'blizzard',
                 turnsRemaining: 1,
-                appliedThisTurn: true
+                // Already applied to the enemy's stats below, so the tick must not apply it a
+                // second time; on expiry the tick restores resolvedValue.
+                appliedThisTurn: false
             });
             hasChanges = true;
-            
-            // Apply to enemy stats immediately
+
+            const latestEnemy = updatedEnemies[enemyIndex];
             updatedEnemies[enemyIndex] = {
-                ...enemy,
+                ...latestEnemy,
                 stats: {
-                    ...enemy.stats,
-                    speed: enemy.stats.speed + speedDebuff
+                    ...latestEnemy.stats,
+                    speed: (latestEnemy.stats.speed || 0) + speedDebuff
                 }
             };
             hasChanges = true;

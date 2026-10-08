@@ -332,3 +332,9 @@
 		min-width: 1100px;
 	}
 }
+
+.levelup-error {
+  margin: 0 0 8px;
+  color: #ff8fa3;
+  font-weight: 600;
+}

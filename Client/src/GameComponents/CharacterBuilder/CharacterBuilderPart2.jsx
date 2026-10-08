@@ -1,4 +1,4 @@
-import React, { useState, useEffect, use } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useGameContext } from '../../Components/Context';
 import './CharacterBuilder.css';
 
@@ -16,27 +16,21 @@ const NON_COMBAT_ATTRIBUTES = [
 ];
 
 function CharacterBuilderPart2() {
-    const { players, playerName, room, socket, playerCharacters, getCharacterImage, allPlayerAttributes, setAllPlayerAttributes } = useGameContext();
+    const { players, playerName, room, socket, playerCharacters, getCharacterImage, allPlayerAttributes } = useGameContext();
     const [playerAttributes, setPlayerAttributes] = useState(allPlayerAttributes[playerName] || Array(10).fill(null));
     const [isReady, setIsReady] = useState(false);
     const [readyPlayers, setReadyPlayers] = useState([]);
     const [showDescription, setShowDescription] = useState(null);
     const character = playerCharacters[playerName]; 
 
+    // Attribute updates are handled globally in Events.jsx; this screen only tracks who is ready.
     useEffect(() => {
-        socket.on('attributes_updated', (attrs) => {
-            setAllPlayerAttributes(attrs);
-        });
-
-        socket.on('attribute_ready_status', (ready) => {
-            setReadyPlayers(ready);
-        });
-
+        const handleReadyStatus = (ready) => setReadyPlayers(Array.isArray(ready) ? ready : []);
+        socket.on('attribute_ready_status', handleReadyStatus);
         return () => {
-            socket.off('attributes_updated');
-            socket.off('attribute_ready_status');
+            socket.off('attribute_ready_status', handleReadyStatus);
         };
-    }, [socket, playerName]);
+    }, [socket]);
 
     const setAttribute = (attr) => {
         setPlayerAttributes((prev) => {
@@ -69,10 +63,6 @@ function CharacterBuilderPart2() {
     const handleReady = () => {
         setIsReady(true);
         socket.emit('attributes_part2_ready', { room, playerName});
-    }
-
-    const isDisabled = (attr) => {
-        return playerAttributes.includes(attr.name);
     }
 
     return(

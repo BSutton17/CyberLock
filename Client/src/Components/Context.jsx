@@ -1,9 +1,11 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { IoLogoElectron } from "react-icons/io5";
 import { FaFistRaised } from "react-icons/fa";
 import { LuCirclePlus } from "react-icons/lu";
 import io from 'socket.io-client';
 import { CHARACTER_IMAGE_MAP, ENEMY_IMAGE_MAP, getCharacterImage, getEnemyImage } from './imageMaps';
+import { useAuth, getStoredToken } from './AuthContext';
+import { API_URL } from '../config';
 
 const GameContext = createContext();
 const DEBUG_LOG_LEVEL = 'quiet';
@@ -26,7 +28,6 @@ export const useGameContext = () => {
 };
 
 export const GameProvider = ({ children }) => {
-  const SOCKET_BASE_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5000`;
     const debugLogLevel = normalizeDebugLogLevel(DEBUG_LOG_LEVEL);
     const [players, setPlayers] = useState([]);
     const [isAdmin, setAdmin] = useState(false);
@@ -40,12 +41,56 @@ export const GameProvider = ({ children }) => {
     const [turnOrder, setTurnOrder] = useState([]); 
     const [isMyTurn, setIsMyTurn] = useState(false);
     const [enemies, setEnemies] = useState([]);
-    const [socket] = useState(() => io.connect(SOCKET_BASE_URL, { withCredentials: true }));
+    // The socket connects only after sign-in and sends the session token on every (re)connect.
+    const [socket] = useState(() => io(API_URL || undefined, {
+      autoConnect: false,
+      auth: (callback) => callback({ token: getStoredToken() })
+    }));
+    const { token, logout } = useAuth();
+    const [connectionStatus, setConnectionStatus] = useState('disconnected');
+    const [connectedPlayers, setConnectedPlayers] = useState([]);
+
+    useEffect(() => {
+      if (token) {
+        if (!socket.connected) socket.connect();
+      } else {
+        socket.disconnect();
+      }
+    }, [socket, token]);
+
+    useEffect(() => {
+      const handleConnect = () => setConnectionStatus('connected');
+      const handleDisconnect = (reason) => {
+        // "io client disconnect" means we closed it on purpose (sign-out).
+        setConnectionStatus(reason === 'io client disconnect' ? 'disconnected' : 'reconnecting');
+      };
+      const handleConnectError = (error) => {
+        if (error?.message === 'unauthorized') {
+          logout();
+        } else {
+          setConnectionStatus('reconnecting');
+        }
+      };
+      const handlePresence = ({ connected } = {}) => setConnectedPlayers(Array.isArray(connected) ? connected : []);
+
+      socket.on('connect', handleConnect);
+      socket.on('disconnect', handleDisconnect);
+      socket.on('connect_error', handleConnectError);
+      socket.on('presence_updated', handlePresence);
+      return () => {
+        socket.off('connect', handleConnect);
+        socket.off('disconnect', handleDisconnect);
+        socket.off('connect_error', handleConnectError);
+        socket.off('presence_updated', handlePresence);
+      };
+    }, [socket, logout]);
     const [gamePhase, setGamePhase] = useState('story');
     const [storyText, setStoryText] = useState('The adventure begins...');
     const [combatRewards, setCombatRewards] = useState(null);
     const [allPlayerAttributes, setAllPlayerAttributes] = useState({});
     const [chat, setChat] = useState(false);
+    // Latest story snapshot from the server (encounter number, side, last decision), used to restore after a reconnect.
+    const [serverStoryState, setServerStoryState] = useState(null);
 
     const [musicVolume, setMusicVolume] = useState(() => {
       const savedVolume = localStorage.getItem('musicVolume');
@@ -57,11 +102,11 @@ export const GameProvider = ({ children }) => {
       return savedMuted === 'true';
     });
 
-    React.useEffect(() => {
+    useEffect(() => {
       localStorage.setItem('musicVolume', musicVolume.toString());
     }, [musicVolume]);
 
-    React.useEffect(() => {
+    useEffect(() => {
       localStorage.setItem('isMuted', isMuted.toString());
     }, [isMuted]);
     const getAbilityScaler = (ability) => {
@@ -86,6 +131,9 @@ export const GameProvider = ({ children }) => {
         playerCharacters, setPlayerCharacters,
         readyPlayers, setReadyPlayers,
         socket,
+        connectionStatus,
+        connectedPlayers,
+        serverStoryState, setServerStoryState,
         gamePhase, setGamePhase,
         storyText, setStoryText,
         combatRewards, setCombatRewards,

@@ -151,16 +151,16 @@ function ChooseAbilities(){
                 <div className="abilities-panel">
                     {(() => {
                         const ultimateAbilities = Object.entries(ABILITIES)
-                            .filter(([key, ability]) => (ability.isUltimate && ability.role === playerRole));
+                            .filter(([, ability]) => (ability.isUltimate && ability.role === playerRole));
                         
                         const level5Abilities = Object.entries(ABILITIES)
-                            .filter(([key, ability]) => (ability.level === 5 && ability.role === playerRole));
+                            .filter(([, ability]) => (ability.level === 5 && ability.role === playerRole));
                         
                         const level3Abilities = Object.entries(ABILITIES)
-                            .filter(([key, ability]) => (ability.level === 3 && ability.role === playerRole));
+                            .filter(([, ability]) => (ability.level === 3 && ability.role === playerRole));
                         
                         const level1Abilities = Object.entries(ABILITIES)
-                            .filter(([key, ability]) => (ability.level === 1 && ability.role === playerRole));
+                            .filter(([, ability]) => (ability.level === 1 && ability.role === playerRole));
 
                         const currentUltimate = currentCharacter?.ultimate;
                         const currentAbilities = currentCharacter?.abilities;
@@ -182,7 +182,7 @@ function ChooseAbilities(){
                                         </button>
                                         {expandedCategory === 'ultimate' && (
                                             <div className="dropdown-menu">
-                                                {ultimateAbilities.map(([key, ability]) => (
+                                                {ultimateAbilities.map(([, ability]) => (
                                                     <button 
                                                         key={ability.name}
                                                         className="dropdown-item"
@@ -214,7 +214,7 @@ function ChooseAbilities(){
                                         </button>
                                         {expandedCategory === 'level5' && (
                                             <div className="dropdown-menu">
-                                                {level5Abilities.map(([key, ability]) => (
+                                                {level5Abilities.map(([, ability]) => (
                                                     <button 
                                                         key={ability.name}
                                                         className="dropdown-item"
@@ -246,7 +246,7 @@ function ChooseAbilities(){
                                         </button>
                                         {expandedCategory === 'level3' && (
                                             <div className="dropdown-menu">
-                                                {level3Abilities.map(([key, ability]) => (
+                                                {level3Abilities.map(([, ability]) => (
                                                     <button 
                                                         key={ability.name}
                                                         className="dropdown-item"
@@ -278,7 +278,7 @@ function ChooseAbilities(){
                                         </button>
                                         {expandedCategory === 'level1' && (
                                             <div className="dropdown-menu">
-                                                {level1Abilities.map(([key, ability]) => (
+                                                {level1Abilities.map(([, ability]) => (
                                                     <button 
                                                         key={ability.name}
                                                         className="dropdown-item"

@@ -523,7 +523,7 @@ export const ABILITIES = {
          * @param {Object} params.playerCharacters - All player characters
          * @returns {Object} Effect data
          */
-        execute: ({ caster, playerName, playerCharacters }) => {
+        execute: ({ caster, playerName }) => {
             const healAmount = 15;
             const currentHealth = caster.stats.health;
             const maxHealth = caster.stats.maxHealth;
@@ -578,10 +578,12 @@ export const ABILITIES = {
                 messages.push(`${enemy.name} was too strong, charge failed!`);
             }
 
-            damageResults.push({
-                target: enemy.id,
-                amount: damage
-            });
+            if (damage > 0) {
+                damageResults.push({
+                    target: enemy.id,
+                    amount: damage
+                });
+            }
 
             return {
                 success: true,
@@ -606,8 +608,7 @@ export const ABILITIES = {
                 effects: [{
                     type: 'damage_reflection',
                     target: playerName,
-                    duration: 1,
-                    tickOnCastTurn: true
+                    duration: 1
                 }],
                 message: `${caster.name} activates Counter! All incoming damage will be reflected for 1 turn!`
             };
@@ -683,7 +684,7 @@ export const ABILITIES = {
                     duration: 2,
                     stackable: false
                 }],
-                message: `${caster.name} curses ${enemy.name}! All incoming damage is amplified by 30% for 2 turns!`
+                message: `${caster.name} curses ${enemy.name}! All incoming damage is amplified by 35% for 2 turns!`
             };
         }
     },
@@ -964,7 +965,7 @@ export const ABILITIES = {
             return {
                 success: true,
                 effects: effects,
-                message: `${caster.name} uses EMP! ${enemyNames.join(', ')} cannot use abilities for 1 turn!`
+                message: `${caster.name} uses EMP! ${enemyNames.join(', ')} cannot use abilities for 2 turns!`
             };
         }
     },
@@ -1050,11 +1051,12 @@ export const ABILITIES = {
         role: "DPS",
         level: 3,
         cooldown: 2,
-        targetType: 'single-enemy', 
+        targetType: 'single-enemy',
+        type: 'damage',
         damageType: 'technical',
-        damageScaling: 'ta', 
-        abilityDamage: 10,
-        range: 3, 
+        damageScaling: 'ta',
+        abilityDamage: 5,
+        range: 3,
         
         /**
          * @param {Object} params
@@ -1068,7 +1070,8 @@ export const ABILITIES = {
                 return { success: false, message: 'Target not found' };
             }
 
-            // Technical Damage Formula: (ta/10) * abilityDamage - (resistance/10)
+            // Technical Damage Formula: (ta/10) * abilityDamage - (resistance/10).
+            // Lower damage than other level-3 spells because it also halves speed.
             const finalDamage = Math.max(1, Math.round(
                 (caster.stats.ta / 10) * 5 - (enemy.stats.resistance / 10)
             ));
@@ -1120,7 +1123,8 @@ export const ABILITIES = {
                     target: playerName,
                     stat: 'speed',
                     value: speedBonus,
-                    duration: 1
+                    duration: 1,
+                    tickOnCastTurn: true
                 }],
                 message: `${caster.name} uses Flash Step! Speed doubled for 1 turn!`
             };
@@ -1703,7 +1707,7 @@ export const ABILITIES = {
             return {
                 success: true,
                 effects: effects,
-                message: `${caster.name} casts Murus Fictilis! ${allyNames.join(', ')} gain +25 Health and +20 Resistance for 2 turns!`
+                message: `${caster.name} casts Murus Fictilis! ${allyNames.join(', ')} gain +35 Bonus Health and +30 Resistance for 2 turns!`
             };
         }
     },
@@ -2310,7 +2314,7 @@ export const ABILITIES = {
             const affectedNames = [];
 
             enemies.forEach(enemy => {
-                if (enemy.isDefeated) return;
+                if (enemy.isDeadBody || (enemy.stats?.health || 0) <= 0) return;
 
                 affectedNames.push(enemy.name);
                 effects.push({
@@ -2424,6 +2428,7 @@ export const ABILITIES = {
          */
         execute: ({ caster, playerCharacters }) => {
             const effects = [];
+            const healing = [];
             const supportNames = [];
             
             Object.keys(playerCharacters).forEach(playerName => {
@@ -2437,11 +2442,9 @@ export const ABILITIES = {
                         value: 10,
                         duration: 1
                     });
-                    effects.push({
-                        type: 'heal',
+                    healing.push({
                         target: playerName,
-                        amount: Math.round(character.stats.health * 0.25),
-                        duration: 1
+                        amount: Math.round((character.stats.maxHealth || character.stats.health || 0) * 0.25)
                     });
                 }
             });
@@ -2456,6 +2459,7 @@ export const ABILITIES = {
             return {
                 success: true,
                 effects: effects,
+                healing,
                 message: `${caster.name} uses Zen! ${supportNames.join(', ')} heal 25% and gain +10 Technical Ability for 1 turn!`
             };
         }

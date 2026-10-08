@@ -1,323 +1,160 @@
-import React from 'react';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useGameContext } from './Context.jsx';
 import { enrichCharacterAbilities } from '../Utils/characterUtils';
+import { mergeCharacterPayload } from '../Utils/characterProgression';
 
-const MAX_CHARACTER_LEVEL = 5;
+// Global socket listeners for screen changes and shared state.
+// Handlers are registered once and removed by reference so they never strip listeners that other
+// components registered for the same events. Live values are read through refs.
+function Events() {
+  const {
+    socket, setPlayers, setDisplayGame, setAdmin, setScreen, setPlayerCharacters,
+    setReadyPlayers, setGamePhase, room, setEnemies, setTurnOrder, setCurrentTurn,
+    setIsMyTurn, playerName, setAllPlayerAttributes, setServerStoryState
+  } = useGameContext();
 
-const getAllowedAbilitySlots = (level) => {
-  if (level >= 5) return 3;
-  if (level >= 3) return 2;
-  return 1;
-};
+  const roomRef = useRef(room);
+  const playerNameRef = useRef(playerName);
+  useEffect(() => { roomRef.current = room; }, [room]);
+  useEffect(() => { playerNameRef.current = playerName; }, [playerName]);
 
-function Events(){
-
-    const { socket, setPlayers, setDisplayGame, 
-      setAdmin, setScreen, setPlayerCharacters, 
-      setReadyPlayers, setGamePhase, setStoryText, characterPositions,
-      setCombatRewards, room, setEnemies, 
-      setTurnOrder, setCurrentTurn, 
-      setIsMyTurn, playerName, playerCharacters, debugLogLevel, setAllPlayerAttributes } = useGameContext();
-
-    const isQuiet = debugLogLevel === 'quiet';
-    const isVerbose = debugLogLevel === 'verbose';
-
-    const logImportant = (...args) => {
-      if (isQuiet) return;
-      console.log(...args);
-    };
-
-    const logVerbose = (...args) => {
-      if (!isVerbose) return;
-      console.log(...args);
-    };
-
-    const resolveAbilities = (incomingCharacter, previousCharacter) => {
-      const incomingAbilities = incomingCharacter?.abilities;
-      const previousAbilities = previousCharacter?.abilities;
-      const isSameCharacter = incomingCharacter?.id && previousCharacter?.id && incomingCharacter.id === previousCharacter.id;
-
-      if (!Array.isArray(incomingAbilities)) {
-        return previousAbilities;
-      }
-
-      const hasPreviousAbilities = Array.isArray(previousAbilities) && previousAbilities.length > 0;
-      const incomingIsEmpty = incomingAbilities.length === 0;
-
-      if (incomingIsEmpty && hasPreviousAbilities && isSameCharacter) {
-        console.warn('[ABILITY DEBUG] Ignoring empty incoming abilities, preserving previous abilities.');
-        return previousAbilities;
-      }
-
-      return incomingAbilities;
-    };
-
-    const resolveUltimate = (incomingCharacter, previousCharacter) => {
-      const incomingUltimate = incomingCharacter?.ultimate;
-      const hasValidIncomingUltimate =
-        (typeof incomingUltimate === 'string' && incomingUltimate.trim().length > 0) ||
-        (incomingUltimate && typeof incomingUltimate === 'object' && !!incomingUltimate.id);
-
-      const isSameCharacter = incomingCharacter?.id && previousCharacter?.id && incomingCharacter.id === previousCharacter.id;
-
-      return hasValidIncomingUltimate ? incomingUltimate : (isSameCharacter ? previousCharacter?.ultimate : null);
-    };
-
-    const sanitizeCharacterProgression = (character) => {
-      if (!character || typeof character !== 'object') return character;
-
-      const rawLevel = Number(character.level);
-      const level = Number.isFinite(rawLevel)
-        ? Math.max(1, Math.min(MAX_CHARACTER_LEVEL, rawLevel))
-        : 1;
-      const allowedAbilitySlots = getAllowedAbilitySlots(level);
-      const abilities = Array.isArray(character.abilities)
-        ? character.abilities.slice(0, allowedAbilitySlots).filter(Boolean)
-        : [];
-      const ultimate = level >= 3 ? (character.ultimate || null) : null;
-
-      return {
-        ...character,
-        level,
-        abilities,
-        ultimate
-      };
-    };
-
-    const mergeCharacterPayload = (incomingCharacter, previousCharacter = {}) => {
-      return sanitizeCharacterProgression({
-        ...previousCharacter,
-        ...incomingCharacter,
-        abilities: resolveAbilities(incomingCharacter, previousCharacter),
-        ultimate: resolveUltimate(incomingCharacter, previousCharacter)
+  useEffect(() => {
+    const mergeIntoCharacters = (incoming = {}) => {
+      setPlayerCharacters(previous => {
+        const merged = Object.fromEntries(
+          Object.entries(incoming).map(([name, character]) => [
+            name,
+            enrichCharacterAbilities(mergeCharacterPayload(character, previous[name] || {}))
+          ])
+        );
+        return { ...previous, ...merged };
       });
     };
 
-    useEffect(() => {
-    
-        socket.on("updatePlayerList", (playerList) => {
-          setPlayers([...playerList]);
-        });
-    
-        socket.on("gameStarted", () => {
-          setDisplayGame(true);
-          setScreen("characterSelect");
-        });
-        
-        socket.on("setAdmin", (admin) => {
-          let isAdmin = admin;
-          const storedIsAdmin = localStorage.getItem('isAdmin') === 'true';
-          const storedRoom = localStorage.getItem('room');
-          
-          if (!admin && storedIsAdmin && storedRoom === room) {
-            isAdmin = true;
-          }
+    const isMe = (turn) => turn?.type === 'ally' && turn.id === playerNameRef.current;
 
-          setAdmin(isAdmin);
-          localStorage.setItem('isAdmin', isAdmin.toString());
-        });
+    const handlers = {
+      updatePlayerList: (playerList) => setPlayers([...(playerList || [])]),
 
-        socket.on("update_character_selections", (selections) => {
-          setPlayerCharacters(prevCharacters => {
-            const normalizedSelections = Object.fromEntries(
-              Object.entries(selections).map(([name, character]) => {
-                const previousCharacter = prevCharacters[name] || {};
-                return [name, enrichCharacterAbilities(mergeCharacterPayload(character, previousCharacter))];
-              })
-            );
+      gameStarted: () => {
+        setDisplayGame(true);
+        setScreen('characterSelect');
+      },
 
-            return normalizedSelections;
-          });
-        });
+      setAdmin: (isAdmin) => setAdmin(!!isAdmin),
 
-        socket.on("update_ready_status", (readyList) => {
-          setReadyPlayers(readyList);
-        });
+      admin_changed: ({ admin } = {}) => setAdmin(admin === playerNameRef.current),
 
-        socket.on("character_customization", () => {
-          setScreen("characterBuilder");
-        });
+      update_character_selections: (selections = {}) => {
+        // A full snapshot: players missing from it no longer have a character.
+        setPlayerCharacters(previous => Object.fromEntries(
+          Object.entries(selections).map(([name, character]) => [
+            name,
+            enrichCharacterAbilities(mergeCharacterPayload(character, previous[name] || {}))
+          ])
+        ));
+      },
 
-        socket.on("attribute_part1_complete", () => {
-          setScreen("characterBuilderPart2");
-        });
+      update_ready_status: (readyList) => setReadyPlayers(Array.isArray(readyList) ? readyList : []),
 
-        socket.on("start_main_game", () => {
-          setScreen("chooseAbilities");
-        });
+      attributes_updated: (attributes) => {
+        if (attributes && typeof attributes === 'object') setAllPlayerAttributes(attributes);
+      },
 
-        socket.on("start_game", () => {
-          setScreen("main");
-        });
+      character_customization: () => setScreen('characterBuilder'),
+      attribute_part1_complete: () => setScreen('characterBuilderPart2'),
+      start_main_game: () => setScreen('chooseAbilities'),
+      start_game: () => setScreen('main'),
 
-        socket.on("restore_screen", ({ screen }) => {
-          if (!screen) return;
-          localStorage.setItem('screen', screen);
-          setScreen(screen);
-        });
+      restore_screen: ({ screen } = {}) => {
+        if (!screen) return;
+        try { localStorage.setItem('screen', screen); } catch { /* ignore */ }
+        setScreen(screen);
+      },
 
-        // Game phase transitions
-        socket.on("phase_changed_combat", ({ enemies, enemyPositions, playerPositions, turnOrder, currentTurn, characterSelections }) => {
-          logImportant('[COMBAT] phase_changed_combat', {
-            room,
-            turnOrderLength: (turnOrder || []).length,
-            currentTurn,
-            enemyCount: (enemies || []).length,
-            playerPositionCount: Object.keys(playerPositions || {}).length,
-            enemyPositionCount: Object.keys(enemyPositions || {}).length
-          });
-          logVerbose('[COMBAT][VERBOSE] turnOrder:', turnOrder);
-          logVerbose('[COMBAT][VERBOSE] enemies:', enemies);
-          logVerbose('[COMBAT][VERBOSE] enemyPositions:', enemyPositions);
-          logVerbose('[COMBAT][VERBOSE] playerPositions:', playerPositions);
+      phase_changed_combat: ({ enemies, enemyPositions, playerPositions, turnOrder, currentTurn, characterSelections } = {}) => {
+        const currentRoom = roomRef.current;
+        setGamePhase('combat');
+        if (characterSelections) mergeIntoCharacters(characterSelections);
+        setEnemies(enemies || []);
 
-          setGamePhase('combat');
-          
-          if (characterSelections) {
-            setPlayerCharacters(prevCharacters => {
-              const mergedSelections = Object.fromEntries(
-                Object.entries(characterSelections).map(([name, character]) => {
-                  const previousCharacter = prevCharacters[name] || {};
-                  return [name, enrichCharacterAbilities(mergeCharacterPayload(character, previousCharacter))];
-                })
-              );
-
-              return {
-                ...prevCharacters,
-                ...mergedSelections
-              };
-            });
-          }
-          
-          setEnemies(enemies);
-
-          const existingOverworldPositions = sessionStorage.getItem(`overworldPlayerPositions_${room}`);
-          const currentOverworldPositions = sessionStorage.getItem(`playerPositions_${room}`);
-          if (!existingOverworldPositions && currentOverworldPositions) {
-            try {
-              const parsedCurrentPositions = JSON.parse(currentOverworldPositions);
-              if (parsedCurrentPositions && typeof parsedCurrentPositions === 'object' && Object.keys(parsedCurrentPositions).length > 0) {
-                sessionStorage.setItem(`overworldPlayerPositions_${room}`, JSON.stringify(parsedCurrentPositions));
-              }
-            } catch (error) {
-              console.error('[POSITION SNAPSHOT] Failed to snapshot overworld positions before combat:', error);
+        const existingOverworld = sessionStorage.getItem(`overworldPlayerPositions_${currentRoom}`);
+        const currentPositions = sessionStorage.getItem(`playerPositions_${currentRoom}`);
+        if (!existingOverworld && currentPositions) {
+          try {
+            const parsed = JSON.parse(currentPositions);
+            if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+              sessionStorage.setItem(`overworldPlayerPositions_${currentRoom}`, JSON.stringify(parsed));
             }
+          } catch {
+            // ignore corrupt storage
           }
-          
-          if (enemyPositions) {
-            sessionStorage.setItem(`enemyPositions_${room}`, JSON.stringify(enemyPositions));
-          }
+        }
 
-          if (playerPositions) {
-            sessionStorage.setItem(`playerPositions_${room}`, JSON.stringify(playerPositions));
-          }
-          
-          setTurnOrder(turnOrder);
+        if (enemyPositions) sessionStorage.setItem(`enemyPositions_${currentRoom}`, JSON.stringify(enemyPositions));
+        if (playerPositions) sessionStorage.setItem(`playerPositions_${currentRoom}`, JSON.stringify(playerPositions));
+
+        setTurnOrder(turnOrder || []);
+        setCurrentTurn(currentTurn || null);
+        setIsMyTurn(isMe(currentTurn));
+      },
+
+      turn_changed: ({ currentTurn } = {}) => {
+        setCurrentTurn(currentTurn || null);
+        setIsMyTurn(isMe(currentTurn));
+      },
+
+      turn_order_updated: ({ turnOrder, currentTurnIndex } = {}) => {
+        setTurnOrder(turnOrder || []);
+        if (Array.isArray(turnOrder) && turnOrder.length > 0) {
+          const safeIndex = Math.max(0, Math.min(currentTurnIndex || 0, turnOrder.length - 1));
+          const currentTurn = turnOrder[safeIndex];
           setCurrentTurn(currentTurn);
-          setIsMyTurn(currentTurn.id === playerName && currentTurn.type === 'ally');
-        });
+          setIsMyTurn(isMe(currentTurn));
+        }
+      },
 
-        socket.on("turn_changed", ({ currentTurn }) => {
-          const nextIsMyTurn = currentTurn.id === playerName && currentTurn.type === 'ally';
-          console.log(`[TURN_CHANGED] Received - ${currentTurn.id} (${currentTurn.type}), isMyTurn: ${nextIsMyTurn}`);
-          logImportant('[TURN] changed', {
-            id: currentTurn.id,
-            type: currentTurn.type,
-            isMyTurn: nextIsMyTurn
-          });
-          logVerbose('[TURN][VERBOSE] playerName:', playerName);
-          setCurrentTurn(currentTurn);
-          setIsMyTurn(nextIsMyTurn);
-        });
+      player_health_updated: ({ playerName: damagedPlayer, newHealth } = {}) => {
+        setPlayerCharacters(previous => (previous[damagedPlayer]
+          ? { ...previous, [damagedPlayer]: { ...previous[damagedPlayer], stats: { ...previous[damagedPlayer].stats, health: newHealth } } }
+          : previous));
+      },
 
-        socket.on("turn_order_updated", ({ turnOrder, currentTurnIndex }) => {
-          setTurnOrder(turnOrder || []);
+      story_state: (storyState) => setServerStoryState(storyState || null),
 
-          if (Array.isArray(turnOrder) && turnOrder.length > 0) {
-            const safeIndex = Math.max(0, Math.min(currentTurnIndex || 0, turnOrder.length - 1));
-            const currentTurn = turnOrder[safeIndex];
-            if (currentTurn) {
-              setCurrentTurn(currentTurn);
-              setIsMyTurn(currentTurn.id === playerName && currentTurn.type === 'ally');
-            }
-          }
-        });
+      level_up: () => setScreen('levelup'),
 
-        socket.on("player_health_updated", ({ playerName: damagedPlayer, newHealth }) => {
-          setPlayerCharacters(prev => ({
-            ...prev,
-            [damagedPlayer]: {
-              ...prev[damagedPlayer],
-              stats: { ...prev[damagedPlayer]?.stats, health: newHealth }
-            }
-          }));
-        });
-        
-        socket.on("level_up", () => {
-          console.log('[EVENTS] Received level_up event, setting screen to levelup');
-          setScreen("levelup");
-        });
+      level_up_complete: (payload = {}) => {
+        if (payload.players) mergeIntoCharacters(payload.players);
+        const choosers = Array.isArray(payload.chooseAbilities) ? payload.chooseAbilities : [];
+        setScreen(choosers.includes(playerNameRef.current) ? 'chooseAbilities' : 'main');
+      },
 
-        socket.on("level_up_complete", (payload = {}) => {
-          const players = payload.players || playerCharacters || {};
+      game_reset: () => {
+        setPlayerCharacters({});
+        setReadyPlayers([]);
+        setEnemies([]);
+        setTurnOrder([]);
+        setCurrentTurn(null);
+        setIsMyTurn(false);
+        setAllPlayerAttributes({});
+        setGamePhase('story');
+        setServerStoryState(null);
+        const currentRoom = roomRef.current;
+        ['storyProgress_', 'playerPositions_', 'enemyPositions_', 'overworldPlayerPositions_', 'pendingEncounterEndAfterLevelUp_', 'allPlayerAttributes_']
+          .forEach(prefix => sessionStorage.removeItem(`${prefix}${currentRoom}`));
+        setScreen('waiting');
+      }
+    };
 
-          setPlayerCharacters(prevCharacters => {
-            const mergedPlayers = Object.fromEntries(
-              Object.entries(players).map(([name, character]) => {
-                const previousCharacter = prevCharacters[name] || {};
-                return [name, enrichCharacterAbilities(mergeCharacterPayload(character, previousCharacter))];
-              })
-            );
+    for (const [event, handler] of Object.entries(handlers)) socket.on(event, handler);
+    return () => {
+      for (const [event, handler] of Object.entries(handlers)) socket.off(event, handler);
+    };
+  }, [socket, setPlayers, setDisplayGame, setAdmin, setScreen, setPlayerCharacters, setReadyPlayers,
+    setGamePhase, setEnemies, setTurnOrder, setCurrentTurn, setIsMyTurn, setAllPlayerAttributes, setServerStoryState]);
 
-            return {
-              ...prevCharacters,
-              ...mergedPlayers
-            };
-          });
-
-          const currentPlayer = players[playerName];
-          const currentLevel = Number(currentPlayer?.level || 0);
-
-          if (currentLevel === 3 || currentLevel === 5) {
-            setScreen("chooseAbilities");
-          } else {
-            setScreen("main");
-          }
-        });
-
-        socket.on("game_reset", () => {
-          setPlayerCharacters({});
-          setReadyPlayers([]);
-          setEnemies([]);
-          setTurnOrder([]);
-          setAllPlayerAttributes({});
-          setScreen("waiting");
-        });
-
-        return () => {
-          socket.off("updatePlayerList");
-          socket.off("gameStarted");
-          socket.off("setAdmin");
-          socket.off("update_character_selections");
-          socket.off("update_ready_status");
-          socket.off("start_main_game");
-          socket.off("start_game");
-          socket.off("restore_screen");
-          socket.off("phase_changed_combat");
-          socket.off("turn_changed");
-          socket.off("turn_order_updated");
-          socket.off("player_health_updated");
-          socket.off("level_up");
-          socket.off("level_up_complete");
-          socket.off("game_reset");
-        };
-    }, [room, playerName, playerCharacters]);
-    
-    return (
-        <>
-        </>
-    );
-};
+  return null;
+}
 
 export default Events;

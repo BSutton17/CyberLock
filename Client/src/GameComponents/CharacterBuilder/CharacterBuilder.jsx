@@ -16,7 +16,7 @@ const NON_COMBAT_ATTRIBUTES = [
 ];
 
 function CharacterBuilder() {
-    const { players, playerName, room, socket, playerCharacters, getCharacterImage, allPlayerAttributes, setAllPlayerAttributes } = useGameContext();
+    const { players, playerName, room, socket, playerCharacters, getCharacterImage, allPlayerAttributes } = useGameContext();
     const [playerAttributes, setPlayerAttributes] = useState(Array(10).fill(null));
     const [isReady, setIsReady] = useState(false);
     const [readyPlayers, setReadyPlayers] = useState([]);
@@ -24,18 +24,12 @@ function CharacterBuilder() {
     const character = playerCharacters[playerName]; 
     const [count, setCount] = useState(0);
 
+    // Attribute updates are handled globally in Events.jsx; this screen only tracks who is ready.
     useEffect(() => {
-        socket.on('attributes_updated', (attrs) => {
-            setAllPlayerAttributes(attrs);
-        });
-    
-        socket.on('attribute_ready_status', (ready) => {
-            setReadyPlayers(ready);
-        });
-    
+        const handleReadyStatus = (ready) => setReadyPlayers(Array.isArray(ready) ? ready : []);
+        socket.on('attribute_ready_status', handleReadyStatus);
         return () => {
-            socket.off('attributes_updated');
-            socket.off('attribute_ready_status');
+            socket.off('attribute_ready_status', handleReadyStatus);
         };
     }, [socket]);
 
@@ -115,8 +109,8 @@ function CharacterBuilder() {
             const primaryAttributes = Object.values(allPlayerAttributes).map(attrs => Array.isArray(attrs) ? attrs[0] : null);
             return primaryAttributes.includes(attr);
         }
-        for (const [player, theirAttributes] of Object.entries(allPlayerAttributes)) {
-            if (theirAttributes.includes(attr)) {
+        for (const theirAttributes of Object.values(allPlayerAttributes)) {
+            if (Array.isArray(theirAttributes) && theirAttributes.includes(attr)) {
                 return true;
             }
         }

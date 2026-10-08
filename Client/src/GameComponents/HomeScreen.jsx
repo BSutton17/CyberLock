@@ -1,6 +1,6 @@
 import "../App.css";
 import "./HomeScreen.css";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../Components/AuthContext";
 import WaitingRoom from "./WaitingRoom";
@@ -12,7 +12,6 @@ import CharacterBuilder from "./CharacterBuilder/CharacterBuilder";
 import CharacterBuilderPart2 from "./CharacterBuilder/CharacterBuilderPart2";
 import LevelUp from "./LevelUp/LevelUp.jsx"
 import ChooseAbilities from "./ChooseAbilities/ChooseAbilities.jsx"
-import ChatBot from "./ChatBot/ChatBot.jsx";
 import SettingsMenu from "../Components/SettingsMenu";
 import { FaRotate } from "react-icons/fa6";
 
@@ -28,22 +27,33 @@ const getIsMobilePortrait = () => {
   return isCoarsePointer && isPortrait && isMobileWidth;
 };
 
+const SAVED_KEYS = ['name', 'room', 'screen', 'isAdmin'];
+
+const readSaved = (key) => {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+
+const clearSavedGame = () => {
+  try {
+    SAVED_KEYS.forEach(key => localStorage.removeItem(key));
+  } catch {
+    // ignore
+  }
+};
+
 function HomeScreen() {
   const [joinError, setJoinError] = useState('');
   const [isMobilePortrait, setIsMobilePortrait] = useState(getIsMobilePortrait);
-  const [isJoining, setIsJoining] = useState(() => {
-    const savedName = localStorage.getItem('name');
-    const savedRoom = localStorage.getItem('room');
-    return !!(savedName && savedRoom);
-  });
-  const { socket, room, setRoom, screen, setPlayerName, setAdmin, setScreen, musicVolume, isMuted } = useGameContext();
+  const [isJoining, setIsJoining] = useState(() => !!(readSaved('name') && readSaved('room')));
+  const [isBusy, setIsBusy] = useState(false);
+  const { socket, room, setRoom, screen, setPlayerName, setAdmin, setScreen, musicVolume, isMuted, connectionStatus } = useGameContext();
   const navigate = useNavigate();
   const { user, logout: logoutAuth } = useAuth();
-  const [name] = useState(() => {
-    const savedName = localStorage.getItem('name');
-    const savedRoom = localStorage.getItem('room');
-    return (savedName && savedRoom) ? savedName : user?.username;
-  });
+  const [displayName, setDisplayName] = useState(() => readSaved('displayName') || user?.name || '');
 
   const titleMusicRef = useRef(null);
 
@@ -54,20 +64,20 @@ function HomeScreen() {
     }
 
     const screensWithTitleMusic = [
-      "waiting", 
-      "characterSelect", 
-      "characterBuilder", 
+      "waiting",
+      "characterSelect",
+      "characterBuilder",
       "characterBuilderPart2",
       "chooseAbilities"
     ];
-    
+
     const shouldPlayTitleMusic = !isJoining || screensWithTitleMusic.includes(screen);
 
     if (shouldPlayTitleMusic) {
       const playPromise = titleMusicRef.current.play();
       if (playPromise !== undefined) {
-          playPromise.catch(error => {
-              console.log("Audio autoplay prevented or failed:", error);
+          playPromise.catch(() => {
+              // Browsers block autoplay until the first click; music starts after that.
           });
       }
     } else {
@@ -107,11 +117,59 @@ function HomeScreen() {
     };
   }, []);
 
+  // Joins a room and applies the server's answer (it may adjust our name or refuse us).
+  const joinRoomCode = useCallback((roomCode, requestedName) => new Promise((resolve) => {
+    socket.emit('join_room', roomCode, requestedName, (result = {}) => {
+      if (result.ok) {
+        try {
+          localStorage.setItem('name', result.playerName);
+          localStorage.setItem('room', result.room);
+        } catch {
+          // ignore
+        }
+        setPlayerName(result.playerName);
+        setRoom(result.room);
+        setAdmin(!!result.isAdmin);
+        setJoinError('');
+        setIsJoining(true);
+      }
+      resolve(result);
+    });
+  }), [socket, setPlayerName, setRoom, setAdmin]);
+
+  // Rejoin the saved game every time the socket (re)connects: after a refresh, a Wi-Fi blip,
+  // or the server waking up.
+  useEffect(() => {
+    const rejoinSavedGame = async () => {
+      const savedName = readSaved('name');
+      const savedRoom = readSaved('room');
+      if (!savedName || !savedRoom) return;
+
+      const savedScreen = readSaved('screen');
+      if (savedScreen) setScreen(savedScreen);
+
+      const result = await joinRoomCode(savedRoom, savedName);
+      if (!result.ok) {
+        clearSavedGame();
+        setIsJoining(false);
+        setScreen('waiting');
+        setRoom('');
+        setJoinError(result.message || 'Could not rejoin your last game.');
+      }
+    };
+
+    if (socket.connected) rejoinSavedGame();
+    socket.on('connect', rejoinSavedGame);
+    return () => {
+      socket.off('connect', rejoinSavedGame);
+    };
+  }, [socket, joinRoomCode, setScreen, setRoom]);
+
   useEffect(() => {
     const handleRoomFull = () => {
       setIsJoining(false);
       setJoinError("This room is full.");
-      localStorage.removeItem('room');
+      try { localStorage.removeItem('room'); } catch { /* ignore */ }
     };
 
     socket.on('room_full', handleRoomFull);
@@ -122,88 +180,64 @@ function HomeScreen() {
   }, [socket]);
 
   useEffect(() => {
-    const savedName = localStorage.getItem('name');
-    const savedRoom = localStorage.getItem('room');
-    const savedIsAdmin = localStorage.getItem('isAdmin') === 'true';
-    const savedScreen = localStorage.getItem('screen');
+    if (!isJoining || !room || !screen) return;
 
-    if (savedName && savedRoom) {
-      if (setPlayerName) setPlayerName(savedName);
-      setRoom(savedRoom);
-      if (setAdmin) setAdmin(savedIsAdmin);
-      if (savedScreen) setScreen(savedScreen);
+    try { localStorage.setItem('screen', screen); } catch { /* ignore */ }
 
-      socket.emit('join_room', savedRoom, savedName);
+    socket.emit('player_screen_updated', { room, screen });
+  }, [socket, isJoining, room, screen]);
+
+  const resolvedName = () => {
+    const trimmed = displayName.trim();
+    if (trimmed) {
+      try { localStorage.setItem('displayName', trimmed); } catch { /* ignore */ }
     }
-  }, [setAdmin, setPlayerName, setRoom, socket, setScreen]);
+    return trimmed || user?.name || 'Operative';
+  };
 
-  useEffect(() => {
-    if (!isJoining || !room || !name || !screen) return;
-
-    localStorage.setItem('screen', screen);
-
-    socket.emit('player_screen_updated', {
-      room,
-      playerName: name,
-      screen
-    });
-  }, [socket, isJoining, room, name, screen]);
-
-
-
-  const joinRoom = () => {
-    if (room !== '' && name !== '') {
-      setJoinError('');
-      localStorage.setItem('name', name);
-      localStorage.setItem('room', room);
-      localStorage.setItem('screen', 'waiting');
-      if (setPlayerName) setPlayerName(name);
-
-      socket.emit('join_room', room, name);
-      setIsJoining(true);
-    } else {
-      alert('Please enter a valid room and name.');
+  const joinRoom = async () => {
+    const code = String(room || '').trim();
+    if (!/^\d{4,6}$/.test(code)) {
+      setJoinError('Enter the 4-digit room code your host shared.');
+      return;
     }
+    setIsBusy(true);
+    try { localStorage.setItem('screen', 'waiting'); } catch { /* ignore */ }
+    setScreen('waiting');
+    const result = await joinRoomCode(code, resolvedName());
+    setIsBusy(false);
+    if (!result.ok) setJoinError(result.message || 'Could not join that room.');
   };
 
   const startRoom = () => {
     setJoinError('');
-
-    // Generate random 4-digit room ID
-    const newRoom = Math.floor(Math.random() * (9999 - 1000 + 1) + 1000);
-    const strRoom = String(newRoom);
-
-    // Simulate typing room ID character by character
-    setRoom('');
-    setTimeout(() => setRoom(strRoom.substring(0, 3)), 30);
-    setTimeout(() => setRoom(strRoom), 60);
-
-    setTimeout(() => {
-      localStorage.setItem('name', name);
-      localStorage.setItem('room', strRoom);
-      localStorage.setItem('screen', 'waiting');
-      if (setPlayerName) setPlayerName(name);
-
-      socket.emit('join_room', strRoom, name);
-      setIsJoining(true);
-    }, 20);
+    setIsBusy(true);
+    socket.emit('create_room', {}, async ({ room: newRoom } = {}) => {
+      if (!newRoom) {
+        setIsBusy(false);
+        setJoinError('Could not create a room. Try again.');
+        return;
+      }
+      try { localStorage.setItem('screen', 'waiting'); } catch { /* ignore */ }
+      setScreen('waiting');
+      const result = await joinRoomCode(newRoom, resolvedName());
+      setIsBusy(false);
+      if (!result.ok) setJoinError(result.message || 'Could not join the new room.');
+    });
   };
 
-  // Get rid of the saved data
   const leaveGame = () => {
-    if (window.confirm("Are you sure you want to leave the game? This will disconnect you from the current room.")) {
-      localStorage.removeItem("name");
-      localStorage.removeItem("room");
-      localStorage.removeItem("isAdmin");
-      localStorage.removeItem("screen");
+    if (window.confirm("Are you sure you want to leave the game? This will remove you from the current room.")) {
+      socket.emit('leave_room');
+      clearSavedGame();
       window.location.reload();
-      socket.emit("disconnect");
     }
   };
 
-  // Logout from authentication
-  const handleLogout = async () => {
-    await logoutAuth();
+  const handleLogout = () => {
+    if (isJoining) socket.emit('leave_room');
+    clearSavedGame();
+    logoutAuth();
     navigate('/login');
   };
 
@@ -211,6 +245,9 @@ function HomeScreen() {
     <div className="home-screen-container">
       <Events />
       {screen !== 'main' && <SettingsMenu />}
+      {connectionStatus === 'reconnecting' && (
+        <div className="connection-banner" role="status">Connection lost. Reconnecting...</div>
+      )}
       {isMobilePortrait && (
         <div className="rotate-device-overlay">
           <div className="rotate-device-card">
@@ -230,21 +267,33 @@ function HomeScreen() {
           <div className="name_input">
             <div className="user-header">
               <div className="user-info">
-                <span className="welcome-text">Welcome, <strong>{user?.username}</strong></span>
+                <span className="welcome-text">Signed in as <strong>{user?.name}</strong></span>
               </div>
               <button className="logout-btn" onClick={handleLogout}>
-                Logout
+                Sign out
               </button>
             </div>
             <input
-              placeholder="Room Id..."
-              type="number"
-              value={room}
-              onChange={(event) => setRoom(event.target.value)}
+              placeholder="Display name"
+              type="text"
+              maxLength={24}
+              value={displayName}
+              onChange={(event) => setDisplayName(event.target.value)}
+              aria-label="Display name"
             />
-            {joinError && <div className="error-message">{joinError}</div>}
-            <button onClick={joinRoom}>Join Room</button>
-            <button onClick={startRoom}>Start Room</button>
+            <input
+              placeholder="Room code"
+              inputMode="numeric"
+              maxLength={6}
+              value={room}
+              onChange={(event) => setRoom(event.target.value.replace(/\D/g, ''))}
+              onKeyDown={(event) => event.key === 'Enter' && joinRoom()}
+              aria-label="Room code"
+            />
+            {joinError && <div className="error-message" role="alert">{joinError}</div>}
+            <button onClick={joinRoom} disabled={isBusy || connectionStatus !== 'connected'}>Join Room</button>
+            <button onClick={startRoom} disabled={isBusy || connectionStatus !== 'connected'}>Start Room</button>
+            {connectionStatus !== 'connected' && <div className="connection-hint">Connecting to the server...</div>}
           </div>
         </div>
       ) : (

@@ -1,177 +1,115 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import axios from 'axios';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { apiFetch, waitForServer } from '../api';
 
-const AuthContext = createContext();
+const AuthContext = createContext(null);
 
-const API_URL = import.meta.env.VITE_API_URL || 
-  `http://${window.location.hostname}:5000`;
+const TOKEN_KEY = 'cyberlock_token';
+const USER_KEY = 'cyberlock_user';
 
-// Auto-login as guest when on mobile/LAN in dev mode (hostname is not localhost)
-const DEV_MOBILE_BYPASS = import.meta.env.DEV && window.location.hostname !== 'localhost';
-const DEV_GUEST_USER = { id: 'guest', username: 'MobileGuest' };
+const readStorage = (key) => {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+
+const writeStorage = (key, value) => {
+  try {
+    if (value === null || value === undefined) localStorage.removeItem(key);
+    else localStorage.setItem(key, value);
+  } catch {
+    // Storage can be unavailable (private mode); the session just won't persist.
+  }
+};
+
+export const getStoredToken = () => readStorage(TOKEN_KEY);
+
+const readStoredUser = () => {
+  try {
+    return JSON.parse(readStorage(USER_KEY) || 'null');
+  } catch {
+    return null;
+  }
+};
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(DEV_MOBILE_BYPASS ? DEV_GUEST_USER : null);
-  const [isAuthenticated, setIsAuthenticated] = useState(DEV_MOBILE_BYPASS);
-  const [loading, setLoading] = useState(!DEV_MOBILE_BYPASS);
-  const [accessToken, setAccessToken] = useState(null);
-  const [refreshToken, setRefreshToken] = useState(null);
-  const [securityQuestionSet, setSecurityQuestionSet] = useState(true);
+  const [token, setToken] = useState(() => getStoredToken());
+  const [user, setUser] = useState(() => readStoredUser());
+  const [loading, setLoading] = useState(true);
+  // checking -> online | waking (Heroku dyno starting) -> online | offline
+  const [serverStatus, setServerStatus] = useState('checking');
+  const [authConfig, setAuthConfig] = useState({ googleClientId: null, guestLoginEnabled: false });
 
-  // Check if user is already logged in on mount
-  useEffect(() => {
-    if (DEV_MOBILE_BYPASS) return; // skip — already auto-authenticated
-
-    const checkAuth = async () => {
-      const storedAccessToken = localStorage.getItem('accessToken');
-      const storedRefreshToken = localStorage.getItem('refreshToken');
-      const storedUser = localStorage.getItem('user');
-
-      if (storedAccessToken && storedUser) {
-        setAccessToken(storedAccessToken);
-        setRefreshToken(storedRefreshToken);
-        setUser(JSON.parse(storedUser));
-        setIsAuthenticated(true);
-      }
-      setLoading(false);
-    };
-
-    checkAuth();
+  const saveSession = useCallback((nextToken, nextUser) => {
+    writeStorage(TOKEN_KEY, nextToken);
+    writeStorage(USER_KEY, nextUser ? JSON.stringify(nextUser) : null);
+    setToken(nextToken);
+    setUser(nextUser);
   }, []);
 
-  // Setup axios interceptor to add token to requests
+  const logout = useCallback(() => {
+    saveSession(null, null);
+  }, [saveSession]);
+
   useEffect(() => {
-    if (accessToken) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
-    }
-  }, [accessToken]);
+    const controller = new AbortController();
 
-  const register = async (username, email, password) => {
-    try {
-      const response = await axios.post(`${API_URL}/api/auth/register`, {
-        username,
-        email,
-        password,
+    (async () => {
+      const online = await waitForServer({
+        onWaiting: () => setServerStatus('waking'),
+        signal: controller.signal
       });
+      if (controller.signal.aborted) return;
+      setServerStatus(online ? 'online' : 'offline');
 
-      const { user, accessToken, refreshToken } = response.data;
+      if (online) {
+        try {
+          setAuthConfig(await apiFetch('/api/auth/config'));
+        } catch {
+          // Leave defaults; the login page shows what it can.
+        }
 
-      // Store tokens and user info
-      localStorage.setItem('accessToken', accessToken);
-      localStorage.setItem('refreshToken', refreshToken);
-      localStorage.setItem('user', JSON.stringify(user));
-
-      setAccessToken(accessToken);
-      setRefreshToken(refreshToken);
-      setUser(user);
-      setIsAuthenticated(true);
-
-      return { success: true, user };
-    } catch (error) {
-      const message = error.response?.data?.message || 'Registration failed';
-      return { success: false, message };
-    }
-  };
-
-  const login = async (username, password) => {
-    try {
-      const response = await axios.post(`${API_URL}/api/auth/login`, {
-        username,
-        password,
-      });
-
-      const { user, accessToken, refreshToken, securityQuestionSet } = response.data;
-
-      // Store tokens and user info
-      localStorage.setItem('accessToken', accessToken);
-      localStorage.setItem('refreshToken', refreshToken);
-      localStorage.setItem('user', JSON.stringify(user));
-
-      setAccessToken(accessToken);
-      setRefreshToken(refreshToken);
-      setUser(user);
-      setIsAuthenticated(true);
-      setSecurityQuestionSet(!!securityQuestionSet);
-
-      return { success: true, user, securityQuestionSet: !!securityQuestionSet };
-    } catch (error) {
-      const message = error.response?.data?.message || 'Login failed';
-      return { success: false, message };
-    }
-  };
-
-  const setSecurityQuestion = async (securityQuestion, securityAnswer) => {
-    try {
-      await axios.post(`${API_URL}/api/auth/set-security-question`, {
-        securityQuestion,
-        securityAnswer,
-      });
-      setSecurityQuestionSet(true);
-      return { success: true };
-    } catch (error) {
-      const message = error.response?.data?.message || 'Failed to set security question';
-      return { success: false, message };
-    }
-  };
-
-  const refreshAccessToken = async () => {
-    try {
-      if (!refreshToken) {
-        return { success: false };
+        const storedToken = getStoredToken();
+        if (storedToken) {
+          try {
+            const { user: verifiedUser } = await apiFetch('/api/auth/me', { token: storedToken });
+            saveSession(storedToken, verifiedUser);
+          } catch (error) {
+            if (error.status === 401) saveSession(null, null);
+          }
+        }
       }
 
-      const response = await axios.post(`${API_URL}/api/auth/refresh-token`, {
-        refreshToken,
-      });
+      setLoading(false);
+    })();
 
-      const { accessToken: newAccessToken } = response.data;
+    return () => controller.abort();
+  }, [saveSession]);
 
-      localStorage.setItem('accessToken', newAccessToken);
-      setAccessToken(newAccessToken);
+  const signInWithGoogle = useCallback(async (credential) => {
+    const { token: nextToken, user: nextUser } = await apiFetch('/api/auth/google', { method: 'POST', body: { credential } });
+    saveSession(nextToken, nextUser);
+    return nextUser;
+  }, [saveSession]);
 
-      return { success: true, accessToken: newAccessToken };
-    } catch (error) {
-      // Refresh failed, logout user
-      logout();
-      return { success: false };
-    }
-  };
+  const signInAsGuest = useCallback(async (name) => {
+    const { token: nextToken, user: nextUser } = await apiFetch('/api/auth/guest', { method: 'POST', body: { name } });
+    saveSession(nextToken, nextUser);
+    return nextUser;
+  }, [saveSession]);
 
-  const logout = async () => {
-    try {
-      if (refreshToken) {
-        await axios.post(`${API_URL}/api/auth/logout`, { refreshToken });
-      }
-    } catch (error) {
-      console.error('Logout error:', error);
-    } finally {
-      // Clear local storage and state
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      localStorage.removeItem('user');
-
-      setAccessToken(null);
-      setRefreshToken(null);
-      setUser(null);
-      setIsAuthenticated(false);
-
-      // Remove auth header
-      delete axios.defaults.headers.common['Authorization'];
-    }
-  };
-
-  const value = {
+  const value = useMemo(() => ({
     user,
-    isAuthenticated,
+    token,
+    isAuthenticated: !!token && !!user,
     loading,
-    register,
-    login,
-    logout,
-    refreshAccessToken,
-    accessToken,
-    securityQuestionSet,
-    setSecurityQuestion,
-  };
+    serverStatus,
+    authConfig,
+    signInWithGoogle,
+    signInAsGuest,
+    logout
+  }), [user, token, loading, serverStatus, authConfig, signInWithGoogle, signInAsGuest, logout]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

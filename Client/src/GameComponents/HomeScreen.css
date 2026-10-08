@@ -255,3 +255,34 @@
       padding: 2.228vmin;
   }
 }
+/* Connection status */
+.connection-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2000;
+  padding: 8px 12px;
+  text-align: center;
+  font-weight: 600;
+  color: #1a1400;
+  background: #ffc800;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+}
+
+.connection-hint {
+  margin-top: 8px;
+  font-size: 0.85rem;
+  color: #ffd76a;
+  text-align: center;
+}
+
+.name_input .error-message {
+  margin: 6px 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  color: #ff8fa3;
+  background: rgba(255, 60, 90, 0.12);
+  border-left: 3px solid #ff3c5a;
+  font-size: 0.9rem;
+}

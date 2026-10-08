@@ -99,7 +99,7 @@ export function selectAttackTarget(enemy, allies, playerCharacters, enemyPositio
 }
 
 //enemy behavior
-export function determineBehavior(enemy, allies, playerCharacters) {
+export function determineBehavior(enemy) {
     const behavior = enemy.behavior || 'aggressive';
 
     return behavior;
@@ -254,6 +254,26 @@ function canUseAbilityNow(ability, enemy, allies, alliedEnemies, battlefieldEnem
 
     if (!enemyPos) return false;
 
+    if (abilityDef.type === 'heal') {
+        const isHurt = (unit) => !!unit && !unit.isDeadBody &&
+            (unit.stats?.health || 0) > 0 &&
+            (unit.stats?.health || 0) < (unit.stats?.maxHealth || unit.stats?.health || 0);
+        const livingAllies = (battlefieldEnemies || []).filter(candidate =>
+            candidate.id !== enemy.id && (alliedEnemies || []).includes(candidate.id)
+        );
+
+        if (targetType === 'self') return isHurt(enemy);
+        if (targetType === 'all-allies' || targetType === 'ground-target') {
+            return isHurt(enemy) || livingAllies.some(isHurt);
+        }
+        if (targetType === 'ally') {
+            return livingAllies.some(ally => {
+                const allyPos = characterPositions[ally.id];
+                return isHurt(ally) && !!allyPos && getDistance(enemyPos, allyPos) <= abilityRange;
+            });
+        }
+    }
+
     if (targetType === 'self') {
         return true;
     }
@@ -344,32 +364,6 @@ function isCellInDangerZone(cell, activeEffects = [], enemy) {
     return false;
 }
 
-function getValidMovementCells(position, maxMovement, characterPositions, ROWS = 7, COLS = 10) {
-    const validCells = [];
-    
-    // Check all cells within movement range using Manhattan distance
-    for (let row = 0; row < ROWS; row++) {
-        for (let col = 0; col < COLS; col++) {
-            // Calculate Manhattan distance
-            const distance = Math.abs(row - position.row) + Math.abs(col - position.col);
-            
-            // Skip current position and cells out of range
-            if (distance === 0 || distance > maxMovement) continue;
-            
-            // Check if occupied
-            const isOccupied = Object.values(characterPositions).some(
-                pos => pos.row === row && pos.col === col
-            );
-            
-            if (!isOccupied) {
-                validCells.push({ row, col, distance });
-            }
-        }
-    }
-    
-    return validCells;
-}
-
 function isCellBlockedByBarrier(cell, activeEffects = []) {
     if (!activeEffects || activeEffects.length === 0) return false;
 
@@ -444,11 +438,19 @@ function getReachableCells(startPos, maxMovement, characterPositions, activeEffe
 }
 
 //aggressive behavior type movement logic
+function isWithinWeaponRangeOfAny(enemy, enemyPos, targetIds, characterPositions) {
+    const weaponRange = enemy?.weapon?.range || 1;
+    return targetIds.some(targetId => {
+        const targetPos = characterPositions[targetId];
+        return !!targetPos && getDistance(enemyPos, targetPos) <= weaponRange;
+    });
+}
+
 function calculateAggressiveMovement(enemy, allies, characterPositions, activeEffects = [], sceneKey = null) {
     const enemyPos = characterPositions[enemy.id];
     if (!enemyPos) return null;
     
-    if (isInRangeOfAny(enemyPos, allies, characterPositions)) {
+    if (isWithinWeaponRangeOfAny(enemy, enemyPos, allies, characterPositions)) {
         console.log(`[AGGRESSIVE] ${enemy.name} already in range, staying to attack`);
         return null; // Stay in place to attack
     }
@@ -651,7 +653,9 @@ export function calculateEnemyMovement(enemy, allies, alliedEnemies, supportAlli
     return null;
 }
 
-export function executeEnemyTurn(enemy, allies, alliedEnemies, battlefieldEnemies = [], playerCharacters, characterPositions, activeEffects = [], sceneKey = null) {
+export function executeEnemyTurn(enemy, connectedAllies, alliedEnemies, battlefieldEnemies = [], playerCharacters, characterPositions, activeEffects = [], sceneKey = null) {
+    // Only living players are targets (corpses used to look like the easiest kill).
+    const allies = (connectedAllies || []).filter(allyId => (playerCharacters?.[allyId]?.stats?.health || 0) > 0);
     console.log(`[ENEMY TURN] ${enemy.name} (${enemy.id}) starting turn`);
     console.log(`[ENEMY TURN] Enemy abilities:`, enemy.abilities);
     console.log(`[ENEMY TURN] Enemy cooldowns:`, enemy.cooldowns);
@@ -806,12 +810,16 @@ export function executeEnemyTurn(enemy, allies, alliedEnemies, battlefieldEnemie
         const abilityRange = abilityDef?.range || 1;
         const enemyPos = characterPositions[enemy.id];
         
+        // Ground-placed heals go where this enemy's own side is hurt, not on a player.
+        const healsOwnSide = abilityDef?.type === 'heal' && targetType === 'ground-target';
         const validTargetPool = targetType === 'ally'
             ? (alliedEnemies || []).filter(allyEnemyId => allyEnemyId !== enemy.id)
-            : allies;
+            : healsOwnSide
+                ? [enemy.id, ...(alliedEnemies || []).filter(allyEnemyId => allyEnemyId !== enemy.id)]
+                : allies;
 
         const validTargets = validTargetPool.filter(targetId => {
-            const targetCharacter = targetType === 'ally'
+            const targetCharacter = (targetType === 'ally' || healsOwnSide)
                 ? battlefieldEnemies.find(candidate =>
                     candidate.id === targetId &&
                     !candidate.isDeadBody &&

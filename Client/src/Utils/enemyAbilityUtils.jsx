@@ -46,7 +46,7 @@ export function selectRandomAbility(abilitiesList) {
  * @returns {Array} Array of ability objects assigned to the enemy
  */
 export function assignEnemyAbilities(enemy) {
-    const { level = 1, behavior = 'aggressive', role = 'DPS' } = enemy;
+    const { level = 1, behavior = 'aggressive' } = enemy;
     const assignedAbilities = [];
 
     // Determine which ability roles are valid for this enemy

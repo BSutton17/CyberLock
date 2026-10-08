@@ -16,15 +16,16 @@ const MAX_CHARACTER_LEVEL = 5;
 
 function LevelUp(){
     const {players, playerCharacters, setPlayerCharacters, playerName, room, socket } = useGameContext();
-    const [isReady, setIsReady] = useState(false);
     const [hasSubmittedReady, setHasSubmittedReady] = useState(false);
     const [readyPlayers, setReadyPlayers] = useState([]);
     const [levelPoints, setLevelPoints] = useState(
         STATS.reduce((acc, attr) => ({ ...acc, [attr.id]: 0}), {})
     );
     const [baseStats, setBaseStats] = useState(null);
+    const [error, setError] = useState('');
 
     const currentCharacter = playerCharacters[playerName];
+    const isMaxLevel = (currentCharacter?.level || 1) >= MAX_CHARACTER_LEVEL;
 
     useEffect(() => {
         if (!currentCharacter) return;
@@ -34,21 +35,33 @@ function LevelUp(){
 
     useEffect(() => {
         const handleLevelReadyStatus = (readyList) => {
-            setReadyPlayers(Array.isArray(readyList) ? readyList : []);
+            const list = Array.isArray(readyList) ? readyList : [];
+            setReadyPlayers(list);
+            // The server counts max-level players (and anyone who already submitted) as ready.
+            if (list.includes(playerName)) setHasSubmittedReady(true);
         };
 
         const handleLevelComplete = () => {
             setHasSubmittedReady(true);
         };
 
+        const handleRejected = ({ message } = {}) => {
+            setError(message || 'Your level up was not accepted. Please try again.');
+            setHasSubmittedReady(false);
+        };
+
         socket.on('level_up_ready_status', handleLevelReadyStatus);
         socket.on('level_up_complete', handleLevelComplete);
+        socket.on('level_up_rejected', handleRejected);
+        // After a refresh, ask the server where this level-up stands.
+        socket.emit('request_ready_status');
 
         return () => {
             socket.off('level_up_ready_status', handleLevelReadyStatus);
             socket.off('level_up_complete', handleLevelComplete);
+            socket.off('level_up_rejected', handleRejected);
         };
-    }, [socket]);
+    }, [socket, playerName]);
 
     const totalPointsUsed = Object.values(levelPoints).reduce((sum, val) => sum + val, 0);
     const remainingPoints = TOTAL_POINTS - totalPointsUsed;
@@ -60,11 +73,11 @@ function LevelUp(){
 
     const handleReady = () => {
         if (hasSubmittedReady) return;
-        // Check if applied all points
-        if(remainingPoints != 0){
-            alert('You must apply all your points before readying up!');
+        if (remainingPoints !== 0) {
+            setError('Spend all your points before readying up.');
             return;
         }
+        setError('');
         const playerInfo = currentCharacter;
         const stats = currentCharacter.stats;
         const updatedCharacter = {
@@ -85,7 +98,6 @@ function LevelUp(){
             playerName,
             updatedCharacter: updatedCharacter[playerName]
         });
-        setIsReady(true);
         setHasSubmittedReady(true);
     }
 
@@ -146,6 +158,24 @@ function LevelUp(){
             setPlayerCharacters(updatedCharacter);
         }
     };
+
+    if (!currentCharacter) {
+        return <div className="level-up-container"><div className="levelup-header"><h1>Level Up</h1><p>Loading your character...</p></div></div>;
+    }
+
+    if (isMaxLevel) {
+        return (
+            <div className="level-up-container">
+                <div className="levelup-header">
+                    <h1>Max Level</h1>
+                    <p>{currentCharacter.name} is already level {MAX_CHARACTER_LEVEL}. Waiting for the rest of the crew to level up.</p>
+                </div>
+                <div className="levelup-footer">
+                    <p className="levelup-status">{readyPlayers.length}/{players.length} players ready</p>
+                </div>
+            </div>
+        );
+    }
 
     return(
         <div className="level-up-container">
@@ -217,6 +247,7 @@ function LevelUp(){
             </div>
 
             <div className="levelup-footer">
+                {error && <p className="levelup-error" role="alert">{error}</p>}
                 <button 
                     className="levelup-ready-button" 
                     onClick={handleReady}

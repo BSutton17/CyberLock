@@ -225,6 +225,12 @@ describe('narrator flow', () => {
     expect(result).toMatchObject({ response: 'It is over.', options: null, startCombat: false });
   });
 
+  it('writes the ending on campaign_end', async () => {
+    const narrator = createNarrator({ provider: scriptedProvider([beat({ narration: 'Finale.' })]), logger: quietLogger });
+    const result = await narrator.handleEvent({ room: 'r1', eventType: 'campaign_end', context: context({ encounterIndex: 10 }) });
+    expect(result).toMatchObject({ response: 'Finale.', options: null, startCombat: false });
+  });
+
   it('keeps the shop options fixed and owned by the Banker', async () => {
     const narrator = createNarrator({ provider: scriptedProvider([beat()]), logger: quietLogger });
     const result = await narrator.handleEvent({ room: 'r1', eventType: 'shop_intro', context: context() });

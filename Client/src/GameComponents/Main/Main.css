@@ -1841,3 +1841,13 @@ p {
         transform: translateY(0);
     }
 }
+.the-end-text {
+  max-width: 640px;
+  margin: 18px auto 0;
+  padding: 0 16px;
+  font-size: 1.1rem;
+  line-height: 1.6;
+  color: #e6e6f0;
+  text-align: center;
+  white-space: pre-line;
+}

@@ -32,7 +32,7 @@ import { createTurnController } from './turns.js';
 
 const ROOM_CODE_PATTERN = /^\d{4,6}$/;
 const EMPTY_ROOM_TTL_MS = 2 * 60 * 1000;
-const STORY_EVENTS = new Set(['game_start', 'choice_made', 'story_choice', 'dynamic_scenario', 'encounter_end', 'next_encounter', 'shop_intro', 'shop_continue']);
+const STORY_EVENTS = new Set(['game_start', 'choice_made', 'story_choice', 'dynamic_scenario', 'encounter_end', 'next_encounter', 'shop_intro', 'shop_continue', 'campaign_end']);
 
 const cloneDeep = (value) => JSON.parse(JSON.stringify(value ?? null));
 

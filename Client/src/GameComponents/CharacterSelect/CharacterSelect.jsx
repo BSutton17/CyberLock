@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useGameContext } from '../../Components/Context';
 import charactersData from '../../Components/Characters.json';
 import { enrichAllCharacters } from '../../Utils/characterUtils';
@@ -19,6 +19,16 @@ function CharacterSelect() {
     const [selectedCharacter, setSelectedCharacter] = useState(null);
     const [displayClassInfo, setDisplayClassInfo] = useState(false);
     const lastTappedCharacterRef = useRef({ id: null, timestamp: 0 });
+    const [notice, setNotice] = useState('');
+
+    // The server has the final say on who gets a character (two players can click at once).
+    useEffect(() => {
+        const handleTaken = () => setNotice('Someone else just took that character. Pick another one.');
+        socket.on('character_taken', handleTaken);
+        return () => {
+            socket.off('character_taken', handleTaken);
+        };
+    }, [socket]);
 
     const isCharacterTakenByAnotherPlayer = (characterId) =>
         Object.entries(playerCharacters).some(
@@ -46,10 +56,11 @@ function CharacterSelect() {
 
     const handleAddToTeam = (character) => {
         if (isCharacterTakenByAnotherPlayer(character.id)) {
-            alert('That character is already taken by another player.');
+            setNotice('That character is already taken by another player.');
             return;
         }
 
+        setNotice('');
         socket.emit("character_selected", { room, playerName, character });
     };
 
@@ -64,7 +75,7 @@ function CharacterSelect() {
 
     const handleReady = () => {
         if (!playerCharacters[playerName]) {
-            alert("Please select a character before readying up!");
+            setNotice('Select a character before readying up.');
             return;
         }
 
@@ -139,6 +150,20 @@ function CharacterSelect() {
                                     <div className="stat-row"><span>TA</span><span>{selectedCharacter.stats.ta}</span></div>
                                 </div>
 
+                                {(() => {
+                                    const isMine = playerCharacters[playerName]?.id === selectedCharacter.id;
+                                    const isTaken = isCharacterTakenByAnotherPlayer(selectedCharacter.id);
+                                    return (
+                                        <button
+                                            className='choose-character-button'
+                                            onClick={() => handleAddToTeam(selectedCharacter)}
+                                            disabled={isMine || isTaken || isPlayerReady}
+                                        >
+                                            {isMine ? 'Your character' : isTaken ? 'Taken' : `Play as ${selectedCharacter.name}`}
+                                        </button>
+                                    );
+                                })()}
+
                                 <div className='weapon-detail'>
                                     <h5>Weapon: {selectedCharacter.weapon.name}</h5>
                                     {selectedCharacter.weapon.damage && (
@@ -163,6 +188,8 @@ function CharacterSelect() {
                     )}
                 </div>
             </div>
+
+            {notice && <div className='select-notice' role='status'>{notice}</div>}
 
             <div className='footer-controls'>
                 <button 

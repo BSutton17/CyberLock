@@ -6,7 +6,10 @@ import {
   normalizeEnemiesForCombat,
   shouldApplyEnemyUpdateForEncounter,
   removeDeadEnemiesFromTurnOrder,
-  calculateTurnOrder
+  calculateTurnOrder,
+  advanceTurn,
+  removeAllyFromTurnOrder,
+  insertAllyIntoTurnOrder
 } from './combatSession.js';
 
 const enemy = (id, health = 40, extra = {}) => ({
@@ -182,5 +185,93 @@ describe('calculateTurnOrder', () => {
   it('puts allies before enemies on a speed tie', () => {
     const order = calculateTurnOrder(['alice'], selections, [{ ...enemy('tie'), stats: { health: 10, speed: 40 } }]);
     expect(order.map(t => t.type)).toEqual(['ally', 'enemy']);
+  });
+});
+
+describe('advanceTurn', () => {
+  it('moves to the next combatant and wraps at the end of the round', () => {
+    const combat = { turnOrder: [ally('p1'), foe('e1')], currentTurnIndex: 0 };
+    expect(advanceTurn(combat, ally('p1'))).toEqual(foe('e1'));
+    expect(advanceTurn(combat, foe('e1'))).toEqual(ally('p1'));
+    expect(combat.currentTurnIndex).toBe(0);
+  });
+
+  // Regression: an enemy killed by a DoT tick during its own turn used to make the
+  // server advance twice, so the next player silently lost their turn.
+  it('does not skip anyone when the acting enemy died during its own turn', () => {
+    const combat = {
+      enemies: [enemy('e1', 0), enemy('e2')],
+      turnOrder: [ally('p1'), foe('e1'), ally('p2'), foe('e2')],
+      currentTurnIndex: 1
+    };
+    const finished = combat.turnOrder[combat.currentTurnIndex];
+    removeDeadEnemiesFromTurnOrder(combat);
+    expect(advanceTurn(combat, finished)).toEqual(ally('p2'));
+  });
+
+  it('wraps correctly when the acting enemy was last in the round and died', () => {
+    const combat = {
+      enemies: [enemy('e1', 0), enemy('e2')],
+      turnOrder: [ally('p1'), foe('e2'), foe('e1')],
+      currentTurnIndex: 2
+    };
+    const finished = combat.turnOrder[2];
+    removeDeadEnemiesFromTurnOrder(combat);
+    expect(advanceTurn(combat, finished)).toEqual(ally('p1'));
+  });
+
+  it('returns null when nobody is left', () => {
+    expect(advanceTurn({ turnOrder: [], currentTurnIndex: 3 }, ally('p1'))).toBeNull();
+  });
+});
+
+describe('removeAllyFromTurnOrder', () => {
+  // Regression: a player killed by an enemy after acting earlier in the round used to be
+  // filtered out without fixing the index, so the pointer jumped off the acting enemy and
+  // combat stalled.
+  it('keeps the pointer on the acting enemy when a player who already acted dies', () => {
+    const combat = { turnOrder: [ally('p1'), foe('e1'), ally('p2')], currentTurnIndex: 1 };
+    expect(removeAllyFromTurnOrder(combat, 'p1')).toBe(false);
+    expect(combat.turnOrder[combat.currentTurnIndex]).toEqual(foe('e1'));
+  });
+
+  it('reports when the removed ally was acting and points at the next combatant', () => {
+    const combat = { turnOrder: [ally('p1'), ally('p2'), foe('e1')], currentTurnIndex: 1 };
+    expect(removeAllyFromTurnOrder(combat, 'p2')).toBe(true);
+    expect(combat.turnOrder[combat.currentTurnIndex]).toEqual(foe('e1'));
+  });
+
+  it('wraps when the acting ally was last', () => {
+    const combat = { turnOrder: [foe('e1'), ally('p1')], currentTurnIndex: 1 };
+    expect(removeAllyFromTurnOrder(combat, 'p1')).toBe(true);
+    expect(combat.currentTurnIndex).toBe(0);
+  });
+
+  it('ignores players who are not in the order and never removes enemies with the same id', () => {
+    const combat = { turnOrder: [foe('p1'), ally('p2')], currentTurnIndex: 0 };
+    expect(removeAllyFromTurnOrder(combat, 'ghost')).toBe(false);
+    removeAllyFromTurnOrder(combat, 'p1');
+    expect(combat.turnOrder).toEqual([foe('p1'), ally('p2')]);
+  });
+});
+
+describe('insertAllyIntoTurnOrder', () => {
+  const withSpeed = (turn, speed) => ({ ...turn, speed });
+
+  it('inserts by speed and keeps the pointer on the acting combatant', () => {
+    const combat = {
+      turnOrder: [withSpeed(foe('fast'), 50), withSpeed(ally('p1'), 30), withSpeed(foe('slow'), 10)],
+      currentTurnIndex: 1
+    };
+    insertAllyIntoTurnOrder(combat, withSpeed(ally('back'), 40));
+    expect(combat.turnOrder.map(t => t.id)).toEqual(['fast', 'back', 'p1', 'slow']);
+    expect(combat.turnOrder[combat.currentTurnIndex].id).toBe('p1');
+  });
+
+  it('appends the slowest and never duplicates', () => {
+    const combat = { turnOrder: [withSpeed(ally('p1'), 30)], currentTurnIndex: 0 };
+    insertAllyIntoTurnOrder(combat, withSpeed(ally('p2'), 5));
+    insertAllyIntoTurnOrder(combat, withSpeed(ally('p2'), 5));
+    expect(combat.turnOrder.map(t => t.id)).toEqual(['p1', 'p2']);
   });
 });

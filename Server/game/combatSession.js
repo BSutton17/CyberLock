@@ -106,6 +106,86 @@ export function removeDeadEnemiesFromTurnOrder(combat) {
   }
 }
 
+const sameTurn = (a, b) => !!a && !!b && a.type === b.type && a.id === b.id;
+
+// Removes an ally (dead, left, or disconnected) while keeping the pointer on whoever is acting.
+// If the removed ally was the one acting, the pointer ends up on the next combatant.
+// Returns true when the removed ally was the current turn.
+export function removeAllyFromTurnOrder(combat, playerName) {
+  if (!combat?.turnOrder?.length) return false;
+
+  const currentTurn = combat.turnOrder[combat.currentTurnIndex] || null;
+  const wasCurrentTurn = currentTurn?.type === 'ally' && currentTurn.id === playerName;
+  const removedIndex = combat.turnOrder.findIndex(turn => turn.type === 'ally' && turn.id === playerName);
+  if (removedIndex === -1) return false;
+
+  combat.turnOrder = combat.turnOrder.filter(turn => !(turn.type === 'ally' && turn.id === playerName));
+
+  if (combat.turnOrder.length === 0) {
+    combat.currentTurnIndex = 0;
+    return wasCurrentTurn;
+  }
+
+  if (!wasCurrentTurn) {
+    const preservedIndex = combat.turnOrder.findIndex(turn => sameTurn(turn, currentTurn));
+    if (preservedIndex !== -1) {
+      combat.currentTurnIndex = preservedIndex;
+      return false;
+    }
+  }
+
+  // The acting ally was removed: the entry that slid into its slot is next.
+  if (combat.currentTurnIndex >= combat.turnOrder.length) {
+    combat.currentTurnIndex = 0;
+  }
+  return wasCurrentTurn;
+}
+
+// Puts an ally back into the order by speed (used when a player reconnects mid-fight).
+// The pointer stays on whoever is currently acting.
+export function insertAllyIntoTurnOrder(combat, entry) {
+  if (!combat || !entry) return;
+  if (!Array.isArray(combat.turnOrder)) combat.turnOrder = [];
+  if (combat.turnOrder.some(turn => sameTurn(turn, entry))) return;
+
+  const currentTurn = combat.turnOrder[combat.currentTurnIndex] || null;
+  let insertAt = combat.turnOrder.findIndex(turn => (turn.speed || 0) < (entry.speed || 0));
+  if (insertAt === -1) insertAt = combat.turnOrder.length;
+
+  combat.turnOrder.splice(insertAt, 0, entry);
+
+  if (currentTurn) {
+    combat.currentTurnIndex = combat.turnOrder.findIndex(turn => sameTurn(turn, currentTurn));
+  } else {
+    combat.currentTurnIndex = 0;
+  }
+}
+
+// Moves the pointer past the combatant whose turn just ended and returns the next turn.
+// If that combatant was removed during its own turn (for example an enemy killed by a
+// damage-over-time tick), the pointer already sits on the next combatant, so it must not move again.
+export function advanceTurn(combat, finishedTurn) {
+  const order = combat?.turnOrder || [];
+  if (order.length === 0) {
+    if (combat) combat.currentTurnIndex = 0;
+    return null;
+  }
+
+  if (combat.currentTurnIndex >= order.length || combat.currentTurnIndex < 0) {
+    combat.currentTurnIndex = 0;
+  }
+
+  if (sameTurn(order[combat.currentTurnIndex], finishedTurn)) {
+    combat.currentTurnIndex += 1;
+  }
+
+  if (combat.currentTurnIndex >= order.length) {
+    combat.currentTurnIndex = 0;
+  }
+
+  return order[combat.currentTurnIndex];
+}
+
 // Allies and living enemies sorted fastest first. Ties keep insertion order (allies before enemies).
 export function calculateTurnOrder(players = [], characterSelections = {}, enemies = []) {
   const characters = [];

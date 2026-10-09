@@ -32,6 +32,8 @@ export const GameProvider = ({ children }) => {
     const [players, setPlayers] = useState([]);
     // Seats played by the computer (they are in `players` too).
     const [bots, setBots] = useState([]);
+    // The host's "Mock" switch: the room uses the free offline narrator instead of the AI.
+    const [narratorMock, setNarratorMock] = useState(false);
     const [isAdmin, setAdmin] = useState(false);
     const [room, setRoom] = useState("");
     const [displayGame, setDisplayGame] = useState(false);
@@ -129,6 +131,7 @@ export const GameProvider = ({ children }) => {
       value={{
         players, setPlayers,
         bots, setBots,
+        narratorMock, setNarratorMock,
         isAdmin, setAdmin,
         room, setRoom,
         displayGame, setDisplayGame,

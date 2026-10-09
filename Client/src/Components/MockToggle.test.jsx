@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { describe, it, expect, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, act } from '@testing-library/react';
 import GameContext from './Context';
@@ -16,10 +16,23 @@ function fakeSocket() {
   };
 }
 
-const renderWith = (socket, isAdmin) => render(
-  <GameContext.Provider value={{ socket, room: '1234', isAdmin }}>
-    <MockToggle inRoom />
-  </GameContext.Provider>
+// Holds the room's setting the way the real context does, with Events.jsx's listener.
+function Room({ socket, isAdmin, children }) {
+  const [narratorMock, setNarratorMock] = useState(false);
+  useEffect(() => {
+    const handleMode = ({ mock } = {}) => setNarratorMock(!!mock);
+    socket.on('narrator_mode', handleMode);
+    return () => socket.off('narrator_mode', handleMode);
+  }, [socket]);
+  return (
+    <GameContext.Provider value={{ socket, room: '1234', isAdmin, narratorMock, setNarratorMock }}>
+      {children}
+    </GameContext.Provider>
+  );
+}
+
+const renderWith = (socket, isAdmin, inline = false) => render(
+  <Room socket={socket} isAdmin={isAdmin}><MockToggle inRoom inline={inline} /></Room>
 );
 
 afterEach(cleanup);
@@ -40,5 +53,14 @@ describe('MockToggle', () => {
     act(() => socket.serverSends('narrator_mode', { mock: true }));
     expect(screen.getByText('Mock narrator')).toBeTruthy();
     expect(screen.queryAllByRole('button')).toHaveLength(0);
+  });
+
+  it("keeps its setting when it moves from the corner into the game's top bar", () => {
+    const socket = fakeSocket();
+    const view = render(<Room socket={socket} isAdmin><MockToggle inRoom /></Room>);
+    fireEvent.click(screen.getByText('Mock off'));
+    view.rerender(<Room socket={socket} isAdmin><MockToggle inRoom inline /></Room>);
+    const button = screen.getByText('Mock on');
+    expect(button.className).toContain('mock-toggle-inline');
   });
 });

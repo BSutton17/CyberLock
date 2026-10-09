@@ -9,6 +9,7 @@ import { FaRegSnowflake, FaSkullCrossbones, FaFireAlt, FaShieldAlt } from 'react
 import './Main.css';
 import ChatBot from '../ChatBot/ChatBot';
 import SettingsMenu from '../../Components/SettingsMenu';
+import MockToggle from '../../Components/MockToggle';
 import DialogueChoices from './DialogueChoices';
 
 const SCENE_BACKGROUNDS = {
@@ -2464,6 +2465,7 @@ function Main() {
                     </button>
                     <SettingsMenu />
                     <button className='leave-main-help' onClick={() => setChat(true)}>Help</button>
+                    <MockToggle inRoom inline />
                 </div>
                 <h2 className='title'>{SCENE_LABELS[currentSceneKey] || SCENE_LABELS.city_square}</h2>
                 {combatNotice && <div className="combat-notice" role="status">{combatNotice}</div>}

@@ -338,3 +338,8 @@
   color: #ff8fa3;
   font-weight: 600;
 }
+
+/* The stat's current value inside its row; only phones show it (see styles/mobileLandscape.css). */
+.levelup-stat-value {
+  display: none;
+}

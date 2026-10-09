@@ -6,6 +6,9 @@
  * and text and buttons get explicit sizes. Because of the half scale, sizes here are double what
  * appears on the phone: 24px text shows as 12px, an 80px tall button as 40px.
  *
+ * Nothing scrolls as a page: every screen fits the phone exactly. Only small lists inside a
+ * screen (the party, the team's feats, an open ability menu) scroll on their own.
+ *
  * Loaded after every screen's own styles (see App.jsx), so these rules win on phones only.
  */
 @media (orientation: landscape) and (max-height: 520px) {
@@ -15,6 +18,25 @@
         --phone-small: 22px;      /* labels: 11px */
         --phone-title: 40px;      /* screen titles: 20px */
         --phone-button: 80px;     /* button height: 40px */
+    }
+
+    /* ---------- No page scrolling ---------- */
+    /* The half-scale canvas still takes up its full size for layout, which used to leave a
+       second, empty screen to drag into. Pin the page and clip it to the phone. */
+    html,
+    body {
+        height: 100%;
+        overflow: hidden !important;
+        overscroll-behavior: none;
+    }
+
+    /* `clip` (not just `hidden`) so not even the browser can scroll it, e.g. to bring a tapped
+       button "into view". */
+    body .home-screen-container {
+        position: fixed !important;
+        inset: 0;
+        overflow: hidden !important;
+        overflow: clip !important;
     }
 
     /* ---------- Canvas: fill the whole screen ---------- */
@@ -31,14 +53,31 @@
         transform: scale(var(--phone-scale)) !important;
         transform-origin: top left !important;
         box-sizing: border-box;
+        overflow: hidden !important;
+        overflow: clip !important;
     }
 
-    /* Leave the top corners for the Leave and settings buttons. */
+    /* Each screen's title shares the top row with the Leave and settings buttons in the corners,
+       which leaves the rest of the screen for the screen itself. */
     body .character-select-container,
     body .character-builder-container,
     body .choose-abilities-wrapper,
     body .level-up-container {
-        padding-top: 96px !important;
+        padding-top: 0 !important;
+    }
+
+    body .character-select-container > .header,
+    body .builder-header,
+    body .abilities-header,
+    body .levelup-header {
+        box-sizing: border-box;
+        height: auto !important;
+        min-height: 84px;
+        margin: 0 240px 12px !important;
+        padding: 6px 16px !important;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
     }
 
     /* Older small-screen rules double every h1/h3 and some panels; on phones we size them here instead. */
@@ -235,7 +274,18 @@
     body .abilities-header p,
     body .levelup-header p {
         font-size: var(--phone-small) !important;
+        letter-spacing: 0.04em !important;
         margin: 4px 0 !important;
+    }
+
+    /* One line of instructions under the Feats title; the second (how the rest are ranked) is
+       left out so the title stays on screen. */
+    body .builder-header p + p {
+        display: none;
+    }
+
+    body .builder-header > p {
+        height: auto !important;
     }
 
     body .ready-button-select,
@@ -297,6 +347,47 @@
 
     body .team-character .bot-tag {
         font-size: var(--phone-small) !important;
+    }
+
+    /* The three columns fill the height between the title and Ready; the nine cards share it. */
+    body .character-select-container .left-section,
+    body .character-select-container .middle-section,
+    body .character-select-container .right-section {
+        max-height: none !important;
+        min-height: 0 !important;
+    }
+
+    body .character-select-container .characters-grid {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    body .character-select-container .character-cards {
+        flex: 1;
+        min-height: 0;
+        overflow: hidden !important;
+        gap: 12px !important;
+        margin: 6px 0 0 !important;
+        padding: 0 !important;
+    }
+
+    body .character-select-container .character-card {
+        height: auto !important;
+        min-height: 0 !important;
+    }
+
+    /* Ready sits in the footer row (it floated off the bottom of the screen before). */
+    body .character-select-container .footer-controls {
+        flex-direction: row !important;
+        gap: 32px;
+        padding-top: 12px !important;
+    }
+
+    body .ready-button-select {
+        position: static !important;
+        margin: 0 !important;
     }
 
     /* Wider side columns so the team list and character details fit. */
@@ -406,8 +497,29 @@
     }
 
     body .abilities-panel {
+        position: relative;
         gap: 14px !important;
-        overflow-y: auto;
+        overflow: visible !important;
+    }
+
+    /* An open slot covers the whole panel: its button stays on top (tap it to close) and its
+       choices fill the rest, scrolling there if there are many. */
+    body .abilities-panel .dropdown-container:has(> .dropdown-menu) {
+        position: absolute !important;
+        inset: 0;
+        z-index: 20;
+        display: flex;
+        flex-direction: column;
+        border-radius: 12px;
+        background: rgba(12, 12, 28, 0.97);
+    }
+
+    body .abilities-panel .dropdown-container:has(> .dropdown-menu) .dropdown-menu {
+        position: static !important;
+        flex: 1;
+        min-height: 0;
+        max-height: none !important;
+        overflow-y: auto !important;
     }
 
     body .current-abilities-section {
@@ -420,10 +532,6 @@
         padding: 8px 12px !important;
     }
 
-    body .dropdown-menu {
-        max-height: 360px !important;
-        overflow-y: auto !important;
-    }
 
     body .ability-description-drop {
         display: block !important;
@@ -475,6 +583,7 @@
     /* ---------- Main game (story and combat), on the half-scale canvas ---------- */
     /* Scene bar, then party list + board, then the character bar along the bottom. */
     body .main-game-container {
+        grid-template-columns: 300px minmax(0, 1fr) !important;
         grid-template-rows: 88px minmax(0, 1fr) 0 248px !important;
         gap: 10px !important;
         padding: 10px !important;
@@ -498,7 +607,16 @@
         white-space: nowrap;
     }
 
+    /* Narrow phones: the top bar's buttons and turn indicator need the room more than the
+       location name does (the narration names the place anyway). */
+    @media (max-width: 759px) {
+        body .main-game-container .scene-name h2.title {
+            display: none;
+        }
+    }
+
     body .leave-main,
+    body .mock-toggle-inline,
     body .settings-cog-btn.battle-screen-cog {
         min-height: 64px !important;
         min-width: 72px;
@@ -537,8 +655,8 @@
     }
 
     body .main-game-container .party-member {
-        padding: 8px 12px !important;
-        margin-top: 8px !important;
+        padding: 6px 12px !important;
+        margin-top: 6px !important;
     }
 
     body .main-game-container .character-stats {
@@ -570,6 +688,15 @@
     body .stat-value,
     body .stat-item {
         font-size: var(--phone-small) !important;
+    }
+
+    body .main-game-container .stat-item {
+        gap: 8px;
+    }
+
+    body .main-game-container .stat-label {
+        letter-spacing: 0.03em !important;
+        white-space: nowrap;
     }
 
     body .weapon-name,
@@ -619,18 +746,129 @@
         padding: 8px 20px !important;
     }
 
-    /* ---------- Level up ---------- */
-    body .levelup-stat-name,
-    body .levelup-preview-label,
-    body .levelup-preview-value,
-    body .levelup-points-display,
-    body .levelup-status {
+    /* ---------- Level up: five stat cards in a row, Ready underneath ---------- */
+    body .level-up-container {
+        padding: 0 20px 16px !important;
+        gap: 12px;
+    }
+
+    body .levelup-header {
+        flex-direction: row !important;
+        align-items: center;
+        justify-content: center !important;
+        gap: 32px;
+        margin-bottom: 0 !important;
+    }
+
+    /* "Distribute all points" is what the points counter and the locked Ready button already say. */
+    body .levelup-header p:has(+ .levelup-points-display) {
+        display: none;
+    }
+
+    body .levelup-points-display {
+        margin: 0 !important;
+        padding: 8px 24px !important;
+    }
+
+    body .levelup-points-remaining {
         font-size: var(--phone-text) !important;
     }
 
+    body .levelup-content {
+        display: flex !important;
+        flex: 1;
+        min-height: 0;
+        min-width: 0 !important;
+    }
+
+    body .levelup-preview,
+    body .levelup-allocation h3 {
+        display: none !important;
+    }
+
+    body .levelup-allocation {
+        flex: 1;
+        min-height: 0;
+        padding: 16px !important;
+    }
+
+    body .levelup-stats-list {
+        flex: 1;
+        display: grid !important;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 16px !important;
+        padding: 0 !important;
+        overflow: visible !important;
+    }
+
+    body .levelup-stat-row {
+        flex-direction: column;
+        justify-content: space-between !important;
+        padding: 16px 12px !important;
+        gap: 8px !important;
+        min-height: 0;
+    }
+
+    body .levelup-stat-info {
+        flex: 1 !important;
+        flex-direction: column;
+        justify-content: center !important;
+        gap: 4px !important;
+    }
+
+    body .levelup-stat-name {
+        min-height: 2.5em;
+        display: flex;
+        align-items: center;
+        text-align: center;
+        font-size: var(--phone-small) !important;
+        letter-spacing: 0.08em !important;
+    }
+
+    body .levelup-stat-value {
+        display: block;
+        font-size: 64px;
+        font-weight: 800;
+        line-height: 1;
+        color: #c4b5fd;
+        text-shadow: 0 0 10px rgba(139, 92, 246, 0.7);
+    }
+
+    body .levelup-stat-added {
+        font-size: var(--phone-text) !important;
+    }
+
+    body .levelup-stat-controls {
+        width: 100%;
+        justify-content: center;
+        gap: 12px !important;
+    }
+
     body .levelup-control-btn {
-        min-width: 80px !important;
-        min-height: 80px !important;
-        font-size: 32px !important;
+        flex: 1;
+        max-width: 140px;
+        min-width: 0 !important;
+        height: 96px !important;
+        min-height: 96px !important;
+        font-size: 44px !important;
+    }
+
+    body .levelup-footer {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 32px;
+        margin: 0 !important;
+        padding: 10px 16px !important;
+    }
+
+    body .levelup-ready-button {
+        min-width: 320px;
+    }
+
+    body .levelup-status,
+    body .levelup-error {
+        margin: 0 !important;
+        font-size: var(--phone-small) !important;
     }
 }

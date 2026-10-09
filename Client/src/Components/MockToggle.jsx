@@ -1,29 +1,24 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useGameContext } from './Context';
 import './MockToggle.css';
 
 /**
- * Bottom-left switch for the host: "Mock" swaps the AI narrator for the free offline one in this
- * room, for testing in production without spending AI credits. Everyone else sees a small badge
- * while it's on.
+ * The host's switch: "Mock" swaps the AI narrator for the free offline one in this room, for
+ * testing in production without spending AI credits. Everyone else sees a small badge while it's
+ * on. It sits in the bottom-left corner before the game; in the game it sits in the top bar
+ * (`inline`) so it never covers the character bar.
  */
-function MockToggle({ inRoom }) {
-    const { socket, room, isAdmin } = useGameContext();
-    const [mock, setMock] = useState(false);
+function MockToggle({ inRoom, inline = false }) {
+    // The room-wide setting lives in the game context (Events.jsx keeps it current), so the
+    // switch stays right when it moves from the corner into the game's top bar.
+    const { socket, room, isAdmin, narratorMock: mock, setNarratorMock: setMock } = useGameContext();
     const [busy, setBusy] = useState(false);
 
-    useEffect(() => {
-        const handleMode = ({ mock: enabled } = {}) => setMock(!!enabled);
-        socket.on('narrator_mode', handleMode);
-        return () => {
-            socket.off('narrator_mode', handleMode);
-        };
-    }, [socket]);
-
     if (!inRoom) return null;
+    const placement = inline ? 'mock-toggle-inline' : '';
 
     if (!isAdmin) {
-        return mock ? <div className="mock-toggle mock-badge" role="status">Mock narrator</div> : null;
+        return mock ? <div className={`mock-toggle mock-badge ${placement}`} role="status">Mock narrator</div> : null;
     }
 
     const toggle = () => {
@@ -36,7 +31,7 @@ function MockToggle({ inRoom }) {
 
     return (
         <button
-            className={`mock-toggle ${mock ? 'on' : ''}`}
+            className={`mock-toggle ${placement} ${mock ? 'on' : ''}`}
             onClick={toggle}
             disabled={busy}
             aria-pressed={mock}

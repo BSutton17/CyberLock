@@ -244,7 +244,7 @@ function HomeScreen() {
     <div className="home-screen-container">
       <Events />
       {screen !== 'main' && <SettingsMenu />}
-      <MockToggle inRoom={isJoining} />
+      <MockToggle inRoom={isJoining && screen !== 'main'} />
       {connectionStatus === 'reconnecting' && (
         <div className="connection-banner" role="status">Connection lost. Reconnecting...</div>
       )}

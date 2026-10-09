@@ -195,6 +195,8 @@ function LevelUp(){
                             <div key={stat.id} className="levelup-stat-row">
                                 <div className="levelup-stat-info">
                                     <span className="levelup-stat-name">{stat.label}</span>
+                                    {/* Shown on phones, where the preview panel is hidden to fit one screen. */}
+                                    <span className="levelup-stat-value">{currentCharacter.stats[stat.id]}</span>
                                     <span className="levelup-stat-added">+{levelPoints[stat.id]}</span>
                                 </div>
 

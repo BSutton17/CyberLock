@@ -338,16 +338,17 @@ describe('Main (combat)', () => {
     await waitFor(() => expect(document.querySelector('.ai-text').textContent).toBe('Leo ducks under the baton.'), { timeout: 3000 });
   });
 
-  it('lets each narration finish and stay up for a moment before the next one replaces it', async () => {
+  it('holds each narration at least two seconds, then a second more to read, before the next one', async () => {
     const socket = createFakeSocket();
     render(<Harness socket={socket} serverStoryState={storyInProgress} initialCombat={fightSnapshot()} />);
     const shown = () => document.querySelector('.ai-text').textContent;
-    act(() => socket.serverSends('combat_narration', { text: 'Leo ducks under the baton.' }));
+    const sentAt = Date.now();
+    act(() => socket.serverSends('combat_narration', { text: 'Leo ducks.' }));
     act(() => socket.serverSends('combat_narration', { text: 'Shipment answers with a shoulder.' }));
-    await waitFor(() => expect(shown()).toBe('Leo ducks under the baton.'), { timeout: 3000 });
-    const finishedAt = Date.now();
-    await waitFor(() => expect(shown()).not.toBe('Leo ducks under the baton.'), { timeout: 3000 });
-    expect(Date.now() - finishedAt).toBeGreaterThanOrEqual(400);
-    await waitFor(() => expect(shown()).toBe('Shipment answers with a shoulder.'), { timeout: 3000 });
-  });
+    await waitFor(() => expect(shown()).toBe('Leo ducks.'), { timeout: 3000 });
+    // A short line is fully typed almost at once, but still holds the screen.
+    await waitFor(() => expect(shown()).not.toBe('Leo ducks.'), { timeout: 6000 });
+    expect(Date.now() - sentAt).toBeGreaterThanOrEqual(2900);
+    await waitFor(() => expect(shown()).toBe('Shipment answers with a shoulder.'), { timeout: 4000 });
+  }, 15000);
 });

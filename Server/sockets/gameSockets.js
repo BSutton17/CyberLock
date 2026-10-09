@@ -47,7 +47,18 @@ export function createGameState() {
 export function registerGameSockets({ io, state, narrator, timing, logger = console, combatOptions = {} }) {
   const random = combatOptions.random || Math.random;
   // buildNarratorContext is a function declaration below, so it can be handed over here.
-  const combat = createCombatController({ io, state, timing, narrator, logger, buildNarratorContext, ...combatOptions });
+  const combat = createCombatController({ io, state, timing, narrator, logger, buildNarratorContext, onCombatEnded: refreshStorySummary, ...combatOptions });
+
+  // After every fight, the narrator rewrites the "story so far" recap (the Summarize button).
+  async function refreshStorySummary(room, { encounterIndex = 0 } = {}) {
+    if (!narrator?.summarize || !state.rooms[room]) return;
+    try {
+      const summary = await narrator.summarize(room, buildNarratorContext(room), { fightsDone: encounterIndex + 1 });
+      if (summary && state.rooms[room]) io.to(room).emit('story_summary', summary);
+    } catch (error) {
+      logger.warn?.(`[AI] story recap failed: ${error.message}`);
+    }
+  }
 
   // -------------------------------------------------------------------------
   // Helpers
@@ -584,6 +595,12 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
     });
 
     // The host can switch the room to the free offline narrator (testing without AI credits).
+    // The "story so far" recap, for a client that just opened the game or reconnected.
+    socket.on('request_story_summary', ({ room: payloadRoom } = {}, ack) => {
+      const room = currentRoom(payloadRoom);
+      if (typeof ack === 'function') ack({ summary: room ? narrator?.getSummary?.(room) || null : null });
+    });
+
     socket.on('set_narrator_mode', ({ room: payloadRoom, mock } = {}, ack) => {
       const room = currentRoom(payloadRoom);
       const reply = (payload) => { if (typeof ack === 'function') ack(payload); };

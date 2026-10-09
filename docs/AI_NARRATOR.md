@@ -110,14 +110,32 @@ decisions) one party member gets a moment of their own, of one of two kinds:
 - **They get to ask an NPC something.** *Ines Calder is picking through the wreck of her stall...
   Livewire has a moment to ask her something.*
 
-Everyone sees the choices where the story choices go; only that player can pick. There's a
-straight option, a pushy or defiant one, and a special one if they rank a fitting attribute in their
-top three (a Politician can answer "We came to save someone"). The next narration tells what they
-said and how the NPC took it, then brings up the group's decision, which waits until then. If they
-don't answer within `DIALOGUE_TIMEOUT_MS` (default 60 s), their character stays silent and the story
-moves on. Answers never move the group; they change how the NPC feels about the party
-(`npcAttitudes`), and every later prompt lists those feelings and what was said so the model can
-let it show. Bots never get personal moments. The moments live in `dialogue.js`; add more there.
+Everyone sees the choices where the story choices go; only that player can pick. Every answer is a
+different approach: straight with them, pushing back, a sly angle, and a special one if they rank a
+fitting attribute in their top three (a Politician can answer "We came to save someone"). The next
+narration tells what they said and how the NPC took it, then brings up the group's decision, which
+waits until then. If they don't answer within `DIALOGUE_TIMEOUT_MS` (default 60 s), their character
+stays silent and the story moves on.
+
+**Answers steer the story.** Each one starts its own thread (`lead`): a patrol on the party's trail,
+a shortcut, a favor owed, a name worth chasing. Threads go into the story log and every later
+prompt ("Open threads ... pay them off in the coming scenes"), so the model brings them back; the
+offline narrator pays the newest one off in the next scene or fight intro. NPCs also remember how
+they were treated (`npcAttitudes`). Bots never get personal moments.
+
+**Where moments come from.** With a real model (Claude, Gemini), each moment is written fresh for
+the scene that was just narrated: its own NPC, question and answers, checked for outsiders and
+completeness. In mock mode, or if the model's moment doesn't fit, one of the 18 hand-written
+moments in `dialogue.js` is used instead (add more there; tests check every answer has its own
+reaction and thread).
+
+## The story so far (Summarize button)
+
+The in-game top bar has a **Summarize** button. It opens a recap of the whole story up to now: how
+it began, which side the party joined, the choices that mattered, the threads in play and what
+they are after next. The narrator rewrites it after every fight (the AI from the story log and
+current state, or a recap the game builds from its own records in mock mode or if the model
+fails) and the server sends it to everyone; a player who reconnects fetches the latest one.
 
 ## Seeing what the model sees
 

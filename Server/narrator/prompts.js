@@ -119,9 +119,11 @@ party did not choose, and each act ends with that act's villain. Make the fights
 whatever story you are telling. Earlier choices should come back with consequences.
 
 PERSONAL MOMENTS
-Between decisions, an NPC sometimes speaks to one party member, who answers for themselves. Those
-answers don't change where the story goes, but people remember them: CURRENT STATE lists how each
-NPC feels about the party and what was said. When those NPCs appear, let it show.
+Between decisions, an NPC sometimes speaks to one party member, who answers for themselves. Every
+answer starts a thread: a patrol on the party's trail, a shortcut, a favor owed, a name worth
+chasing. CURRENT STATE lists the open threads and how each NPC feels about the party. Pay threads
+off in the scenes that follow: bring the patrol, use the shortcut, call in the favor. Different
+answers should visibly lead the story to different places.
 
 DECISIONS
 Story decisions are made by one party member on behalf of the group, chosen by the game because a
@@ -219,6 +221,10 @@ export function buildStateBlock(session, { party = [], partyFaction = null, enco
   }
   if (session?.personalMoments?.length) {
     lines.push(`Things party members said for themselves (people remember):\n${session.personalMoments.slice(-5).map(m => `- ${m.by} to ${m.npc}: "${m.reply}"`).join('\n')}`);
+    const threads = session.personalMoments.filter(m => m.lead).slice(-4);
+    if (threads.length) {
+      lines.push(`Open threads from those answers (pay them off in the coming scenes, newest first):\n${threads.reverse().map(m => `- ${m.lead}`).join('\n')}`);
+    }
   }
 
   if (session?.decisions?.length) {
@@ -237,6 +243,44 @@ export const STORY_RESPONSE_SCHEMA = {
     memory: { type: 'string', description: 'One sentence recording what happened, for continuity.' }
   },
   required: ['narration', 'options', 'location', 'memory'],
+  additionalProperties: false
+};
+
+// A personal moment the AI writes to fit the scene (see writeDialogue in storyEngine.js).
+export const DIALOGUE_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    kind: { type: 'string', enum: ['reply', 'ask'] },
+    npc: { type: 'string', description: 'Who the party member is talking to, as the narration names them.' },
+    intro: { type: 'string', description: 'One or two sentences setting up the moment; for reply, ending with the question.' },
+    options: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          approach: { type: 'string', enum: ['honest', 'defiant', 'sly', 'skill'] },
+          attribute: { type: 'string', description: 'For a skill answer, the attribute it uses; otherwise empty.' },
+          text: { type: 'string', description: 'The answer as the player picks it, under 12 words.' },
+          told: { type: 'string', description: 'How the narration reports it, one sentence.' },
+          reaction: { type: 'string', description: 'How the NPC reacts, one or two sentences.' },
+          lead: { type: 'string', description: 'The story thread this answer starts, one sentence, stated as something now true.' }
+        },
+        required: ['approach', 'attribute', 'text', 'told', 'reaction', 'lead'],
+        additionalProperties: false
+      }
+    }
+  },
+  required: ['kind', 'npc', 'intro', 'options'],
+  additionalProperties: false
+};
+
+// The "story so far" recap behind the Summarize button.
+export const SUMMARY_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    points: { type: 'array', items: { type: 'string' }, description: 'Four to seven short recap points, oldest first.' }
+  },
+  required: ['points'],
   additionalProperties: false
 };
 

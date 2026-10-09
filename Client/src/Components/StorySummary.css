@@ -1,0 +1,96 @@
+/* "The story so far" panel, opened from the Summarize button in the game's top bar. Rendered on
+   the page itself (not inside the half-scale phone canvas), so sizes here are real sizes. */
+.story-summary-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    box-sizing: border-box;
+    background: rgba(5, 5, 15, 0.7);
+}
+
+.story-summary-panel {
+    width: min(620px, 100%);
+    max-height: calc(100vh - 32px);
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+    box-sizing: border-box;
+    padding: 20px 24px;
+    border-radius: 10px;
+    border: 2px solid rgba(139, 92, 246, 0.5);
+    background: rgba(20, 20, 40, 0.97);
+    color: #e5e7eb;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+.story-summary-panel h2 {
+    margin: 0 0 12px;
+    font-size: 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #c4b5fd;
+}
+
+.story-summary-points {
+    margin: 0;
+    padding-left: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    font-size: 15px;
+    line-height: 1.45;
+}
+
+.story-summary-empty {
+    margin: 0;
+    font-size: 15px;
+    color: #9ca3af;
+}
+
+.story-summary-updated {
+    margin: 14px 0 0;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #9ca3af;
+}
+
+.story-summary-close {
+    display: block;
+    margin: 16px auto 0;
+    min-height: 40px;
+    padding: 0 28px;
+    border: none;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+    color: #fff;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+}
+
+/* Landscape phones: a little tighter so a long recap needs less scrolling. */
+@media (orientation: landscape) and (max-height: 520px) {
+    .story-summary-panel {
+        padding: 14px 18px;
+    }
+
+    .story-summary-panel h2 {
+        font-size: 16px;
+        margin-bottom: 8px;
+    }
+
+    .story-summary-points {
+        gap: 6px;
+        font-size: 13px;
+    }
+
+    .story-summary-close {
+        margin-top: 10px;
+        min-height: 36px;
+    }
+}

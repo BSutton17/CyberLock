@@ -442,7 +442,7 @@ export const ABILITIES = {
     butterfly_effect: {
         id: 'butterfly_effect',
         name: 'Butterfly Effect',
-        description: 'Bonus action: add two turns of cooldown to every enemy ability, and every enemy loses 15 Speed and 10 Resistance for 2 turns',
+        description: 'Bonus action: add two turns of cooldown to every enemy ability (not ultimates), and every enemy loses 15 Speed and 10 Resistance for 2 turns',
         role: "Support",
         level: 3,
         cooldown: 2,
@@ -496,7 +496,7 @@ export const ABILITIES = {
     calm_under_pressure: {
         id: 'calm_under_pressure',
         name: 'Calm Under Pressure',
-        description: 'Heal yourself for 15 hp',
+        description: 'Heal yourself for 35 hp',
         role: "DPS",
         level: 3,
         cooldown: 3,
@@ -510,7 +510,7 @@ export const ABILITIES = {
          * @returns {Object} Effect data
          */
         execute: ({ caster, playerName }) => {
-            const healAmount = 15;
+            const healAmount = 35;
             const currentHealth = caster.stats.health;
             const maxHealth = caster.stats.maxHealth;
             const actualHeal = Math.min(healAmount, maxHealth - currentHealth);
@@ -1657,12 +1657,13 @@ export const ABILITIES = {
     no_limits: {
         id: 'no_limits',
         name: 'No Limits',
-        description: 'Allows you to use your weapon 3 times in one turn',
+        description: 'Bonus action: use your weapon 3 times this turn',
         role: "DPS",
         cooldown: 9,
         isUltimate: true,
         targetType: 'self',
         type: 'buff',
+        consumesAction: false,
         
         /**
          * @param {Object} params
@@ -1676,7 +1677,9 @@ export const ABILITIES = {
                 effects: [{
                     type: 'extra_weapon_attacks',
                     target: playerName,
-                    value: 3, // Can attack 3 times total
+                    // Two swings on top of the turn's own attack: three in all. (As a bonus
+                    // action it leaves the action free, so it works before or after attacking.)
+                    value: 2,
                     duration: 1 // Lasts this turn only
                 }],
                 message: `${caster.name} activates No Limits! Can use weapon 3 times this turn!`

@@ -297,3 +297,34 @@ describe('logging', () => {
     expect(logger.log).toHaveBeenCalledWith(expect.stringMatching(/\[AI\] scripted story \d+ms/));
   });
 });
+
+describe('the story so far (Summarize button)', () => {
+  it('asks the model to recap the whole story, and keeps its points', async () => {
+    const provider = scriptedProvider([beat(), { points: ['The party sided with the Rebels after the market bombing.', 'Shipment chose to hit the depot at night.'] }]);
+    const narrator = createNarrator({ provider, logger: quietLogger });
+    await narrator.handleEvent({ room: 'r1', eventType: 'choice_made', data: { faction: 'rebels' }, context: context() });
+    const summary = await narrator.summarize('r1', context(), { fightsDone: 1 });
+    const request = provider.calls[provider.calls.length - 1];
+    expect(request.kind).toBe('summary');
+    expect(request.messages[0].content).toMatch(/WHOLE story so far/);
+    expect(summary).toMatchObject({ fightsDone: 1, points: ['The party sided with the Rebels after the market bombing.', 'Shipment chose to hit the depot at night.'] });
+    expect(narrator.getSummary('r1')).toBe(summary);
+  });
+
+  it('falls back to a recap built from the game\'s own records', async () => {
+    const provider = scriptedProvider([beat(), new Error('model down')]);
+    const narrator = createNarrator({ provider, logger: quietLogger });
+    await narrator.handleEvent({ room: 'r1', eventType: 'choice_made', data: { faction: 'enforcers' }, context: context() });
+    const { points } = await narrator.summarize('r1', context(), { fightsDone: 2 });
+    expect(points.join(' ')).toMatch(/fight with the Enforcers/);
+    expect(points.join(' ')).toMatch(/2 fights/);
+  });
+
+  it('drops recap points that name characters outside the party', async () => {
+    const provider = scriptedProvider([beat(), { points: ['Shipment kept the door.', 'Aaron Bray cheered.', 'Ghost Shell found the files.'] }]);
+    const narrator = createNarrator({ provider, logger: quietLogger });
+    await narrator.handleEvent({ room: 'r1', eventType: 'choice_made', data: { faction: 'rebels' }, context: context() });
+    const { points } = await narrator.summarize('r1', context(), { fightsDone: 1 });
+    expect(points).toEqual(['Shipment kept the door.', 'Ghost Shell found the files.']);
+  });
+});

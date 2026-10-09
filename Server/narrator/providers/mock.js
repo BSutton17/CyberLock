@@ -14,6 +14,11 @@ export function createMockProvider({ delayMs = 0, random = Math.random } = {}) {
         await new Promise(resolve => setTimeout(resolve, delayMs));
       }
 
+      // The offline recap is the one the game builds from its own records.
+      if (kind === 'summary') {
+        return JSON.stringify({ points: hints.recap || [] });
+      }
+
       if (kind === 'rules') {
         return JSON.stringify({
           answer: `(Offline help) ${hints.question ? `About "${hints.question}": ` : ''}select your weapon or an ability, then click a target in range. Bonus-action abilities can be used alongside your main action. End your turn when you are done.`

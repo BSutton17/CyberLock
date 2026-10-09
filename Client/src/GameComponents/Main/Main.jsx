@@ -10,6 +10,7 @@ import './Main.css';
 import ChatBot from '../ChatBot/ChatBot';
 import SettingsMenu from '../../Components/SettingsMenu';
 import MockToggle from '../../Components/MockToggle';
+import StorySummary from '../../Components/StorySummary';
 import DialogueChoices from './DialogueChoices';
 
 const SCENE_BACKGROUNDS = {
@@ -188,8 +189,10 @@ const resolveSceneKey = (rawKeyword = '') => {
 
 const TYPEWRITER_CHAR_INTERVAL_MS = 20;
 const TYPEWRITER_SENTENCE_GAP_FACTOR_MS = 18;
-// After a narration finishes typing, it stays up this long before the next one replaces it.
-const NARRATION_READ_PAUSE_MS = 500;
+// Every narration stays up at least this long, however short it is...
+const NARRATION_MIN_DISPLAY_MS = 2000;
+// ...and once it has finished typing, this much longer before the next one replaces it.
+const NARRATION_READ_PAUSE_MS = 1000;
 const TURN_ADVANCE_AFTER_TYPING_MS = 1000;
 // Real models can take several seconds for a story beat; fall back only if the server is truly stuck.
 const POST_COMBAT_NARRATION_TIMEOUT_MS = 25000;
@@ -206,7 +209,7 @@ const splitAiTextSegments = (message = '') => {
     return segments.length > 0 ? segments : [trimmedMessage];
 };
 
-const estimateTypewriterDurationMs = (message = '') => {
+const estimateTypingMs = (message = '') => {
     const segments = splitAiTextSegments(message);
     if (segments.length === 0) return 0;
 
@@ -217,8 +220,12 @@ const estimateTypewriterDurationMs = (message = '') => {
             : 0;
 
         return durationMs + typingDurationMs + sentencePauseMs;
-    }, NARRATION_READ_PAUSE_MS);
+    }, 0);
 };
+
+// How long a narration holds the screen: typing (at least the minimum), then the reading pause.
+const narrationHoldMs = (message = '') => Math.max(NARRATION_MIN_DISPLAY_MS, estimateTypingMs(message)) + NARRATION_READ_PAUSE_MS;
+const estimateTypewriterDurationMs = (message = '') => narrationHoldMs(message);
 
 
 function Main() {
@@ -279,6 +286,9 @@ function Main() {
     const [pendingPostEncounterChoice, setPendingPostEncounterChoice] = useState(false);
     const [pendingNextEncounterChoice, setPendingNextEncounterChoice] = useState(false);
     const [aiText, setAiText] = useState('');
+    // Fight narration is shown like story text but never saved as the story's place: coming back
+    // to the story (after a level-up, a refresh) must not replay the last line of a fight.
+    const [aiTextIsCombat, setAiTextIsCombat] = useState(false);
     // A personal moment in the narration: one party member answers (or asks) an NPC. Its choices
     // show where the story choices go; the group's options follow once it's answered.
     const [dialogue, setDialogue] = useState(null);
@@ -556,6 +566,9 @@ function Main() {
     const playerCharactersRef = useRef(playerCharacters);
     const characterPositionsRef = useRef(characterPositions);
     const moveAnimationTimersRef = useRef([]);
+    // Per unit: the timers of its current walk, and when that walk ends.
+    const moveTimersByUnitRef = useRef({});
+    const walkingUntilRef = useRef({});
     const combatNoticeTimeoutRef = useRef(null);
     const turnDeadlineRef = useRef(null);
     const turnStartLockTimeoutRef = useRef(null);
@@ -686,7 +699,7 @@ function Main() {
             pendingFactionChoice,
             pendingPostEncounterChoice,
             pendingNextEncounterChoice,
-            aiText,
+            aiText: aiTextIsCombat ? '' : aiText,
             aiOptions,
             aiAttribute,
             allowFallbackFactionChoices,
@@ -705,6 +718,7 @@ function Main() {
         pendingPostEncounterChoice,
         pendingNextEncounterChoice,
         aiText,
+        aiTextIsCombat,
         aiOptions,
         aiAttribute,
         allowFallbackFactionChoices,
@@ -1144,6 +1158,7 @@ function Main() {
     // New narration waits for the one on screen to finish typing, plus a short pause to read it.
     // Only the newest waiting narration is kept, so the text never falls behind the board.
     const narrationTypingRef = useRef(false);
+    const narrationStartedAtRef = useRef(0);
     const narrationDoneAtRef = useRef(0);
     const pendingNarrationRef = useRef(null);
     const narrationHoldTimerRef = useRef(null);
@@ -1152,7 +1167,9 @@ function Main() {
         clearTimeout(narrationHoldTimerRef.current);
         if (narrationTypingRef.current || pendingNarrationRef.current === null) return;
 
-        const waitMs = narrationDoneAtRef.current + NARRATION_READ_PAUSE_MS - Date.now();
+        // Free once the last one has been up for the minimum and then for the reading pause.
+        const waitMs = Math.max(narrationDoneAtRef.current, narrationStartedAtRef.current + NARRATION_MIN_DISPLAY_MS)
+            + NARRATION_READ_PAUSE_MS - Date.now();
         if (waitMs > 0) {
             narrationHoldTimerRef.current = setTimeout(showNextNarration, waitMs);
             return;
@@ -1162,6 +1179,7 @@ function Main() {
         pendingNarrationRef.current = null;
         const segments = splitAiTextSegments(message);
         narrationTypingRef.current = true;
+        narrationStartedAtRef.current = Date.now();
         setSentencesSource(message);
         setAiSentences(segments.length > 0 ? segments : [message]);
         setCurrentSentenceIndex(0);
@@ -1401,6 +1419,7 @@ function Main() {
             setAiBusy(false);
             // New narration types out first; its choices appear once it has finished.
             setAiNarrationComplete(false);
+            setAiTextIsCombat(false);
             setAiText(safeResponse);
             // A new story beat replaces any earlier personal moment.
             setDialogue(incomingDialogue || null);
@@ -1587,6 +1606,8 @@ function Main() {
             combatLifecycleActiveRef.current = false;
             moveAnimationTimersRef.current.forEach(clearTimeout);
             moveAnimationTimersRef.current = [];
+            moveTimersByUnitRef.current = {};
+            walkingUntilRef.current = {};
 
             if (result === 'all_dead') {
                 setTurnOrder([]);
@@ -2015,22 +2036,32 @@ function Main() {
         if (!combatState || gamePhase !== 'combat') return;
         const snapshot = combatState;
 
-        moveAnimationTimersRef.current.forEach(clearTimeout);
-        moveAnimationTimersRef.current = [];
         const finalPositions = snapshot.positions || {};
         const moves = (snapshot.events || []).filter(event => event.type === 'move' && Array.isArray(event.path) && event.path.length > 0);
         const shown = characterPositionsRef.current || {};
+        // Units still walking from an earlier snapshot keep walking; only a new move restarts one.
+        const walking = walkingUntilRef.current;
+        const now = Date.now();
+        moves.forEach(move => {
+            (moveTimersByUnitRef.current[move.unitId] || []).forEach(clearTimeout);
+            moveTimersByUnitRef.current[move.unitId] = [];
+        });
+        const stillWalking = Object.keys(walking).filter(id => walking[id] > now && !moves.some(move => move.unitId === id));
 
         setCharacterPositions({
             ...finalPositions,
+            ...Object.fromEntries(stillWalking.filter(id => shown[id]).map(id => [id, shown[id]])),
             ...Object.fromEntries(moves.map(move => [move.unitId, shown[move.unitId] || move.path[0]]))
         });
         moves.forEach(move => {
             const stepMs = move.stepMs || PLAYER_STEP_MS;
+            walking[move.unitId] = now + stepMs * move.path.length;
             move.path.forEach((position, index) => {
-                moveAnimationTimersRef.current.push(setTimeout(() => {
+                const timer = setTimeout(() => {
                     setCharacterPositions(previous => ({ ...previous, [move.unitId]: position }));
-                }, stepMs * (index + 1)));
+                }, stepMs * (index + 1));
+                moveTimersByUnitRef.current[move.unitId].push(timer);
+                moveAnimationTimersRef.current.push(timer);
             });
         });
 
@@ -2061,7 +2092,9 @@ function Main() {
         };
         const handleCombatNarration = ({ text } = {}) => {
             const safeText = sanitizeAiNarrationText(text || '');
-            if (safeText) setAiText(safeText);
+            if (!safeText) return;
+            setAiTextIsCombat(true);
+            setAiText(safeText);
         };
 
         socket.on('combat_error', handleCombatError);
@@ -2501,6 +2534,7 @@ function Main() {
                     </button>
                     <SettingsMenu />
                     <button className='leave-main-help' onClick={() => setChat(true)}>Help</button>
+                    <StorySummary />
                     <MockToggle inRoom inline />
                 </div>
                 <h2 className='title'>{SCENE_LABELS[currentSceneKey] || SCENE_LABELS.city_square}</h2>

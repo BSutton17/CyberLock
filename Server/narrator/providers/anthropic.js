@@ -3,7 +3,7 @@
 // narrated from hand-written lines (narrator/combatLines). The system prompt is cached between calls.
 import Anthropic from '@anthropic-ai/sdk';
 
-const EFFORT_BY_KIND = { story: 'medium', combat: 'low', rules: 'low' };
+const EFFORT_BY_KIND = { story: 'medium', combat: 'low', rules: 'low', summary: 'low' };
 
 // The SDK itself retries busy/overloaded/rate-limited replies (429, 5xx, 529) with backoff and
 // honors retry-after. Two retries matches the Gemini provider.

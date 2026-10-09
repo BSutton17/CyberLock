@@ -23,7 +23,7 @@ describe('DialogueChoices', () => {
   it('lets the chosen player pick, with attribute answers tagged', () => {
     const onChoose = vi.fn();
     render(<DialogueChoices dialogue={dialogue} playerName="B" onChoose={onChoose} />);
-    expect(screen.getByText('Your answer to A checkpoint guard')).toBeTruthy();
+    expect(screen.getByText('Your answer to a checkpoint guard')).toBeTruthy();
     expect(screen.getByText('Politician')).toBeTruthy();
     fireEvent.click(screen.getByText("It's none of your business."));
     expect(onChoose).toHaveBeenCalledWith('defiant');
@@ -32,7 +32,7 @@ describe('DialogueChoices', () => {
   it('shows everyone else the same choices, but only the chosen player can click', () => {
     const onChoose = vi.fn();
     render(<DialogueChoices dialogue={dialogue} playerName="A" onChoose={onChoose} />);
-    expect(screen.getByText(/Livewire's answer to A checkpoint guard \(only they can choose\)/)).toBeTruthy();
+    expect(screen.getByText(/Livewire's answer to a checkpoint guard \(only they can choose\)/)).toBeTruthy();
     const buttons = screen.getAllByRole('button');
     expect(buttons).toHaveLength(3);
     expect(buttons.every(button => button.disabled)).toBe(true);

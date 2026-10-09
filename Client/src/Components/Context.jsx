@@ -34,6 +34,8 @@ export const GameProvider = ({ children }) => {
     const [bots, setBots] = useState([]);
     // The host's "Mock" switch: the room uses the free offline narrator instead of the AI.
     const [narratorMock, setNarratorMock] = useState(false);
+    // The "story so far" recap behind the Summarize button (rewritten after every fight).
+    const [storySummary, setStorySummary] = useState(null);
     const [isAdmin, setAdmin] = useState(false);
     const [room, setRoom] = useState("");
     const [displayGame, setDisplayGame] = useState(false);
@@ -132,6 +134,7 @@ export const GameProvider = ({ children }) => {
         players, setPlayers,
         bots, setBots,
         narratorMock, setNarratorMock,
+        storySummary, setStorySummary,
         isAdmin, setAdmin,
         room, setRoom,
         displayGame, setDisplayGame,

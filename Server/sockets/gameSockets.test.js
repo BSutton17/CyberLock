@@ -444,6 +444,17 @@ describe('combat turns', () => {
     });
   });
 
+  it('rewrites the story-so-far recap after a fight and hands it to anyone who asks', async () => {
+    const { room, sockets: [a, b] } = await startFight([enemy('e1', 20, 2)]);
+    fight(room).positions.e1 = { row: 5, col: 3 };
+    const pushed = waitFor(b, 'story_summary');
+    await ack(a, 'combat_attack', { room, targetId: 'e1' });
+    const summary = await pushed;
+    expect(summary.fightsDone).toBe(1);
+    expect(summary.points.length).toBeGreaterThan(0);
+    expect(await ack(b, 'request_story_summary', { room })).toEqual({ summary });
+  });
+
   it('declares victory when the last enemy falls and patches the party up', async () => {
     const { room, sockets: [a] } = await startFight([enemy('e1', 20, 2)]);
     game.state.rooms[room].characterSelections.B.stats.health = 5;

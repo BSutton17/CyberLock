@@ -132,3 +132,12 @@ and keeps the best. Live bots weigh at most 20 options per step to keep the serv
 `node Server/scripts/botFight.js [fights] [partySize] [--real-timing] [--strong]` plays story
 fights end to end over real sockets with simple bots, to check nothing stalls after a rules
 change. For balance testing use `node Server/scripts/balance.js` (see [BALANCE.md](BALANCE.md)).
+
+## Pacing
+
+Every combat narration stays on screen at least 2 seconds and, once typed out, 1 more second to
+read; the next turn waits for it. Bot party members walk a tile every 320 ms
+(`BOT_MOVE_STEP_MS`), pause 700 ms between arriving and striking (`BOT_ACTION_DELAY_MS`) and
+1.6 s before each step (`BOT_STEP_MS`). Ultimates' cooldowns carry over between fights and are
+never lengthened by Butterfly Effect.
+

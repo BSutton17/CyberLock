@@ -18,9 +18,11 @@ const formatAttribute = (attribute) => (attribute ? attribute.charAt(0).toUpperC
 function DialogueChoices({ dialogue, playerName, onChoose, busy = false, mobile = false }) {
     const isMine = dialogue.playerName === playerName;
     const who = isMine ? 'You' : dialogue.characterName;
+    // "A street kid" starts a sentence; mid-sentence it's "a street kid".
+    const npc = String(dialogue.npc || '').replace(/^A /, 'a ').replace(/^An /, 'an ');
     const label = dialogue.kind === 'ask'
-        ? `${who} can ask ${dialogue.npc} something`
-        : `${isMine ? 'Your' : `${dialogue.characterName}'s`} answer to ${dialogue.npc}`;
+        ? `${who} can ask ${npc} something`
+        : `${isMine ? 'Your' : `${dialogue.characterName}'s`} answer to ${npc}`;
 
     return (
         <div className={`${mobile ? 'mobile-ai-overlay-choices' : 'ai-choices'} dialogue-choices`}>

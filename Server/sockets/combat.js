@@ -35,6 +35,8 @@ export function createCombatController({
   buildNarratorContext = () => ({}),
   generateEnemies = generateEncounterEnemies,
   random = Math.random,
+  // Called once a fight has ended (the "story so far" recap is rewritten then).
+  onCombatEnded = () => {},
   // Where the party starts each fight. Tests replace this to set up exact positions.
   spawnPlayers = (players, characters, sceneKey) => generatePlayerSpawnPositions(players, characters, sceneKey, random)
 }) {
@@ -139,7 +141,7 @@ export function createCombatController({
     const typing = sentences.reduce((total, sentence, index) =>
       total + sentence.length * (timing.narrationCharMs || 0)
         + (index < sentences.length - 1 ? sentence.length * (timing.narrationSentenceGapCharMs || 0) : 0), 0);
-    return typing + (timing.narrationReadPauseMs || 0) + (timing.narrationSlackMs || 0);
+    return Math.max(typing, timing.narrationMinDisplayMs || 0) + (timing.narrationReadPauseMs || 0) + (timing.narrationSlackMs || 0);
   }
 
   // Narrates one turn: a sentence for each thing that happened, sent a moment after it happened.
@@ -231,6 +233,7 @@ export function createCombatController({
       characters: roomState?.characterSelections || {}
     });
     logger.log?.(`[COMBAT] Room ${room} encounter ${combat.encounterIndex} ended: ${result}`);
+    onCombatEnded(room, { result, encounterIndex: combat.encounterIndex });
 
     // Keep the finished fight briefly so late clicks are recognised as stale.
     setTimeout(() => {
@@ -376,15 +379,35 @@ export function createCombatController({
     }
 
     const here = ctx.combat.positions[turn.id];
-    let acted = false;
+    const acts = step.kind === 'attack' || step.kind === 'ability';
     if (step.move && here && (step.move.row !== here.row || step.move.col !== here.col)) {
       const moved = engine.movePlayer(ctx, turn.id, { row: step.move.row, col: step.move.col });
       if (moved.ok) {
-        acted = true;
-        broadcast(room, moved.events);
+        // Walk at a pace people can follow, and finish the walk before swinging.
+        const stepMs = timing.botMoveStepMs || 0;
+        const tiles = moved.events.reduce((total, event) => total + (event.path?.length || 0), 0);
+        broadcast(room, moved.events.map(event => (event.type === 'move' ? { ...event, stepMs: stepMs || undefined } : event)));
+        if (acts) {
+          const walkMs = tiles * stepMs * (timing.animationScale ?? 1);
+          schedule(room, walkMs + (timing.botActionDelayMs || 0), () => finishBotStep(room, step, true));
+          return;
+        }
+        finishBotStep(room, null, true);
+        return;
       }
     }
-    if (step.kind === 'attack' || step.kind === 'ability') {
+    finishBotStep(room, acts ? step : null, false);
+  }
+
+  // The second half of a bot's step: its attack or ability (if any), then on to the next step.
+  function finishBotStep(room, step, alreadyActed) {
+    const ctx = contextFor(room);
+    if (!ctx) return;
+    const turn = ctx.combat.turn;
+    if (!turn || turn.finished || !isBot(state.rooms[room], turn.id)) return;
+
+    let acted = alreadyActed;
+    if (step) {
       const result = step.kind === 'attack'
         ? engine.attack(ctx, turn.id, step.targetId)
         : ACTIONS.ability(ctx, turn.id, step);

@@ -353,10 +353,25 @@ const MOMENT_CALLBACKS = {
     ]
 };
 
-function momentCallback(hints, tools) {
+// A thread an answer started, paid off: the lead itself, introduced by a short beat.
+const THREAD_LEAD_INS = [
+    'What {by} said earlier is already catching up with them.',
+    'The conversation with {npcMid} hasn\'t stayed a conversation.',
+    'Things said in passing have a way of coming back around.',
+    '{by}\'s answer earlier is still rippling outward.'
+];
+
+function momentCallback(hints, tools, recent = []) {
     const moments = hints.personalMoments || [];
-    if (moments.length === 0 || !tools.chance(0.35)) return null;
+    if (moments.length === 0) return null;
     const moment = moments[moments.length - 1];
+    // A thread nobody has heard paid off yet comes first, every time.
+    if (moment.lead && !recent.includes(moment.lead)) {
+        recent.push(moment.lead);
+        const npcMid = moment.npc.replace(/^A /, 'a ');
+        return `${fill(tools.pick(THREAD_LEAD_INS), { npcMid, by: moment.by })} ${moment.lead}`;
+    }
+    if (!tools.chance(0.35)) return null;
     const pool = moment.tone === 'defiant' ? MOMENT_CALLBACKS.cold : MOMENT_CALLBACKS.warm;
     // "A checkpoint guard" starts a sentence; mid-sentence it's "a checkpoint guard".
     const npcMid = moment.npc.replace(/^A /, 'a ');
@@ -470,6 +485,9 @@ export function mockStoryBeat(hints = {}, random = Math.random, recent = []) {
             }
 
             if (hints.startsCombat) {
+                // A thread an earlier answer started can be what this fight grows out of.
+                const thread = momentCallback(hints, tools, recent);
+                if (thread) lines.push(thread);
                 lines.push(fill(tools.pick(TRANSITIONS), v));
                 // The campaign's fight setups are written as outlines ("Assault on the tower..."), so lead into them.
                 if (hints.setup) lines.push(sentence(`${tools.pick(['The job: ', 'Next stop: ', 'What comes next: '])}${lowerFirst(hints.setup)}`));
@@ -477,7 +495,7 @@ export function mockStoryBeat(hints = {}, random = Math.random, recent = []) {
                 lines.push(tools.pick(FIGHT_STARTS));
                 memory = hints.setup || 'Another fight broke out.';
             } else if (hints.needsOptions) {
-                const callback = momentCallback(hints, tools);
+                const callback = momentCallback(hints, tools, recent);
                 if (callback) lines.push(callback);
                 const situation = tools.pick(SITUATIONS[hints.attribute] || SITUATIONS.navigator);
                 lines.push(fill(situation.text, v));

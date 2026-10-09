@@ -8,7 +8,7 @@ import { mergeCharacterPayload } from '../Utils/characterProgression';
 // components registered for the same events. Live values are read through refs.
 function Events() {
   const {
-    socket, setPlayers, setBots, setNarratorMock, setDisplayGame, setAdmin, setScreen, setPlayerCharacters,
+    socket, setPlayers, setBots, setNarratorMock, setStorySummary, setDisplayGame, setAdmin, setScreen, setPlayerCharacters,
     setReadyPlayers, setGamePhase, room, setEnemies, setTurnOrder, setCurrentTurn,
     setIsMyTurn, playerName, setAllPlayerAttributes, setServerStoryState, setCombatState
   } = useGameContext();
@@ -38,6 +38,7 @@ function Events() {
 
       bots_updated: (botList) => setBots(Array.isArray(botList) ? botList : []),
       narrator_mode: ({ mock } = {}) => setNarratorMock(!!mock),
+      story_summary: (summary) => setStorySummary(summary || null),
 
       gameStarted: () => {
         setDisplayGame(true);

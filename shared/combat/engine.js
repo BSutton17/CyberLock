@@ -324,7 +324,9 @@ function applyInstantEffect(ctx, casterId, effect) {
         const excluded = new Set(effect.excludeAbilityIds || []);
         changeCooldowns(ctx, targetId, (id, value) => (excluded.has(id) ? value : 0));
     } else if (effect.type === 'cooldown_increase') {
-        changeCooldowns(ctx, targetId, (_id, value) => value + (effect.value || 1));
+        // Ultimates are left alone: their long cooldowns carry over between fights, and an enemy
+        // spamming Butterfly Effect could otherwise push one out of reach for the rest of the game.
+        changeCooldowns(ctx, targetId, (id, value) => (getAbility(id)?.isUltimate ? value : value + (effect.value || 1)));
     } else if (effect.type === 'extra_weapon_attacks' && targetId === casterId && ctx.combat.turn?.id === casterId) {
         ctx.combat.turn.extraWeaponAttacks = effect.value || 0;
     }

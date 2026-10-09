@@ -72,7 +72,7 @@ export const config = {
     combatStartEnemyDelayMs: toInt(env.COMBAT_START_ENEMY_DELAY_MS, 3000),
     // Enemy pacing: "thinking" before acting, after walking before striking, and after the turn.
     enemyThinkMs: toInt(env.ENEMY_THINK_MS, 700),
-    enemyAttackDelayMs: toInt(env.ENEMY_ATTACK_DELAY_MS, 350),
+    enemyAttackDelayMs: toInt(env.ENEMY_ATTACK_DELAY_MS, 600),
     enemyTurnEndDelayMs: toInt(env.ENEMY_TURN_END_DELAY_MS, 1000),
     // Pause between one enemy's turn and the next unit's.
     enemyTurnAdvanceDelayMs: toInt(env.ENEMY_TURN_ADVANCE_DELAY_MS, 0),
@@ -80,8 +80,12 @@ export const config = {
     animationScale: 1,
     // A player's turn is ended automatically after this long.
     allyTurnTimeoutMs: toInt(env.ALLY_TURN_TIMEOUT_MS, 40000),
-    // Pause before each step a bot party member takes, so players can follow it.
-    botStepMs: toInt(env.BOT_STEP_MS, 900),
+    // Pause before each step a bot party member takes, so players can follow it...
+    botStepMs: toInt(env.BOT_STEP_MS, 1600),
+    // ...how long a bot spends walking each tile...
+    botMoveStepMs: toInt(env.BOT_MOVE_STEP_MS, 320),
+    // ...and the beat between arriving and striking.
+    botActionDelayMs: toInt(env.BOT_ACTION_DELAY_MS, 700),
     // How long a player has to answer a personal moment before their character stays silent.
     dialogueTimeoutMs: toInt(env.DIALOGUE_TIMEOUT_MS, 60000),
     // How long a disconnected player keeps their seat before being removed.
@@ -92,7 +96,8 @@ export const config = {
     // character of the sentence before, and a moment to read the end. The next turn waits for it.
     narrationCharMs: 20,
     narrationSentenceGapCharMs: 18,
-    narrationReadPauseMs: 500,
+    narrationMinDisplayMs: 2000,
+    narrationReadPauseMs: 1000,
     // Allowance for the network and a slow phone.
     narrationSlackMs: 400
   }
@@ -107,7 +112,7 @@ const MOCK_PACING = {
   enemyAttackDelayMs: ['ENEMY_ATTACK_DELAY_MS', 600],
   enemyTurnEndDelayMs: ['ENEMY_TURN_END_DELAY_MS', 1600],
   enemyTurnAdvanceDelayMs: ['ENEMY_TURN_ADVANCE_DELAY_MS', 1200],
-  botStepMs: ['BOT_STEP_MS', 1500]
+  botStepMs: ['BOT_STEP_MS', 2000]
 };
 
 export function applyMockPacing(timing, environment = env) {

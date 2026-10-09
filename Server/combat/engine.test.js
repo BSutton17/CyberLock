@@ -862,3 +862,31 @@ describe('turn beats for the narrator', () => {
     expect(beats.find(beat => beat.kind === 'kill')).toMatchObject({ strike: { kind: 'ability', abilityId: 'poison_apple', actor: { name: 'Shipment' } } });
   });
 });
+
+describe('ultimate cooldowns', () => {
+  it('are not pushed back by an enemy Butterfly Effect, while regular abilities are', () => {
+    const butterfly = { id: 'butterfly_effect' };
+    const ctx = setup({
+      players: { p1: player('Leo', { ultimate: 'no_limits', level: 3, abilities: ['shadow_strike'] }) },
+      enemies: [enemy('handler', { role: 'Support', abilities: [butterfly] })],
+      positions: { p1: { row: 6, col: 2 }, handler: { row: 1, col: 2 } },
+      order: ['handler', 'p1']
+    });
+    ctx.cooldowns.p1 = { no_limits: 9, shadow_strike: 0 };
+    runEnemyAbilityAndMove(ctx, 'handler', { abilityToUse: butterfly, target: 'p1', movement: null });
+    expect(ctx.cooldowns.p1).toEqual({ no_limits: 9, shadow_strike: 2 });
+  });
+
+  it('No Limits is a bonus action worth three swings in all', () => {
+    const ctx = setup({
+      players: { p1: player('Leo', { ultimate: 'no_limits', level: 3, strength: 10 }) },
+      enemies: [enemy('e1', { health: 500, maxHealth: 500 })],
+      positions: { p1: { row: 5, col: 2 }, e1: { row: 4, col: 2 } }
+    });
+    expect(attack(ctx, 'p1', 'e1').ok).toBe(true);
+    expect(useAbility(ctx, 'p1', { abilityId: 'no_limits' }).ok).toBe(true);
+    expect(attack(ctx, 'p1', 'e1').ok).toBe(true);
+    expect(attack(ctx, 'p1', 'e1').ok).toBe(true);
+    expect(attack(ctx, 'p1', 'e1').ok).toBe(false);
+  });
+});

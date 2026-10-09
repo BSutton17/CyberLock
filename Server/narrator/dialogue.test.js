@@ -25,7 +25,7 @@ describe('personal moments', () => {
     const plain = createDialogue({ target, attributes: ['banker', 'spy', 'medic'], faction: 'rebels', random: () => 0 });
     expect(plain.kind).toBe('reply');
     expect(plain.intro).toBe('A checkpoint guard steps into the party\'s path and looks straight at Livewire. "Why are you here?"');
-    expect(publicDialogue(plain).options.map(option => option.id)).toEqual(['honest', 'defiant']);
+    expect(publicDialogue(plain).options.map(option => option.id)).toEqual(['honest', 'defiant', 'sly']);
 
     const politician = createDialogue({ target, attributes: ['spy', 'politician'], faction: 'rebels', random: () => 0 });
     expect(politician.options[0]).toMatchObject({ tone: 'skill', attribute: 'politician', text: 'We came to save someone.' });
@@ -58,6 +58,21 @@ describe('personal moments', () => {
     const shown = publicDialogue(createDialogue({ target, faction: 'rebels', random: () => 0 }));
     expect(JSON.stringify(shown)).not.toMatch(/reaction|told/);
     expect(shown.options.some(option => option.id === 'silent')).toBe(false);
+  });
+
+  it('gives every answer its own words, reaction and story thread', () => {
+    const allLeads = [];
+    for (const exchange of DIALOGUE_EXCHANGES) {
+      const answers = [exchange.honest, exchange.defiant, exchange.sly, ...Object.values(exchange.skills)];
+      for (const field of ['text', 'reaction', 'lead']) {
+        const values = answers.map(answer => answer[field]);
+        expect(values.every(Boolean), `${exchange.npc} ${field}`).toBe(true);
+        expect(new Set(values).size, `${exchange.npc} ${field}`).toBe(values.length);
+      }
+      allLeads.push(...answers.map(answer => answer.lead));
+    }
+    expect(new Set(allLeads).size).toBe(allLeads.length);
+    expect(DIALOGUE_EXCHANGES.length).toBeGreaterThanOrEqual(18);
   });
 
   it('labels attitudes', () => {
@@ -114,11 +129,83 @@ describe('personal moments in the story', () => {
     expect(state).toContain(defiant.text);
   });
 
+  it('starts a story thread the narrator is told about, and the offline narrator pays it off', async () => {
+    const { narrator, result } = await afterFight();
+    const { playerName, id, options } = result.dialogue;
+    const chosen = narrator.getSession('r').pendingDialogue.options.find(option => option.id === options[0].id);
+    narrator.answerDialogue('r', { playerName, dialogueId: id, optionId: chosen.id });
+
+    const session = narrator.getSession('r');
+    session.openingCombatStarted = true; // past the opening, so the next choice is a story choice
+    expect(session.personalMoments.at(-1).lead).toBe(chosen.lead);
+    expect(buildStateBlock(session, { party })).toContain(chosen.lead);
+    expect(session.storyLog).toContain(chosen.lead);
+
+    const next = await narrator.handleEvent({ room: 'r', eventType: 'choice_made', data: { choice: options[0].text }, context });
+    expect(next.response).toContain(chosen.lead);
+  });
+
   it('lets the moment pass in silence when time runs out', async () => {
     const { narrator, result } = await afterFight();
     const expired = narrator.expireDialogue('r', result.dialogue.id);
     expect(expired.response).toMatch(new RegExp(`${result.dialogue.characterName} (doesn't answer|lets the moment pass)`));
     expect(expired.options).toHaveLength(2);
     expect(narrator.getSession('r').personalMoments).toHaveLength(0);
+  });
+});
+
+describe('personal moments written by the AI', () => {
+  const party = [
+    { playerName: 'A', characterId: 'offensive_tank_1', characterName: 'Shipment', role: 'Tank' },
+    { playerName: 'B', characterId: 'offensive_support_2', characterName: 'Livewire', role: 'Support' }
+  ];
+  const context = { party, players: ['A', 'B'], attributesByPlayer: { A: ['medic', 'spy'], B: ['politician', 'crook'] }, connectedPlayers: ['A', 'B'], partyFaction: 'rebels', encounterIndex: 1 };
+  const beat = { narration: 'Rain hammers the depot roof.', options: ['Go in loud', 'Wait for dark'], location: 'warehouse', memory: 'They reached the depot.' };
+  const moment = (overrides = {}) => ({
+    kind: 'reply',
+    npc: 'A dock foreman',
+    intro: 'A dock foreman blocks the gate and squints at {who}. "You lot with the union or the company?"',
+    options: [
+      { approach: 'honest', attribute: '', text: 'Neither. We just need in.', told: 'x says they need in.', reaction: 'The foreman shrugs.', lead: 'The foreman left the side gate unlocked.' },
+      { approach: 'defiant', attribute: '', text: 'Move.', told: 'x tells him to move.', reaction: 'He moves, and calls someone.', lead: 'Company security knows the party is at the depot.' },
+      { approach: 'sly', attribute: '', text: 'Union. Obviously.', told: 'x lies smoothly.', reaction: 'He grins and lowers his voice.', lead: 'The union is planning a walkout the party could use as cover.' },
+      { approach: 'skill', attribute: 'politician', text: 'We are here for the workers.', told: 'x makes a promise.', reaction: 'The foreman takes off his cap.', lead: 'The dock workers will back the party in a fight at the depot.' }
+    ],
+    ...overrides
+  });
+
+  function scripted(responses) {
+    const calls = [];
+    return { name: 'scripted', model: 'scripted', calls, async generate(request) { calls.push(request); return JSON.stringify(responses.length > 1 ? responses.shift() : responses[0]); } };
+  }
+
+  async function fightEnds(provider) {
+    const narrator = createNarrator({ provider, logger: quiet, random: () => 0.1 });
+    // Joining a side first, as in a real game, so moments can happen.
+    await narrator.handleEvent({ room: 'r', eventType: 'choice_made', data: { faction: 'rebels' }, context: { ...context, encounterIndex: 0 } });
+    const result = await narrator.handleEvent({ room: 'r', eventType: 'encounter_end', context });
+    return { narrator, result };
+  }
+
+  it('writes the moment fresh for the scene, with answers that lead different ways', async () => {
+    const provider = scripted([beat, beat, moment({ intro: 'A dock foreman blocks the gate and squints at Livewire. "You lot with the union or the company?"' })]);
+    const { narrator, result } = await fightEnds(provider);
+    expect(provider.calls.at(-1).messages[0].content).toMatch(/genuinely different approach/);
+    expect(result.dialogue.npc).toBe('A dock foreman');
+    expect(result.response).toContain('union or the company');
+    // Livewire (B) ranks Politician first, so the skill answer is offered, first.
+    const ids = result.dialogue.options.map(option => option.id);
+    if (result.dialogue.playerName === 'B') expect(ids[0]).toBe('skill');
+    const answer = narrator.answerDialogue('r', { playerName: result.dialogue.playerName, dialogueId: result.dialogue.id, optionId: 'sly' });
+    expect(answer.response).toMatch(/He grins/);
+    expect(narrator.getSession('r').personalMoments.at(-1).lead).toBe('The union is planning a walkout the party could use as cover.');
+  });
+
+  it('falls back to a written moment if the AI mentions someone outside the party', async () => {
+    const bad = moment({ intro: 'Leo, who is not here, waves.' });
+    const { result } = await fightEnds(scripted([beat, beat, bad]));
+    expect(result.dialogue).toBeTruthy();
+    expect(result.dialogue.npc).not.toBe('A dock foreman');
+    expect(result.dialogue.options.length).toBeGreaterThanOrEqual(3);
   });
 });

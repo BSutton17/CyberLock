@@ -4,12 +4,13 @@
 export const MAX_PARTY_SIZE = 6;
 
 // Lobby stages, in order. Each stage ends when every seated player is ready.
-export const STAGES = ['lobby', 'characterSelect', 'attributes1', 'attributes2', 'abilities', 'playing'];
+export const STAGES = ['lobby', 'characterSelect', 'attributes', 'abilities', 'playing'];
 
 export function createRoom(code) {
   return {
     code,
     players: [],
+    bots: [],                 // seats played by the computer (also listed in players)
     admin: null,
     memberIds: {},            // playerName -> userId (stops someone else taking your seat)
     characterSelections: {},
@@ -77,6 +78,7 @@ const without = (list, name) => (Array.isArray(list) ? list.filter(entry => entr
 // Removes every trace of a player. Returns the new admin if the admin left, otherwise null.
 export function removePlayer(room, playerName) {
   room.players = without(room.players, playerName);
+  room.bots = without(room.bots, playerName);
   delete room.memberIds[playerName];
   delete room.characterSelections[playerName];
   delete room.attributes[playerName];
@@ -90,10 +92,23 @@ export function removePlayer(room, playerName) {
   if (room.abilityRound) room.abilityRound.required = without(room.abilityRound.required, playerName);
 
   if (room.admin === playerName) {
-    room.admin = room.players[0] || null;
+    // Bots can't run the room.
+    room.admin = room.players.find(name => !(room.bots || []).includes(name)) || null;
     return room.admin;
   }
   return null;
+}
+
+/** Seats a bot under `name` playing `character`. Returns false if the room is full. */
+export function seatBot(room, name, character, maxPartySize = MAX_PARTY_SIZE) {
+  if (room.players.length >= maxPartySize || room.players.includes(name)) return false;
+  room.bots = room.bots || [];
+  room.players.push(name);
+  room.bots.push(name);
+  room.memberIds[name] = `bot:${name}`;
+  room.characterSelections[name] = character;
+  if (!room.readyPlayers.includes(name)) room.readyPlayers.push(name);
+  return true;
 }
 
 // Ready-state lists are cleared when a player drops so a stale "ready" can't skip a step.

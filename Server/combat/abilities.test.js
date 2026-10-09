@@ -113,15 +113,74 @@ describe('specific abilities', () => {
     expect(calculateTotalStat(params.caster, 'p1', 'speed', activeEffects)).toBe(60);
   });
 
-  it('Zen heals each support for a quarter of their max health', () => {
+  it('Zen heals the whole party for a fifth of their max health and sharpens supports', () => {
     const params = fixture();
     const result = ABILITIES.zen.execute(params);
-    expect(result.healing).toEqual([{ target: 'p2', amount: 20 }]);
+    expect(result.healing).toEqual([{ target: 'p1', amount: 16 }, { target: 'p2', amount: 16 }, { target: 'p3', amount: 16 }]);
+    expect(result.effects).toEqual([expect.objectContaining({ target: 'p2', stat: 'ta', value: 15, duration: 2 })]);
+  });
+
+  it('Fireball hits every enemy in the area for the full amount', () => {
+    const params = fixture();
+    const result = ABILITIES.fireball.execute({ ...params, caster: { ...params.caster, stats: { ...params.caster.stats, ta: 60 } }, random: () => 0.99 });
+    // e1 (4,4), e2 (3,4) and e3 (4,5) are all inside the 3x3 around (4,4): 60/10*8 - 20/10 = 46 each.
+    expect(result.damage).toEqual([{ target: 'e1', amount: 46 }, { target: 'e2', amount: 46 }, { target: 'e3', amount: 46 }]);
+  });
+
+  it('Guarded Breath halves the damage an ally takes', () => {
+    const result = ABILITIES.guarded_breath.execute({ ...fixture(), target: 'p2' });
+    expect(result.effects).toEqual([expect.objectContaining({ type: 'damage_taken_multiplier', target: 'p2', value: 0.5 })]);
+  });
+
+  it('Stonewall shields the caster and allies within two tiles', () => {
+    const params = fixture();
+    params.characterPositions.p3 = { row: 6, col: 6 };
+    const result = ABILITIES.stonewall.execute(params);
+    expect(result.effects.map(effect => effect.target).sort()).toEqual(['p1', 'p2', 'p3']);
+    expect(result.effects.every(effect => effect.value === 25)).toBe(true);
+  });
+
+  it('G.T.G. pins an enemy it teleports but not an ally', () => {
+    const params = fixture();
+    const onEnemy = ABILITIES.gtg.execute({ ...params, target: 'e1', targetPosition: { row: 0, col: 0 } });
+    expect(onEnemy.effects.some(effect => effect.status === 'immobilized' && effect.target === 'e1')).toBe(true);
+    const onAlly = ABILITIES.gtg.execute({ ...params, target: 'p2', targetPosition: { row: 6, col: 9 } });
+    expect(onAlly.effects.some(effect => effect.status === 'immobilized')).toBe(false);
+  });
+
+  it('Poison Apple hits right away and its poison starts this turn', () => {
+    const result = ABILITIES.poison_apple.execute(fixture());
+    expect(result.damage).toEqual([{ target: 'e1', amount: 38 }]); // 50/10*8 - 20/10
+    expect(result.effects.find(effect => effect.type === 'poison')).toMatchObject({ damagePercent: 0.1, tickOnCastTurn: true });
+  });
+
+  it('Butterfly Effect also slows every enemy', () => {
+    const result = ABILITIES.butterfly_effect.execute(fixture());
+    expect(result.effects.filter(effect => effect.type === 'stat_debuff' && effect.stat === 'speed')).toHaveLength(3);
+  });
+
+  it('Iron Sharpens Iron reaches Tanks as well as DPS', () => {
+    const result = ABILITIES.iron_sharpens_iron.execute(fixture());
+    expect(result.effects.map(effect => effect.target).sort()).toEqual(['p1', 'p3']);
+    expect(result.effects.every(effect => effect.value === 15)).toBe(true);
+  });
+
+  it('Dead Calm works on the turn it is used', () => {
+    const params = fixture();
+    const active = ABILITIES.dead_calm.execute(params).effects.map(effect => createActiveEffect(effect, { ownerId: 'p1' }));
+    expect(calculateTotalStat(params.caster, 'p1', 'strength', active)).toBe(100);
+    expect(calculateTotalStat(params.caster, 'p1', 'speed', active)).toBe(0);
+  });
+
+  it('marks the quick abilities as bonus actions', () => {
+    for (const id of ['quick_jab', 'selfish_sacrifice', 'dead_calm', 'rallying_guard', 'shield_up', 'butterfly_effect', 'count_me_out', 'humble', 'hurry_up', 'cursed']) {
+      expect(ABILITIES[id].consumesAction, id).toBe(false);
+    }
   });
 
   it('describes Cursed, EMP and Murus Fictilis with their real numbers', () => {
     const params = fixture();
-    expect(ABILITIES.cursed.execute(params).message).toContain('35%');
+    expect(ABILITIES.cursed.execute(params).message).toContain('50%');
     expect(ABILITIES.emp.execute(params).message).toContain('2 turns');
     expect(ABILITIES.murus_fictilis.execute(params).message).toContain('+35');
   });
@@ -168,7 +227,7 @@ describe('zone abilities', () => {
     const unlucky = ABILITIES.blackjack.execute({ ...params, target: 'p2', random: () => 0.99 });
     expect(lucky.healing).toEqual([{ target: 'p2', amount: 40 }]);
     expect(unlucky.healing).toBeUndefined();
-    expect(ABILITIES.sparkshot.execute({ ...params, random: () => 0 }).effects).toHaveLength(1);
-    expect(ABILITIES.sparkshot.execute({ ...params, random: () => 0.9 }).effects).toHaveLength(0);
+    // Sparkshot's slow always lands now.
+    expect(ABILITIES.sparkshot.execute({ ...params, random: () => 0.9 }).effects).toHaveLength(1);
   });
 });

@@ -166,7 +166,7 @@ describe('Feels Like Home', () => {
 describe('Toxic Mist', () => {
   it('hurts enemies standing in it when it ticks, so walking out avoids it', () => {
     const ctx = setup({
-      players: { tank: player('Tank', { role: 'Tank', abilities: ['toxic_mist'], level: 3, ta: 30 }) },
+      players: { tank: player('Tank', { role: 'Tank', abilities: ['toxic_mist'], level: 3, ta: 30, strength: 10 }) },
       enemies: [enemy('inside', { resistance: 0 }), enemy('outside', { resistance: 0 })],
       positions: { tank: { row: 5, col: 4 }, inside: { row: 3, col: 4 }, outside: { row: 0, col: 9 } },
       order: ['tank', 'inside', 'outside']
@@ -175,6 +175,18 @@ describe('Toxic Mist', () => {
     nextTurn(ctx);
     expect(hp(ctx, 'inside')).toBe(70);
     expect(hp(ctx, 'outside')).toBe(100);
+  });
+
+  it('uses Strength when the tank has more of it than TA', () => {
+    const ctx = setup({
+      players: { tank: player('Tank', { role: 'Tank', abilities: ['toxic_mist'], level: 3, ta: 10, strength: 45 }) },
+      enemies: [enemy('inside', { resistance: 0 })],
+      positions: { tank: { row: 5, col: 4 }, inside: { row: 3, col: 4 } },
+      order: ['tank', 'inside']
+    });
+    useAbility(ctx, 'tank', { abilityId: 'toxic_mist', targetPosition: { row: 3, col: 4 } });
+    nextTurn(ctx);
+    expect(hp(ctx, 'inside')).toBe(55);
   });
 
   it('never hurts the party that placed it', () => {
@@ -256,12 +268,12 @@ describe('player actions', () => {
 
   it('gives one action and one bonus action', () => {
     const ctx = setup({
-      players: { p1: player('P1', { role: 'Support', abilities: ['the_show_must_go_on', 'humble'], level: 3 }), p2: player('P2', { health: 10 }) },
+      players: { p1: player('P1', { role: 'Support', abilities: ['the_show_must_go_on', 'zen'], level: 3 }), p2: player('P2', { health: 10 }) },
       enemies: [enemy('e1')],
       positions: { p1: { row: 4, col: 4 }, p2: { row: 5, col: 4 }, e1: { row: 3, col: 4 } }
     });
     expect(useAbility(ctx, 'p1', { abilityId: 'the_show_must_go_on', targetId: 'p2' }).ok).toBe(true); // bonus action
-    expect(useAbility(ctx, 'p1', { abilityId: 'humble' }).ok).toBe(true); // action
+    expect(useAbility(ctx, 'p1', { abilityId: 'zen' }).ok).toBe(true); // action
     expect(attack(ctx, 'p1', 'e1').error).toBe('no_action');
   });
 
@@ -306,6 +318,125 @@ describe('player actions', () => {
   });
 });
 
+describe('ultimates do what they say', () => {
+  const ultimateFight = (ultimate, { enemies = [enemy('e1')], positions = {} } = {}) => setup({
+    players: { p1: player('P1', { ultimate, level: 3 }), p2: player('P2') },
+    enemies,
+    positions: { p1: { row: 5, col: 4 }, p2: { row: 5, col: 5 }, e1: { row: 3, col: 4 }, ...positions },
+    order: ['p1', 'p2', ...enemies.map(e => e.id)]
+  });
+
+  it('all wait longer between uses than any regular ability', () => {
+    const ultimates = Object.values(ABILITIES).filter(ability => ability.isUltimate);
+    const longestRegular = Math.max(...Object.values(ABILITIES).filter(ability => !ability.isUltimate).map(ability => ability.cooldown));
+    expect(ultimates).toHaveLength(9);
+    for (const ability of ultimates) expect(ability.cooldown, ability.id).toBeGreaterThan(longestRegular);
+  });
+
+  it('Black Hole pulls enemies together and pins them for two turns', () => {
+    const ctx = ultimateFight('black_hole', {
+      enemies: [enemy('e1'), enemy('e2')],
+      positions: { e1: { row: 1, col: 2 }, e2: { row: 2, col: 6 } }
+    });
+    expect(useAbility(ctx, 'p1', { abilityId: 'black_hole', targetPosition: { row: 2, col: 4 } }).ok).toBe(true);
+    for (const id of ['e1', 'e2']) {
+      const pos = ctx.combat.positions[id];
+      expect(Math.abs(pos.row - 2) + Math.abs(pos.col - 4)).toBeLessThanOrEqual(2);
+      expect(ctx.combat.activeEffects.some(e => e.target === id && e.status === 'immobilized' && e.duration === 2)).toBe(true);
+    }
+  });
+
+  it('Dead Calm hits much harder this turn but roots you', () => {
+    const adjacent = { positions: { e1: { row: 4, col: 4 } } };
+    const plain = ultimateFight('dead_calm', adjacent);
+    expect(attack(plain, 'p1', 'e1').ok).toBe(true);
+    const plainDamage = 100 - hp(plain, 'e1');
+
+    const ctx = ultimateFight('dead_calm', adjacent);
+    expect(useAbility(ctx, 'p1', { abilityId: 'dead_calm' }).ok).toBe(true);
+    expect(movementLeft(ctx, 'p1')).toBe(0);
+    expect(attack(ctx, 'p1', 'e1').ok).toBe(true);
+    expect(100 - hp(ctx, 'e1')).toBeGreaterThan(plainDamage * 2);
+  });
+
+  it("Executioner's Judgment halves weaker enemies and takes 20% from tougher ones", () => {
+    const ctx = ultimateFight('executioners_judgment', {
+      enemies: [enemy('big'), enemy('small', { health: 50, maxHealth: 50 })],
+      positions: { big: { row: 3, col: 4 }, small: { row: 3, col: 6 } }
+    });
+    useAbility(ctx, 'p1', { abilityId: 'executioners_judgment' });
+    expect(hp(ctx, 'big')).toBe(80);   // max 100 > the caster's 80
+    expect(hp(ctx, 'small')).toBe(25); // max 50 <= 80
+  });
+
+  it('White Phospherus burns every enemy at the end of the turn it is used', () => {
+    const ctx = ultimateFight('white_phospherus');
+    useAbility(ctx, 'p1', { abilityId: 'white_phospherus' });
+    nextTurn(ctx);
+    expect(hp(ctx, 'e1')).toBe(80);
+  });
+
+  it('Murus Fictilis shields and armors the whole party', () => {
+    const ctx = ultimateFight('murus_fictilis');
+    useAbility(ctx, 'p1', { abilityId: 'murus_fictilis' });
+    nextTurn(ctx);
+    expect(effective(ctx, 'p2').stats.resistance).toBe(50);
+    expect(ctx.combat.activeEffects.some(e => e.target === 'p2' && e.stat === 'health' && e.value === 35)).toBe(true);
+  });
+
+  it('Dedicating Everything to You powers up one ally for two turns', () => {
+    const ctx = ultimateFight('dedicating');
+    useAbility(ctx, 'p1', { abilityId: 'dedicating', targetId: 'p2' });
+    nextTurn(ctx);
+    expect(effective(ctx, 'p2').stats.strength).toBe(65);
+  });
+
+  it('EMP shocks every enemy', () => {
+    const ctx = ultimateFight('emp');
+    useAbility(ctx, 'p1', { abilityId: 'emp' });
+    expect(hp(ctx, 'e1')).toBe(78); // 40/10*6 - 20/10
+  });
+
+  it('Love Galore heals the party for half their max health', () => {
+    const ctx = ultimateFight('love_galore');
+    ctx.characters.p2.stats.health = 20;
+    useAbility(ctx, 'p1', { abilityId: 'love_galore' });
+    expect(hp(ctx, 'p2')).toBe(60);
+  });
+});
+
+describe('moving through teammates', () => {
+  // P1 at (6,4) is boxed in by teammates on both sides and above; the enemy is far away.
+  const boxedIn = () => setup({
+    players: { p1: player('P1', { speed: 30 }), a: player('A'), b: player('B'), c: player('C') },
+    enemies: [enemy('e1')],
+    positions: { p1: { row: 6, col: 4 }, a: { row: 6, col: 3 }, b: { row: 6, col: 5 }, c: { row: 5, col: 4 }, e1: { row: 0, col: 9 } },
+    order: ['p1', 'a', 'b', 'c', 'e1']
+  });
+
+  it('walks through a teammate to the tile beyond', () => {
+    const ctx = boxedIn();
+    const result = movePlayer(ctx, 'p1', { row: 4, col: 4 });
+    expect(result.ok).toBe(true);
+    expect(result.events[0].path).toEqual([{ row: 5, col: 4 }, { row: 4, col: 4 }]);
+  });
+
+  it('never stops on a teammate', () => {
+    expect(movePlayer(boxedIn(), 'p1', { row: 5, col: 4 }).error).toBe('blocked');
+  });
+
+  it('still cannot walk through enemies', () => {
+    const ctx = setup({
+      players: { p1: player('P1', { speed: 30 }) },
+      enemies: [enemy('wall', {})],
+      positions: { p1: { row: 6, col: 0 }, wall: { row: 5, col: 0 } },
+      order: ['p1', 'wall']
+    });
+    // Straight up is blocked by the enemy; going around takes 4 steps, more than the 3 allowed.
+    expect(movePlayer(ctx, 'p1', { row: 4, col: 0 }).error).toBe('too_far');
+  });
+});
+
 describe('movement', () => {
   const walker = () => setup({
     players: { p1: player('P1', { speed: 30 }), p2: player('P2') },
@@ -322,11 +453,12 @@ describe('movement', () => {
     expect(movePlayer(ctx, 'p1', { row: 6, col: 5 }).error).toBe('too_far');
   });
 
-  it('cannot end on or pass through barriers and units', () => {
+  it('cannot end on a unit or pass through a barrier', () => {
     const ctx = walker();
     expect(movePlayer(ctx, 'p1', { row: 5, col: 0 }).error).toBe('blocked');
     ctx.combat.activeEffects.push({ type: 'blue_barrier', cell: { row: 6, col: 1 }, turnsRemaining: 2 });
-    expect(movePlayer(ctx, 'p1', { row: 6, col: 2 }).error).toBe('blocked');
+    // The only way round the barrier is through P2 and back down: 4 steps, one more than allowed.
+    expect(movePlayer(ctx, 'p1', { row: 6, col: 2 }).error).toBe('too_far');
   });
 
   it('is stopped by chains', () => {
@@ -560,7 +692,7 @@ describe('enemy turns', () => {
     expect(ctx.combat.enemies[0].cooldowns.rallying_guard).toBe(ABILITIES.rallying_guard.cooldown + 1);
     nextTurn(ctx);
     expect(ctx.combat.enemies[0].usedAbilityLastTurn).toBe(true);
-    expect(effective(ctx, 'e1').stats.resistance).toBe(35);
+    expect(effective(ctx, 'e1').stats.resistance).toBe(40);
   });
 
   it('Butterfly Effect and EMP slow enemy abilities down', () => {
@@ -571,14 +703,14 @@ describe('enemy turns', () => {
       order: ['p1', 'e1']
     });
     useAbility(ctx, 'p1', { abilityId: 'butterfly_effect' });
-    expect(ctx.combat.enemies[0].cooldowns.humble).toBe(1);
+    expect(ctx.combat.enemies[0].cooldowns.humble).toBe(2);
     useAbility(ctx, 'p1', { abilityId: 'emp' });
     expect(planEnemy(ctx, 'e1').abilityToUse).toBeFalsy();
   });
 });
 
 describe('cooldown support abilities', () => {
-  it('Count me Out shaves a turn and Here We Go Again resets an ally', () => {
+  it('Count me Out shaves three turns and Here We Go Again resets an ally', () => {
     const ctx = setup({
       players: {
         sup: player('Sup', { role: 'Support', abilities: ['count_me_out', 'here_we_go_again'], level: 5 }),
@@ -589,7 +721,7 @@ describe('cooldown support abilities', () => {
     });
     ctx.cooldowns.ally = { shadow_strike: 3, no_limits: 10 };
     useAbility(ctx, 'sup', { abilityId: 'count_me_out', targetId: 'ally' });
-    expect(ctx.cooldowns.ally).toEqual({ shadow_strike: 2, no_limits: 9 });
+    expect(ctx.cooldowns.ally).toEqual({ shadow_strike: 0, no_limits: 7 });
     ctx.combat.turn.actionUsed = false;
     useAbility(ctx, 'sup', { abilityId: 'here_we_go_again' });
     expect(ctx.cooldowns.ally).toEqual({ shadow_strike: 0, no_limits: 0 });

@@ -12,10 +12,17 @@ import {
 } from '../../shared/combat/turnOrder.js';
 import { generateEncounterEnemies, getEncounterConfig, isFinalEncounter, TOTAL_ENCOUNTERS } from '../../shared/combat/encounters.js';
 import { getAbility } from '../../shared/combat/effects.js';
-import { generateEnemySpawnPositions, generatePlayerSpawnPositions, sanitizeProposedPlayerPositions } from '../game/spawning.js';
+import { generateEnemySpawnPositions, generatePlayerSpawnPositions } from '../game/spawning.js';
+import { isBot } from '../game/bots.js';
+import { chooseStep } from '../../shared/combat/partyAI.js';
+import { flavorCombatLog } from '../narrator/combatFlavor.js';
 
 const ENDED_COMBAT_CLEANUP_MS = 5000;
 const DISCONNECTED_TURN_TIMEOUT_MS = 5000;
+// Most steps (move-and-act, ability, reposition) a bot takes in one turn.
+const MAX_BOT_STEPS = 4;
+// Steps a live bot weighs per decision, to keep the server responsive.
+const BOT_MAX_CANDIDATES = 20;
 const SCENE_KEY_PATTERN = /^[a-z_]{1,30}$/;
 
 export function createCombatController({
@@ -26,19 +33,21 @@ export function createCombatController({
   logger = console,
   buildNarratorContext = () => ({}),
   generateEnemies = generateEncounterEnemies,
-  random = Math.random
+  random = Math.random,
+  // Where the party starts each fight. Tests replace this to set up exact positions.
+  spawnPlayers = (players, characters, sceneKey) => generatePlayerSpawnPositions(players, characters, sceneKey, random)
 }) {
   // ---------------------------------------------------------------------------
   // Lookups
   // ---------------------------------------------------------------------------
 
-  const connectedPlayers = (room) => {
-    const roomPlayers = state.rooms[room]?.players || [];
-    const socketsByPlayer = state.sockets[room] || {};
-    return roomPlayers.filter(player => (socketsByPlayer[player]?.size || 0) > 0);
-  };
+  // Bots are always "connected": they take turns and can be targeted like anyone else.
+  const isConnected = (room, playerName) =>
+    isBot(state.rooms[room], playerName) || (state.sockets[room]?.[playerName]?.size || 0) > 0;
 
-  const isConnected = (room, playerName) => (state.sockets[room]?.[playerName]?.size || 0) > 0;
+  const connectedPlayers = (room) => (state.rooms[room]?.players || []).filter(player => isConnected(room, player));
+
+  const connectedHumans = (room) => connectedPlayers(room).filter(player => !isBot(state.rooms[room], player));
 
   const livingPlayers = (room) => {
     const roomState = state.rooms[room];
@@ -128,7 +137,8 @@ export function createCombatController({
       || state.combat[room]?.enemies?.find(enemy => enemy.id === actorId)?.name
       || actorId;
     const message = `${actorName}'s turn ends: ${summary.join(' ')}`;
-    const fallbackText = summary.join(' ');
+    // If the narrator is missing or fails, still tell it as a story rather than a damage log.
+    const fallbackText = flavorCombatLog(summary, buildNarratorContext(room), random) || summary.join(' ');
 
     const previous = state.combatNarration[room] || Promise.resolve();
     const next = previous.then(async () => {
@@ -242,6 +252,19 @@ export function createCombatController({
       return;
     }
 
+    if (turn.type === 'ally' && isBot(state.rooms[room], turn.id)) {
+      // Nobody watching: wait for someone to come back rather than playing on alone.
+      if (connectedHumans(room).length === 0) {
+        combat.paused = true;
+        clearTimer(room);
+        broadcast(room);
+        return;
+      }
+      broadcast(room);
+      schedule(room, botDelay(), () => runBotStep(room));
+      return;
+    }
+
     if (turn.type === 'ally') {
       const limit = isConnected(room, turn.id) ? timing.allyTurnTimeoutMs : Math.min(DISCONNECTED_TURN_TIMEOUT_MS, timing.allyTurnTimeoutMs);
       if (limit > 0) {
@@ -257,7 +280,7 @@ export function createCombatController({
     }
 
     // Enemy turn. With nobody connected there is nobody to fight: wait until someone returns.
-    if (connectedPlayers(room).length === 0) {
+    if (connectedHumans(room).length === 0) {
       combat.paused = true;
       clearTimer(room);
       broadcast(room);
@@ -295,6 +318,57 @@ export function createCombatController({
     });
   }
 
+  const botDelay = () => timing.botStepMs ?? timing.enemyThinkMs;
+
+  // One step of a bot's turn: the party AI picks it, then it goes through the same rules a
+  // player's intent does. The next step (or the end of the turn) is scheduled afterwards.
+  function runBotStep(room) {
+    const ctx = contextFor(room);
+    if (!ctx) return;
+    const turn = ctx.combat.turn;
+    if (!turn || turn.type !== 'ally' || turn.finished || !isBot(state.rooms[room], turn.id)) return;
+
+    turn.botSteps = (turn.botSteps || 0) + 1;
+    let step = null;
+    try {
+      step = turn.botSteps <= MAX_BOT_STEPS
+        ? chooseStep(ctx, turn.id, { seed: Math.floor(random() * 1e9), maxCandidates: BOT_MAX_CANDIDATES })
+        : null;
+    } catch (error) {
+      logger.warn?.(`[COMBAT] bot ${turn.id} could not decide: ${error.message}`);
+    }
+    if (!step) {
+      endTurn(room);
+      return;
+    }
+
+    const here = ctx.combat.positions[turn.id];
+    let acted = false;
+    if (step.move && here && (step.move.row !== here.row || step.move.col !== here.col)) {
+      const moved = engine.movePlayer(ctx, turn.id, { row: step.move.row, col: step.move.col });
+      if (moved.ok) {
+        acted = true;
+        broadcast(room, moved.events);
+      }
+    }
+    if (step.kind === 'attack' || step.kind === 'ability') {
+      const result = step.kind === 'attack'
+        ? engine.attack(ctx, turn.id, step.targetId)
+        : ACTIONS.ability(ctx, turn.id, step);
+      if (result.ok) {
+        acted = true;
+        broadcast(room, result.events);
+      }
+    }
+    if (afterAction(room)) return;
+
+    if (!acted || !engine.canStillAct(ctx, turn.id)) {
+      schedule(room, timing.autoEndTurnDelayMs, () => endTurn(room));
+      return;
+    }
+    schedule(room, botDelay(), () => runBotStep(room));
+  }
+
   // After anything happens: end the fight if a side is gone, or the turn if its owner fell.
   // Returns true when the current turn is over.
   function afterAction(room) {
@@ -320,7 +394,7 @@ export function createCombatController({
     narrate(room, turn.id, summary);
     if (checkEnd(room)) return;
 
-    const pause = delayMs ?? (turn.type === 'ally' ? timing.allyTurnAdvanceDelayMs : 0);
+    const pause = delayMs ?? (turn.type === 'ally' ? timing.allyTurnAdvanceDelayMs : (timing.enemyTurnAdvanceDelayMs ?? 0));
     schedule(room, pause, () => advance(room));
   }
 
@@ -369,9 +443,7 @@ export function createCombatController({
     resetNonUltimateCooldowns(roomState);
 
     // Players are placed first so enemies never spawn on top of them.
-    const playerSpots =
-      sanitizeProposedPlayerPositions(roomState.players, playerPositions, scene) ||
-      generatePlayerSpawnPositions(roomState.players, roomState.characterSelections, scene);
+    const playerSpots = spawnPlayers(roomState.players, roomState.characterSelections, scene, { proposed: playerPositions });
     const enemySpots = generateEnemySpawnPositions(enemies, scene, Object.values(playerSpots));
 
     // Only players who are here and standing get a turn; others join when they come back.

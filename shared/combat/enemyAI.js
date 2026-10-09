@@ -50,8 +50,23 @@ export function selectAttackTarget(enemy, allies, playerCharacters, positions) {
         calculateAttackPriority(current, playerCharacters) < calculateAttackPriority(best, playerCharacters) ? current : best
     );
 
+    // On an enemy's first turn it goes for the toughest party member it can reach, so fragile
+    // supports aren't knocked out before they've had a chance to play.
+    if (isFirstTurn(enemy) && targetsInRange.length > 1) return toughest(targetsInRange, playerCharacters);
+
     const killable = targetsInRange.filter(targetId => canKillTarget(enemy, targetId, playerCharacters));
     return pickBest(killable.length > 0 ? killable : targetsInRange);
+}
+
+export const isFirstTurn = (enemy) => !enemy?.turnsTaken;
+
+// The candidate with the highest max health (then the most health left).
+function toughest(targetIds, playerCharacters) {
+    const toughness = (id) => {
+        const stats = playerCharacters[id]?.stats || {};
+        return (stats.maxHealth || stats.health || 0) * 1000 + (stats.health || 0);
+    };
+    return targetIds.reduce((best, id) => (toughness(id) > toughness(best) ? id : best));
 }
 
 export function determineBehavior(enemy) {
@@ -418,9 +433,11 @@ export function planEnemyTurn(enemy, targetablePlayers, alliedEnemies, battlefie
             });
 
             if (validTargets.length > 0) {
-                target = validTargets.reduce((closest, targetId) =>
-                    distance(enemyPos, positions[targetId]) < distance(enemyPos, positions[closest]) ? targetId : closest
-                );
+                target = !ownSideTarget && isFirstTurn(enemy) && validTargets.length > 1
+                    ? toughest(validTargets, playerCharacters)
+                    : validTargets.reduce((closest, targetId) =>
+                        distance(enemyPos, positions[targetId]) < distance(enemyPos, positions[closest]) ? targetId : closest
+                    );
             } else {
                 // Nothing in range for the ability: fall back to the weapon.
                 abilityToUse = null;

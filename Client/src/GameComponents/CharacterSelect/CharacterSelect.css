@@ -197,6 +197,52 @@
     border-color: rgba(239, 68, 68, 0.2);
 }
 
+.team-controls button + button {
+    margin-top: 0.9vmin;
+    background: rgba(139, 92, 246, 0.2);
+    border-color: rgba(139, 92, 246, 0.5);
+    color: #c4b5fd;
+}
+
+.team-controls button + button:hover:not(:disabled),
+.team-controls button + button:active:not(:disabled) {
+    background: rgba(139, 92, 246, 0.4);
+    box-shadow: 0 0 1.125vmin rgba(139, 92, 246, 0.3);
+}
+
+.team-character {
+    display: flex;
+    align-items: center;
+    gap: 0.9vmin;
+}
+
+.team-character .bot-tag {
+    font-size: 0.95vmin;
+    padding: 0.15vmin 0.6vmin;
+    border-radius: 0.45vmin;
+    border: 0.1vmin solid rgba(167, 139, 250, 0.6);
+    color: #c4b5fd;
+    text-shadow: none;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.remove-bot-button {
+    min-height: 32px;
+    padding: 0.3vmin 0.9vmin;
+    background: transparent;
+    border: 0.1vmin solid rgba(239, 68, 68, 0.5);
+    border-radius: 0.45vmin;
+    color: #fca5a5;
+    font-size: 1vmin;
+    cursor: pointer;
+}
+
+.remove-bot-button:hover,
+.remove-bot-button:active {
+    background: rgba(239, 68, 68, 0.25);
+}
+
 
 .characters-grid h3 {
     margin: 0 0 1.5vmin 0;

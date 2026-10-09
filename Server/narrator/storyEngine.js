@@ -1,6 +1,7 @@
 // The narrator: turns game events into narration, decisions and scene changes.
 // The game decides structure (when a fight starts, who owns a decision, where fights happen);
 // the model writes the words. Every path has a pre-written fallback so the game never stalls.
+import { flavorCombatLog, scrubNumbers } from './combatFlavor.js';
 import {
   STORY_SYSTEM_PROMPT,
   RULES_SYSTEM_PROMPT,
@@ -14,6 +15,7 @@ import { getActFor, getCombatLocation, TOTAL_ENCOUNTERS, BOSS_ENCOUNTERS } from 
 import { chooseDecisionAttribute, getDecisionOwner, normalizeAttribute } from './decisions.js';
 import { FALLBACK_NARRATION, optionsForAttribute } from './fallbacks.js';
 import { parseJsonObject } from './json.js';
+import { createDialogue, publicDialogue, followUpNarration, TONE_EFFECT, attitudeLabel } from './dialogue.js';
 
 export const FACTION_OPTIONS = ['Fight with the Enforcers', 'Fight with the Rebels'];
 export const SHOP_INTRO_OPTIONS = ['Leave shop', 'Continue shopping'];
@@ -21,6 +23,8 @@ export const SHOP_CONTINUE_OPTIONS = ['Leave shop', 'Keep browsing'];
 
 const STORY_LOCATIONS = VALID_LOCATIONS.filter(location => location !== 'boss' && location !== 'shop');
 const MAX_STORY_CHARS = 1400;
+// The opening scene sets up the world and the party, so it gets more room.
+const OPENING_MAX_CHARS = 2800;
 const MAX_LOG_ENTRY_CHARS = 220;
 
 export function createStorySession() {
@@ -34,9 +38,18 @@ export function createStorySession() {
     pendingDecision: null,
     lastNarration: '',
     lastStoryLocation: null,
-    chatHistory: []
+    chatHistory: [],
+    // Personal dialogue: one NPC talking to one party member (see dialogue.js).
+    pendingDialogue: null,
+    dialoguesUsed: [],
+    timesAddressed: {},
+    npcAttitudes: {},
+    personalMoments: []
   };
 }
+
+// After a fight an NPC always has something to say to someone; after a group decision, sometimes.
+const DIALOGUE_CHANCE_AFTER_DECISION = 0.35;
 
 // ---------------------------------------------------------------------------
 // Text helpers
@@ -167,7 +180,9 @@ export function createNarrator({
   combatLinesPerMinute = 12,
   logger = console,
   random = Math.random,
-  now = Date.now
+  now = Date.now,
+  // Personal moments between decisions (see dialogue.js); tests of the decision flow turn them off.
+  personalMoments = true
 } = {}) {
   if (!provider) throw new Error('createNarrator requires a provider');
 
@@ -206,7 +221,7 @@ export function createNarrator({
   }
 
   // Story beat with fact guard: one retry if the model mentions characters outside the party.
-  async function writeStoryBeat({ session, context, instructions, hints }) {
+  async function writeStoryBeat({ session, context, instructions, hints, maxChars = MAX_STORY_CHARS, maxTokens = 900 }) {
     const actInfo = session.faction ? getActFor(session.faction, context.encounterIndex) : null;
     const state = buildStateBlock(session, {
       party: context.party,
@@ -216,16 +231,27 @@ export function createNarrator({
     });
     const lastNarration = session.lastNarration ? `\n\nPrevious narration (continue from here, do not repeat it):\n${session.lastNarration.slice(0, 700)}` : '';
     const baseContent = `${state}${lastNarration}\n\nTASK\n${instructions}\n\nReturn JSON with fields: narration, options, location, memory.`;
+    // What the game knows, for providers that write from structured facts (the offline narrator).
+    hints = {
+      faction: session.faction || null,
+      party: (context.party || []).map(member => ({ name: member.characterName, characterId: member.characterId, role: member.role })),
+      decisions: session.decisions.slice(-12),
+      openingScene: session.openingScene || null,
+      villain: actInfo?.act ? BOSSES[actInfo.act.boss]?.name || null : null,
+      storyLocation: session.lastStoryLocation || null,
+      personalMoments: session.personalMoments.slice(-4),
+      ...hints
+    };
 
-    let parsed = await callModel({ kind: 'story', system: STORY_SYSTEM_PROMPT, userContent: baseContent, schema: STORY_RESPONSE_SCHEMA, maxTokens: 900, hints });
-    let narration = cleanNarration(parsed.narration);
+    let parsed = await callModel({ kind: 'story', system: STORY_SYSTEM_PROMPT, userContent: baseContent, schema: STORY_RESPONSE_SCHEMA, maxTokens, hints });
+    let narration = cleanNarration(parsed.narration, maxChars);
     let outsiders = findOutsiderNames(narration, context.party);
 
     if (outsiders.length > 0) {
       logger.warn?.(`[AI] Narration mentioned characters outside the party (${outsiders.join(', ')}); retrying.`);
       const correction = `${baseContent}\n\nYour previous draft mentioned ${outsiders.join(', ')}, who are NOT in this party. Rewrite it using only the party members listed above.`;
-      parsed = await callModel({ kind: 'story', system: STORY_SYSTEM_PROMPT, userContent: correction, schema: STORY_RESPONSE_SCHEMA, maxTokens: 900, hints });
-      narration = cleanNarration(parsed.narration);
+      parsed = await callModel({ kind: 'story', system: STORY_SYSTEM_PROMPT, userContent: correction, schema: STORY_RESPONSE_SCHEMA, maxTokens, hints });
+      narration = cleanNarration(parsed.narration, maxChars);
       outsiders = findOutsiderNames(narration, context.party);
       if (outsiders.length > 0) {
         narration = stripSentencesMentioning(narration, outsiders);
@@ -251,6 +277,75 @@ export function createNarrator({
       return proposed;
     }
     return session.lastStoryLocation || null;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Personal dialogue
+  // ---------------------------------------------------------------------------
+
+  // Maybe plan a personal moment: an NPC turns to one party member, or one gets to ask an NPC
+  // something. People only (bots are not in context.players), preferring whoever has had the
+  // fewest moments. Returns the dialogue (with its narration intro and reactions), or null.
+  function planDialogue(session, context, eventType) {
+    if (!personalMoments || !session.faction) return null;
+    if (eventType !== 'encounter_end' && random() >= DIALOGUE_CHANCE_AFTER_DECISION) return null;
+    const people = (context.party || []).filter(member =>
+      context.players.includes(member.playerName) &&
+      (!context.connectedPlayers || context.connectedPlayers.includes(member.playerName))
+    );
+    if (people.length === 0) return null;
+
+    const fewest = Math.min(...people.map(member => session.timesAddressed[member.playerName] || 0));
+    const candidates = people.filter(member => (session.timesAddressed[member.playerName] || 0) === fewest);
+    const target = candidates[Math.floor(random() * candidates.length) % candidates.length];
+    session.timesAddressed[target.playerName] = fewest + 1;
+
+    const dialogue = createDialogue({
+      target: { playerName: target.playerName, characterName: target.characterName },
+      attributes: context.attributesByPlayer[target.playerName] || [],
+      faction: session.faction,
+      used: new Set(session.dialoguesUsed),
+      random,
+      id: `d${session.dialoguesUsed.length + 1}`
+    });
+    session.dialoguesUsed.push(dialogue.exchange);
+    return dialogue;
+  }
+
+  /**
+   * The chosen party member answers (or, with `silent`, lets the moment pass when time runs out).
+   * Returns the next narration with the group's decision options, or null if it doesn't fit the
+   * open moment.
+   */
+  function answerDialogue(session, { playerName, dialogueId, optionId, silent = false }) {
+    const dialogue = session.pendingDialogue;
+    if (!dialogue || dialogue.id !== dialogueId) return null;
+    if (!silent && dialogue.playerName !== playerName) return null;
+    const option = dialogue.options.find(candidate => (silent ? candidate.id === 'silent' : candidate.id === optionId && !candidate.hidden));
+    if (!option) return null;
+
+    session.pendingDialogue = null;
+    session.npcAttitudes[dialogue.npc] = (session.npcAttitudes[dialogue.npc] || 0) + (TONE_EFFECT[option.tone] || 0);
+    if (option.tone !== 'silent') {
+      session.personalMoments.push({ npc: dialogue.npc, by: dialogue.characterName, reply: option.text, tone: option.tone });
+      if (session.personalMoments.length > 20) session.personalMoments.shift();
+      remember(session, dialogue.kind === 'ask' ? option.told : `${dialogue.characterName} told ${dialogue.npc}: "${option.text}"`);
+    }
+
+    const { options, attribute, ownerName } = dialogue.followUp || {};
+    const narration = followUpNarration(dialogue, option, { ownerName, random });
+    session.lastNarration = narration;
+    return {
+      id: dialogue.id,
+      npc: dialogue.npc,
+      playerName: dialogue.playerName,
+      characterName: dialogue.characterName,
+      reply: option.text,
+      attitude: attitudeLabel(session.npcAttitudes[dialogue.npc]),
+      response: narration,
+      options: options || null,
+      attribute: attribute || null
+    };
   }
 
   function nextDecision(session, context) {
@@ -292,11 +387,15 @@ export function createNarrator({
     const ownerName = characterNameFor(owner, context);
     session.pendingDecision = { attribute: 'politician', owner, ownerName, options: FACTION_OPTIONS };
 
+    // The players are just settling in, so this one is longer: the world first, then why this
+    // party is standing here today, then the incident.
     const instructions = [
-      'Write the OPENING SCENE in 5-7 sentences.',
-      'Spend at most two sentences on the city itself, then drop the party into this incident:',
+      'Write the OPENING SCENE in 12-16 sentences. This is the first thing the players read, so take your time and let them settle in.',
+      'Build the world naturally, never as a list of facts. Let the city come through what the party sees, hears and does on the way in: a corporate ad flickering over a boarded-up shop, a drone that scans faces a little too long, a vendor who stops talking when the Enforcers walk past, rebel graffiti half painted over. Weave in why the streets are tense today. No exposition paragraphs, no "the city is controlled by..." summaries.',
+      'Along the way, show how and why these party members ended up here, together, today (a job, a debt, a rumor, plain bad luck), drawn from their backstories and shown through a thought, a line of dialogue or something they do. They may barely know each other yet.',
+      'Then let this incident break in:',
       OPENING_SCENES[session.openingScene],
-      'Show the party members reacting in character (use their callsigns). Give one NPC a line of dialogue.',
+      'Show the party members reacting in character (use their callsigns). Give one or two NPCs a line of dialogue.',
       `End by framing the choice: help the Enforcers or help the Rebels. ${ownerName} (Politician) must make the call for the group.`,
       `Set options to exactly ${JSON.stringify(FACTION_OPTIONS)} and location to "city_square".`
     ].join('\n');
@@ -307,7 +406,9 @@ export function createNarrator({
         session,
         context,
         instructions,
-        hints: { eventType: 'game_start', partyNames: partyNames(context), ownerName, attribute: 'politician', needsOptions: true, fixedOptions: FACTION_OPTIONS, location: 'city_square' }
+        hints: { eventType: 'game_start', partyNames: partyNames(context), ownerName, attribute: 'politician', needsOptions: true, fixedOptions: FACTION_OPTIONS, location: 'city_square' },
+        maxChars: OPENING_MAX_CHARS,
+        maxTokens: 1600
       });
     } catch (error) {
       logger.warn?.(`[AI] game_start fell back: ${error.message}`);
@@ -348,12 +449,17 @@ export function createNarrator({
     return { response: beat.narration, location, attribute: null, startCombat: true, options: null, fallback: !!beat.fallback };
   }
 
-  async function presentDecision(session, context, { eventType, intro, lastChoice = null }) {
+  async function presentDecision(session, context, { eventType, intro, lastChoice = null, extraHints = {} }) {
     const decision = nextDecision(session, context);
     const ownerName = characterNameFor(decision.owner, context);
+    // A personal moment, if one happens, comes before the group's decision: the narration leads up
+    // to it, the decision options wait, and the answer's narration hands the call back to the group.
+    const dialogue = planDialogue(session, context, eventType);
     const instructions = [
       intro,
-      `Then present the next decision. It is ${ownerName}'s call, because the situation calls for ${decision.attribute[0].toUpperCase()}${decision.attribute.slice(1)} skills: ${DECISION_ATTRIBUTES[decision.attribute] || 'their expertise'}.`,
+      dialogue
+        ? `Then set up the next decision: describe the situation, which calls for ${decision.attribute[0].toUpperCase()}${decision.attribute.slice(1)} skills (${DECISION_ATTRIBUTES[decision.attribute] || 'their expertise'}), so it will be ${ownerName}'s call. Do NOT say whose call it is or ask for the choice yet: a short moment with ${dialogue.npc} and ${dialogue.characterName} comes first and is added after your narration.`
+        : `Then present the next decision. It is ${ownerName}'s call, because the situation calls for ${decision.attribute[0].toUpperCase()}${decision.attribute.slice(1)} skills: ${DECISION_ATTRIBUTES[decision.attribute] || 'their expertise'}.`,
       'Write exactly two options that play to that skill, each under 9 words, leading in different directions.',
       'Set location to the location key where this scene happens (not "boss" or "shop"), or "none" to stay put.'
     ].join('\n');
@@ -364,7 +470,7 @@ export function createNarrator({
         session,
         context,
         instructions,
-        hints: { eventType, partyNames: partyNames(context), ownerName, attribute: decision.attribute, needsOptions: true, lastChoice }
+        hints: { eventType, partyNames: partyNames(context), ownerName, attribute: decision.attribute, needsOptions: true, lastChoice, deferDecisionFrame: !!dialogue, ...extraHints }
       });
     } catch (error) {
       logger.warn?.(`[AI] ${eventType} fell back: ${error.message}`);
@@ -374,9 +480,18 @@ export function createNarrator({
     const options = beat.options?.length === 2 ? beat.options : optionsForAttribute(decision.attribute);
     session.pendingDecision = { attribute: decision.attribute, owner: decision.owner, ownerName, options };
     remember(session, beat.memory);
-    session.lastNarration = beat.narration;
     const location = pickStoryLocation(session, beat.location);
-    return { response: beat.narration, location, attribute: decision.attribute, startCombat: false, options, fallback: !!beat.fallback };
+
+    if (dialogue) {
+      // The moment is told in the narration; its choices show now, the group's after the answer.
+      const narration = `${beat.narration} ${dialogue.intro}`;
+      session.pendingDialogue = { ...dialogue, followUp: { options, attribute: decision.attribute, ownerName } };
+      session.lastNarration = narration;
+      return { response: narration, location, attribute: decision.attribute, startCombat: false, options: null, fallback: !!beat.fallback, dialogue: publicDialogue(dialogue) };
+    }
+
+    session.lastNarration = beat.narration;
+    return { response: beat.narration, location, attribute: decision.attribute, startCombat: false, options, fallback: !!beat.fallback, dialogue: null };
   }
 
   async function leadIntoFight(session, context, { eventType, intro, lastChoice = null }) {
@@ -394,7 +509,7 @@ export function createNarrator({
 
     let beat;
     try {
-      beat = await writeStoryBeat({ session, context, instructions, hints: { eventType, partyNames: partyNames(context), startsCombat: true, location, lastChoice, setup: actInfo?.encounter?.setup } });
+      beat = await writeStoryBeat({ session, context, instructions, hints: { eventType, partyNames: partyNames(context), startsCombat: true, location, lastChoice, setup: actInfo?.encounter?.setup, bossId: boss ? actInfo.act.boss : null } });
     } catch (error) {
       logger.warn?.(`[AI] ${eventType} fell back: ${error.message}`);
       beat = { narration: FALLBACK_NARRATION.next_encounter, fallback: true };
@@ -420,7 +535,11 @@ export function createNarrator({
       ? `The party just defeated ${defeatedBoss.name}. Describe the aftermath in 2-3 sentences and close this act. ${nextAct?.act ? `Then open the next act: ${nextAct.act.title} - ${nextAct.act.goal}` : ''}`
       : 'The fight is over. Describe the aftermath in 2-3 sentences (what the party finds, who is watching), moving the current act forward.';
 
-    return presentDecision(session, context, { eventType: 'encounter_end', intro });
+    return presentDecision(session, context, {
+      eventType: 'encounter_end',
+      intro,
+      extraHints: { defeatedBossId: defeatedBoss ? actInfo.act.boss : null, nextActGoal: defeatedBoss && nextAct?.act ? nextAct.act.goal : null }
+    });
   }
 
   async function ending(session, context) {
@@ -435,6 +554,9 @@ export function createNarrator({
           session.decisions.length
             ? 'Every decision this party made, in order:\n' + session.decisions.map(d => `- ${d.by}${d.attribute ? ` (${d.attribute})` : ''}: ${d.choice}`).join('\n')
             : '',
+          session.personalMoments.length
+            ? 'Things party members said to people along the way:\n' + session.personalMoments.map(m => `- ${m.by} to ${m.npc}: "${m.reply}"`).join('\n')
+            : '',
           "Name what their choices cost or saved, close each party member's arc in a phrase, and end with a line of dialogue from a surviving NPC.",
           'Set options to [] and location to "none".'
         ].filter(Boolean).join('\n'),
@@ -448,6 +570,8 @@ export function createNarrator({
   }
 
   async function storyChoice(session, context, choice) {
+    // The group moved on: an unanswered personal question lapses.
+    session.pendingDialogue = null;
     recordChoice(session, context, choice);
     session.decisionsThisInterlude += 1;
     const intro = `${session.decisions[session.decisions.length - 1]?.by || 'The party'} decided: "${choice}". Narrate the consequence in 2-4 sentences; it should matter.`;
@@ -480,33 +604,41 @@ export function createNarrator({
 
   async function combatLine(session, context, message, data) {
     const summary = tidyCombatSummary(message);
+    const lines = Array.isArray(data?.summaries) && data.summaries.length
+      ? data.summaries.map(String)
+      : summary.split(/(?<=[.!?])\s+/).filter(Boolean);
+    // Turns the AI doesn't write still read like a story, never like a damage log.
+    const flavored = () => flavorCombatLog(lines, context, random) || 'The fight grinds on.';
+
     const recent = combatCallTimes.filter(time => now() - time < 60_000);
     combatCallTimes.length = 0;
     combatCallTimes.push(...recent);
 
     const notable = isNotableTurn(message, data, context.enemies);
     if (!notable || combatCallTimes.length >= combatLinesPerMinute) {
-      return { response: summary || 'The fight grinds on.', location: null, attribute: null, startCombat: false, options: null, fallback: false };
+      return { response: flavored(), location: null, attribute: null, startCombat: false, options: null, fallback: false };
     }
 
     combatCallTimes.push(now());
     const enemyNames = [...new Set((context.enemies || []).filter(e => !e.isDead).map(e => e.name))];
+    // One sentence per action, two at most for a big moment.
+    const maxSentences = Math.min(4, Math.max(2, lines.length + 1));
     const content = [
       `Party: ${partyNames(context).join(', ') || 'unknown'}.`,
       enemyNames.length ? `Enemies still standing: ${enemyNames.join(', ')}.` : '',
-      `What just happened (game log): ${summary}`,
-      'Write ONE or TWO sentences (max 35 words) of vivid combat commentary about exactly these actions. Use the names from the log. No numbers. Return JSON {"narration": "..."}.'
+      `What just happened (game log, ${lines.length} action${lines.length === 1 ? '' : 's'}): ${summary}`,
+      `Write one short sentence per action in the log (two for a big moment like a knockout), never more than ${maxSentences} sentences in all. Blow by blow: the move and how the target answers it. Use the names from the log. Never mention numbers: no damage, healing, health or stat amounts. Return JSON {"narration": "..."}.`
     ].filter(Boolean).join('\n');
 
     try {
-      const parsed = await callModel({ kind: 'combat', system: STORY_SYSTEM_PROMPT, userContent: content, schema: COMBAT_RESPONSE_SCHEMA, maxTokens: 160, hints: { summary } });
-      let narration = limitSentences(cleanNarration(parsed.narration, 400), 2, 50);
+      const parsed = await callModel({ kind: 'combat', system: STORY_SYSTEM_PROMPT, userContent: content, schema: COMBAT_RESPONSE_SCHEMA, maxTokens: 220, hints: { summary, lines, enemies: context.enemies || [] } });
+      let narration = limitSentences(scrubNumbers(cleanNarration(parsed.narration, 600)), maxSentences, maxSentences * 25);
       const outsiders = findOutsiderNames(narration, context.party);
-      if (outsiders.length > 0 || !narration) narration = summary;
+      if (outsiders.length > 0 || !narration) narration = flavored();
       return { response: narration, location: null, attribute: null, startCombat: false, options: null, fallback: false };
     } catch (error) {
       logger.warn?.(`[AI] combat line fell back: ${error.message}`);
-      return { response: summary || 'The fight grinds on.', location: null, attribute: null, startCombat: false, options: null, fallback: true };
+      return { response: flavored(), location: null, attribute: null, startCombat: false, options: null, fallback: true };
     }
   }
 
@@ -541,6 +673,18 @@ export function createNarrator({
       sessions.delete(room);
     },
 
+    /** The chosen party member answers a personal moment (see answerDialogue). */
+    answerDialogue(room, answer) {
+      const session = sessions.get(room);
+      return session ? answerDialogue(session, answer) : null;
+    },
+
+    /** Time ran out on a personal moment: the character stays quiet and the story moves on. */
+    expireDialogue(room, dialogueId) {
+      const session = sessions.get(room);
+      return session ? answerDialogue(session, { dialogueId, silent: true }) : null;
+    },
+
     // Public snapshot used to restore a reconnecting client.
     describeSession(room) {
       const session = sessions.get(room);
@@ -549,7 +693,8 @@ export function createNarrator({
         faction: session.faction,
         openingCombatStarted: session.openingCombatStarted,
         pendingDecision: session.pendingDecision,
-        lastNarration: session.lastNarration
+        lastNarration: session.lastNarration,
+        pendingDialogue: publicDialogue(session.pendingDialogue)
       };
     },
 

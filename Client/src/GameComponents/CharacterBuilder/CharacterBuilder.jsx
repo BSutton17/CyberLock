@@ -101,7 +101,7 @@ function CharacterBuilder() {
 
     const handleReady = () => {
         setIsReady(true);
-        socket.emit('attribute_part1_ready', { room, playerName});
+        socket.emit('attributes_ready', { room, playerName});
     }
 
     const isDisabled = (attr) => {
@@ -126,6 +126,7 @@ function CharacterBuilder() {
                 ) : (
                     <p>You must choose a unique primary and secondary attribute.</p>
                 )}
+                <p>Your other attributes are ranked at random once everyone is ready.</p>
             </div>
 
             <div className="builder-content">
@@ -239,7 +240,7 @@ function CharacterBuilder() {
                 <button 
                     className="ready-button" 
                     onClick={handleReady}
-                    disabled={hasTeamConflict() || !playerAttributes[0] || !playerAttributes[1]}
+                    disabled={hasTeamConflict() || !playerAttributes[0] || (players.length < 6 && !playerAttributes[1])}
                 >
                     {isReady ? 'Waiting for others...' : 'Ready'}
                 </button>

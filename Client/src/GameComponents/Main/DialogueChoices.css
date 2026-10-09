@@ -1,0 +1,12 @@
+/* A personal moment's choices sit with the story choices; attribute answers get a small tag. */
+.dialogue-choices .dialogue-tag {
+    display: inline-block;
+    margin-bottom: 0.15rem;
+    padding: 0.05rem 0.35rem;
+    border-radius: 0.25rem;
+    border: 1px solid rgba(250, 204, 21, 0.6);
+    color: #fde68a;
+    font-size: 0.75em;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}

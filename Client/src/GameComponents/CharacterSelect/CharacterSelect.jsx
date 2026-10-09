@@ -4,6 +4,8 @@ import charactersData from '@shared/data/characters.js';
 import { enrichAllCharacters } from '../../Utils/characterUtils';
 import './CharacterSelect.css';
 
+const MAX_PARTY_SIZE = 6;
+
 function CharacterSelect() {
     const {
         players,
@@ -13,7 +15,9 @@ function CharacterSelect() {
         socket,
         room,
         readyPlayers,
-        getCharacterImage
+        getCharacterImage,
+        isAdmin,
+        bots = []
     } = useGameContext();
     const enrichedCharactersData = enrichAllCharacters(charactersData);
     const [selectedCharacter, setSelectedCharacter] = useState(null);
@@ -83,6 +87,21 @@ function CharacterSelect() {
     };
 
     const isPlayerReady = readyPlayers.includes(playerName);
+    const isPartyFull = players.length >= MAX_PARTY_SIZE;
+
+    // Bots fill empty seats; the server picks a character for each (a missing role first).
+    const handleAddBot = () => {
+        setNotice('');
+        socket.emit('add_bot', { room }, (result) => {
+            if (result && !result.ok) setNotice(result.message || 'Could not add a bot.');
+        });
+    };
+
+    const handleRemoveBot = (bot) => {
+        socket.emit('remove_bot', { room, name: bot }, (result) => {
+            if (result && !result.ok) setNotice(result.message || 'Could not remove that bot.');
+        });
+    };
 
     return (
         <div className='character-select-container'>
@@ -100,6 +119,12 @@ function CharacterSelect() {
                                     {playerCharacters[player] ? (
                                         <div className='team-character'>
                                             <span>{playerCharacters[player].name}</span>
+                                            {bots.includes(player) && <span className='bot-tag'>Bot</span>}
+                                            {bots.includes(player) && isAdmin && (
+                                                <button className='remove-bot-button' onClick={() => handleRemoveBot(player)} aria-label={`Remove ${player}`}>
+                                                    Remove
+                                                </button>
+                                            )}
                                         </div>
                                     ) : (
                                         <div className='empty-slot'>{player} - Not Selected</div>
@@ -109,6 +134,11 @@ function CharacterSelect() {
                         </div>
                         <div className='team-controls'>
                             <button onClick={handleRemoveFromTeam} disabled={!playerCharacters[playerName]}>Clear</button>
+                            {isAdmin && (
+                                <button onClick={handleAddBot} disabled={isPartyFull} title='A computer-controlled teammate'>
+                                    {isPartyFull ? 'Party full' : 'Add bot'}
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>

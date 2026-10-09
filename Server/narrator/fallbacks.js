@@ -20,7 +20,7 @@ export function optionsForAttribute(attribute) {
 }
 
 export const FALLBACK_NARRATION = {
-  game_start: 'Smoke rolls across the market as Enforcers and masked rebels trade fire over the wreckage. A wounded vendor grabs the nearest of you: "They did this. Somebody has to choose a side." Both sides have seen you.',
+  game_start: 'The Twilight Market is the one place in the city where nobody checks whose side you are on, which is why it is so crowded. A Singularity ad flickers over a noodle stall, promising a robot that will do your job for you, and somebody has sprayed THEN WHAT DO WE DO over half of it. A Division drone drifts down the aisle, scanning faces a little too slowly, and the vendor next to you stops mid-sentence until it passes. You each came here for your own reasons, a job, a debt, a rumor, and none of you planned on standing this close to strangers. Then the blast hits. Smoke rolls across the stalls as Enforcers and masked rebels trade fire over the wreckage. A wounded vendor grabs the nearest of you. "They did this," she says. "Somebody has to choose a side." Both sides have already seen you.',
   faction_choice: 'The party commits. There is no walking it back now, and the first shots are already coming your way.',
   choice_made: 'The decision is made. The city reacts the way it always does: fast, loud, and with someone else paying for it.',
   encounter_end: 'The fighting stops. In the ringing quiet the party catches its breath and looks at what it cost.',

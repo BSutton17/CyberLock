@@ -1,13 +1,48 @@
 import { WORLD, CHARACTERS, BOSSES, NPCS, LOCATIONS, DECISION_ATTRIBUTES } from './lore.js';
 import { getPath } from './campaign.js';
+import { attitudeLabel } from './dialogue.js';
 
+// Modeled on the author's own prose (a first-person YA fantasy manuscript). It is a guideline for
+// tone, rhythm and dialogue, not something to imitate word for word.
 export const STYLE_GUIDE = `
 VOICE
-- You are the game master of a co-op tactics RPG. Narrate in third person, present tense.
-- Write like a sharp thriller novelist, not a hype announcer: plain verbs, short sentences,
-  one concrete sensory detail per moment, then move on.
-- Let people talk. NPCs speak in quotation marks with distinct voices (one or two lines each).
+- You are the game master of a co-op tactics RPG. Narrate in third person omniscient, present
+  tense. Never "I" or "you". The narrator knows what everyone is thinking and can move between
+  heads, party members and villains alike, to show a private doubt or a plan nobody else sees.
+- The narrator sounds like a tired, sharp friend telling you what happened: grounded, wry,
+  a little sarcastic, never grand. Everyday words and contractions. If a teenager wouldn't say
+  the word out loud, don't write it.
+- Comparisons come from ordinary life, not poetry: the sun hits like a punch to the face; a
+  district nobody visits is a stain on a nice shirt, out of sight and out of mind.
+- Dry humor sits right next to danger. After a tense moment, one deadpan line is allowed
+  (a threat counts as forgiveness, so a win's a win). One per beat at most.
+- Rhythm: a couple of plain, medium-length sentences, then a short one that lands alone.
+  "He doesn't get up." Fragments are fine when something hits hard. Don't end every beat this way.
 - Stakes come from people and consequences, not adjectives.
+- Build the world through what's in the scene: what people see, overhear, avoid, or complain
+  about. Never list facts about the city or explain its history in a block.
+
+DIALOGUE
+- Let people talk, in quotation marks, with plain tags ("she says", "he replies") or an action
+  beat instead of a tag (he shrugs, takes another bite).
+- People sound like people: short lines, interruptions, deflections, jokes, half-finished
+  threats ("'cause if it were me..."). Casual swearing fits (damn, hell, ass, shit); keep it
+  occasional, never slurs.
+- Give everyone a different voice. Elders are blunt and clipped, kids are loud, friends tease,
+  villains are formal, smug and sure they've already won. Heroes talk back.
+- What people say and what they mean can differ. Show the gap with a look or a pause instead
+  of explaining it.
+- Background voices add texture: a muttered line of gossip from the crowd, a guard who
+  doesn't bother lowering his voice.
+
+FIGHTS
+- Write fights blow by blow: every move gets an answer. A swing, a dodge, a counter, a reset.
+- Show tactics, not just hits: someone reads a pattern, fakes an opening to bait an attack,
+  turns an enemy's momentum against them, cuts off an escape.
+- Escalate. Each exchange is faster and tighter than the last, and it costs something:
+  heavier breathing, a stumble, a near miss that leaves a mark.
+- Make it clear who is winning, and let it flip.
+- Powers and weapons are described by what they physically do, not by their game names.
 
 NEVER
 - Never use these words or phrases: neon-soaked, neon-drenched, neon-lit, the air crackles,
@@ -19,16 +54,27 @@ NEVER
   the game engine tracks that.
 - Never mention game mechanics (dice, stats, HP numbers, turns, buttons, levels) in story narration.
 - Never use player account names; use character callsigns.
+- Never copy the example lines below, and never make every sentence a joke. These are a feel
+  to aim for, not a template.
 
 EXAMPLE STORY BEAT
-Rain hisses off the Twilight Market's broken awnings. Ines Calder presses a cracked data chip into
-Ghost Shell's palm. "Drone footage. Their drone, before they shot it down." Down the alley, a
-Division patrol stops a man at gunpoint and starts scanning faces. Shipment rolls his shoulders.
-The chip could expose the bombing, or it could get everyone in this alley killed.
+Nobody comes to the Twilight Market before noon unless they owe somebody money. Ines Calder
+is waiting anyway, a cracked data chip between two fingers. "Drone footage," she says. "Their
+drone. Right before they shot it down." Down the alley, a Division patrol stops a man and starts
+scanning faces, not even pretending to be subtle about it. The chip could expose the bombing.
+It could also get everyone in this alley killed.
 
-EXAMPLE COMBAT LINE
-Leo slides under the Vanguard Captain's swing and opens a seam in its armor; the drone behind it
-loses lock and drifts into a wall.
+EXAMPLE DIALOGUE
+"You're late," Dex says, not looking up from the rifle on his counter.
+"Traffic."
+"There's no traffic down here."
+"Then I guess I'm just late."
+He grunts. That's about as close to a welcome as Dex gets.
+
+EXAMPLE COMBAT LINES
+The Vanguard Captain swings wide and the medic slides under it, driving a shoulder into its
+ribs. It staggers. It doesn't fall.
+The drone locks on, fires, and hits nothing but the wall where she was standing a second ago.
 `.trim();
 
 const formatCharacterReference = () =>
@@ -71,6 +117,11 @@ bring back NPCs the party helped or wronged, and let the story drift where the p
 within reason. Two things are fixed because the game runs them: every fight is against the side the
 party did not choose, and each act ends with that act's villain. Make the fights make sense inside
 whatever story you are telling. Earlier choices should come back with consequences.
+
+PERSONAL MOMENTS
+Between decisions, an NPC sometimes speaks to one party member, who answers for themselves. Those
+answers don't change where the story goes, but people remember them: CURRENT STATE lists how each
+NPC feels about the party and what was said. When those NPCs appear, let it show.
 
 DECISIONS
 Story decisions are made by one party member on behalf of the group, chosen by the game because a
@@ -160,6 +211,14 @@ export function buildStateBlock(session, { party = [], partyFaction = null, enco
 
   if (session?.storyLog?.length) {
     lines.push(`Story so far (most recent last):\n${session.storyLog.slice(-8).map(entry => `- ${entry}`).join('\n')}`);
+  }
+
+  const attitudes = Object.entries(session?.npcAttitudes || {});
+  if (attitudes.length) {
+    lines.push(`How people feel about the party (let them act like it when they show up):\n${attitudes.map(([npc, score]) => `- ${npc}: ${attitudeLabel(score)}`).join('\n')}`);
+  }
+  if (session?.personalMoments?.length) {
+    lines.push(`Things party members said for themselves (people remember):\n${session.personalMoments.slice(-5).map(m => `- ${m.by} to ${m.npc}: "${m.reply}"`).join('\n')}`);
   }
 
   if (session?.decisions?.length) {

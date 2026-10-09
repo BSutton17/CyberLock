@@ -4,6 +4,13 @@ import Anthropic from '@anthropic-ai/sdk';
 
 const EFFORT_BY_KIND = { story: 'medium', combat: 'low', rules: 'low' };
 
+// The SDK itself retries busy/overloaded/rate-limited replies (429, 5xx, 529) with backoff and
+// honors retry-after. Two retries matches the Gemini provider.
+export const ANTHROPIC_MAX_RETRIES = 2;
+
+export const createAnthropicClient = ({ apiKey, timeoutMs }) =>
+  new Anthropic({ apiKey, timeout: timeoutMs, maxRetries: ANTHROPIC_MAX_RETRIES });
+
 export function createAnthropicProvider({
   apiKey,
   storyModel = 'claude-sonnet-5-5',
@@ -14,7 +21,7 @@ export function createAnthropicProvider({
   if (!apiKey && !client) {
     throw new Error('anthropic: ANTHROPIC_API_KEY is required');
   }
-  const anthropic = client || new Anthropic({ apiKey, timeout: timeoutMs, maxRetries: 1 });
+  const anthropic = client || createAnthropicClient({ apiKey, timeoutMs });
 
   return {
     name: 'anthropic',

@@ -8,7 +8,7 @@ import { mergeCharacterPayload } from '../Utils/characterProgression';
 // components registered for the same events. Live values are read through refs.
 function Events() {
   const {
-    socket, setPlayers, setDisplayGame, setAdmin, setScreen, setPlayerCharacters,
+    socket, setPlayers, setBots, setDisplayGame, setAdmin, setScreen, setPlayerCharacters,
     setReadyPlayers, setGamePhase, room, setEnemies, setTurnOrder, setCurrentTurn,
     setIsMyTurn, playerName, setAllPlayerAttributes, setServerStoryState, setCombatState
   } = useGameContext();
@@ -36,12 +36,20 @@ function Events() {
     const handlers = {
       updatePlayerList: (playerList) => setPlayers([...(playerList || [])]),
 
+      bots_updated: (botList) => setBots(Array.isArray(botList) ? botList : []),
+
       gameStarted: () => {
         setDisplayGame(true);
         setScreen('characterSelect');
       },
 
       setAdmin: (isAdmin) => setAdmin(!!isAdmin),
+
+      // The server confirms our name before it announces the admin; remember it right away, since
+      // the playerName state (and the ref copied from it) only updates after the next render.
+      joined_room: ({ playerName: confirmedName } = {}) => {
+        if (confirmedName) playerNameRef.current = confirmedName;
+      },
 
       admin_changed: ({ admin } = {}) => setAdmin(admin === playerNameRef.current),
 
@@ -62,7 +70,6 @@ function Events() {
       },
 
       character_customization: () => setScreen('characterBuilder'),
-      attribute_part1_complete: () => setScreen('characterBuilderPart2'),
       start_main_game: () => setScreen('chooseAbilities'),
       start_game: () => setScreen('main'),
 

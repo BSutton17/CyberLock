@@ -6,6 +6,8 @@ import Login from './Components/Login';
 import LoadingScreen from './Components/LoadingScreen';
 import ProtectedRoute from './Components/ProtectedRoute';
 import HomeScreen from './GameComponents/HomeScreen';
+// Phone (landscape) sizing; imported after every screen so it wins on phones.
+import './styles/mobileLandscape.css';
 
 const RootRoute = () => {
   const { isAuthenticated, loading } = useAuth();

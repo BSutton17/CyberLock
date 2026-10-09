@@ -5,6 +5,8 @@ import { config as baseConfig } from '../config.js';
 import { createSessionToken } from '../auth/session.js';
 import { createNarrator } from '../narrator/storyEngine.js';
 import { createMockProvider } from '../narrator/providers/mock.js';
+import { createDialogue } from '../narrator/dialogue.js';
+import { generatePlayerSpawnPositions } from '../game/spawning.js';
 
 const quiet = { log: () => {}, warn: () => {}, error: () => {} };
 
@@ -21,7 +23,8 @@ const testConfig = {
     enemyTurnEndDelayMs: 0,
     animationScale: 0,
     allyTurnTimeoutMs: 600,
-    disconnectGraceMs: 150
+    disconnectGraceMs: 150,
+    dialogueTimeoutMs: 200
   }
 };
 
@@ -41,7 +44,13 @@ beforeEach(async () => {
       return { id: 'google:123', name: 'Bryson', provider: 'google' };
     },
     logger: quiet,
-    combatOptions: { generateEnemies: () => JSON.parse(JSON.stringify(nextEnemies)), random: () => 0 }
+    combatOptions: {
+      generateEnemies: () => JSON.parse(JSON.stringify(nextEnemies)),
+      random: () => 0,
+      // Tests put the party exactly where the scenario needs it.
+      spawnPlayers: (players, characters, scene, { proposed } = {}) =>
+        (proposed && players.every(player => proposed[player]) ? proposed : generatePlayerSpawnPositions(players, characters, scene))
+    }
   });
   await new Promise(resolve => game.server.listen(0, resolve));
   baseUrl = `http://127.0.0.1:${game.server.address().port}`;
@@ -252,15 +261,31 @@ describe('rooms', () => {
     b.emit('player_ready', { room });
     await customization;
 
-    const part1 = waitFor(a, 'attribute_part1_complete');
-    a.emit('attribute_part1_ready', { room });
-    b.emit('attribute_part1_ready', { room });
-    await part1;
+    // Character Feats: each player picks a primary and secondary; the server shuffles the rest.
+    a.emit('update_attributes', { room, newAttributes: ['Medic', 'Spy'] });
+    b.emit('update_attributes', { room, newAttributes: ['Crook', 'Banker', 'Scholar'] });
+    await waitFor(a, 'attributes_updated', attrs => !!attrs.A && !!attrs.B);
 
+    const rankings = waitFor(a, 'attributes_updated', attrs => attrs.A?.length === 10 && attrs.B?.length === 10);
     const mainGame = waitFor(a, 'start_main_game');
-    a.emit('attributes_part2_ready', { room });
-    b.emit('attributes_part2_ready', { room });
+    a.emit('attributes_ready', { room });
+    b.emit('attributes_ready', { room });
+    const { A, B } = await rankings;
     await mainGame;
+
+    expect(A.slice(0, 2)).toEqual(['Medic', 'Spy']);
+    expect(B.slice(0, 2)).toEqual(['Crook', 'Banker']); // only the first two picks count
+    expect(new Set(A).size).toBe(10);
+    expect(new Set(B).size).toBe(10);
+    A.forEach((name, slot) => expect(B[slot]).not.toBe(name));
+    expect(game.state.rooms[room].stage).toBe('abilities');
+
+    // Rankings are locked once the shuffle is done.
+    a.emit('update_attributes', { room, newAttributes: ['Navigator', 'Detective'] });
+    a.emit('attributes_ready', { room });
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(game.state.rooms[room].attributes.A).toEqual(A);
+    expect(game.state.rooms[room].stage).toBe('abilities');
 
     const startGame = waitFor(a, 'start_game');
     a.emit('ability_ready', { room });
@@ -548,6 +573,244 @@ describe('level up', () => {
     const resume = waitFor(b, 'start_game');
     a.emit('ability_ready', { room });
     await resume;
+  });
+
+  it("carries the old ultimate's cooldown (+3) over to a new ultimate picked on a level-up", async () => {
+    const { room, sockets: [a, b] } = await playingRoom({ A: 4, B: 5 });
+    const roomState = game.state.rooms[room];
+    roomState.characterSelections.A.ultimate = { id: 'no_limits' };
+    roomState.cooldowns = { A: { no_limits: 5, shadow_strike: 1 } };
+
+    a.emit('level_up', { room, encounterIndex: 6 });
+    await waitFor(a, 'level_up');
+    const complete = waitFor(b, 'level_up_complete');
+    a.emit('level_up_ready', { room, updatedCharacter: roomState.characterSelections.A });
+    expect((await complete).chooseAbilities).toEqual(['A']);
+
+    a.emit('character_selected', { room, character: { ...roomState.characterSelections.A, ultimate: { id: 'dead_calm' } } });
+    await waitFor(a, 'update_character_selections', sel => sel.A?.ultimate?.id === 'dead_calm');
+    const resume = waitFor(b, 'start_game');
+    a.emit('ability_ready', { room });
+    await resume;
+
+    expect(roomState.cooldowns.A).toEqual({ dead_calm: 8, shadow_strike: 1 });
+  });
+
+  it('ignores ability changes mid-game outside the ability screen', async () => {
+    const { room, sockets: [a] } = await playingRoom({ A: 3, B: 3 });
+    const roomState = game.state.rooms[room];
+    roomState.characterSelections.A.ultimate = { id: 'no_limits' };
+    const refreshed = waitFor(a, 'update_character_selections');
+    a.emit('character_selected', { room, character: { ...roomState.characterSelections.A, ultimate: { id: 'dead_calm' } } });
+    await refreshed;
+    expect(roomState.characterSelections.A.ultimate.id).toBe('no_limits');
+  });
+});
+
+describe('cooldowns between fights', () => {
+  it('keeps ultimate cooldowns from one fight to the next and resets everything else', async () => {
+    const { room, sockets: [a] } = await createRoomWith([['u1', 'A']]);
+    seedCharacters(room, { A: { ...character('a', 40), level: 3, ultimate: { id: 'no_limits' }, abilities: [{ id: 'shadow_strike' }] } });
+    const roomState = game.state.rooms[room];
+    roomState.cooldowns = { A: { no_limits: 9, shadow_strike: 2 } };
+    nextEnemies = [enemy('e1', 5, 40)];
+    const started = waitFor(a, 'combat_state');
+    a.emit('start_combat', { room, sceneKey: 'street', playerPositions: { A: { row: 6, col: 3 } } });
+    await started;
+    expect(roomState.cooldowns.A).toEqual({ no_limits: 9, shadow_strike: 0 });
+  });
+});
+
+describe('personal moments', () => {
+  it('moves on in silence if the chosen player never answers', async () => {
+    const { room, sockets: [a] } = await createRoomWith([['u1', 'A']]);
+    seedCharacters(room, { A: { ...character('offensive_support_2', 30), name: 'Livewire' } });
+    const roomState = game.state.rooms[room];
+    roomState.selectedFaction = 'rebels';
+    roomState.attributes = { A: ['Politician', 'Crook'] };
+    const session = game.narrator.getSession(room);
+    session.faction = 'rebels';
+    session.openingCombatStarted = true;
+
+    const story = waitFor(a, 'ai_message', message => message.eventType === 'encounter_end');
+    const silence = waitFor(a, 'ai_message', message => message.eventType === 'dialogue_reply', 3000);
+    a.emit('ai_request', { requestId: 'after-fight', room, eventType: 'encounter_end' });
+    const told = await story;
+    expect(told.dialogue?.playerName).toBe('A');
+    expect(told.options).toBeNull();
+    expect(told.response).toContain('Livewire');
+
+    const after = await silence;
+    expect(after.response).toMatch(/Livewire (doesn't answer|lets the moment pass)/);
+    expect(after.options).toHaveLength(2);
+  });
+
+  it('lets only the chosen player answer, then tells everyone in the narration with the group decision', async () => {
+    const { room, sockets: [a, b] } = await createRoomWith([['u1', 'A'], ['u2', 'B']]);
+    const session = game.narrator.getSession(room);
+    session.pendingDialogue = {
+      ...createDialogue({ target: { playerName: 'B', characterName: 'Livewire' }, attributes: ['politician'], faction: 'rebels', random: () => 0 }),
+      followUp: { options: ['Go left', 'Go right'], attribute: 'navigator', ownerName: 'Shipment' }
+    };
+
+    expect((await ack(a, 'dialogue_reply', { room, dialogueId: 'd1', optionId: 'skill' })).ok).toBe(false);
+
+    const told = waitFor(a, 'ai_message', message => message.eventType === 'dialogue_reply');
+    expect((await ack(b, 'dialogue_reply', { room, dialogueId: 'd1', optionId: 'skill' })).ok).toBe(true);
+    const message = await told;
+    expect(message.response).toMatch(/^Livewire: "We came to save someone\." /);
+    expect(message.options).toEqual(['Go left', 'Go right']);
+    expect(session.npcAttitudes['A checkpoint guard']).toBe(2);
+    expect(game.state.rooms[room].lastStoryMessage.options).toEqual(['Go left', 'Go right']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Bots
+// ---------------------------------------------------------------------------
+
+describe('bots', () => {
+  async function onCharacterScreen(players = [['u1', 'A']]) {
+    const { room, sockets } = await createRoomWith(players);
+    const started = waitFor(sockets[0], 'gameStarted');
+    sockets[0].emit('startGame');
+    await started;
+    return { room, sockets };
+  }
+
+  it('lets only the host add a bot, which picks a missing role and is ready at once', async () => {
+    const { room, sockets: [a, b] } = await onCharacterScreen([['u1', 'A'], ['u2', 'B']]);
+
+    expect((await ack(b, 'add_bot', { room })).ok).toBe(false);
+
+    const botsUpdated = waitFor(b, 'bots_updated', list => list.length === 1);
+    const result = await ack(a, 'add_bot', { room });
+    expect(result.ok).toBe(true);
+    expect(result.name).toMatch(/\(bot\)$/);
+    expect(await botsUpdated).toEqual([result.name]);
+
+    const roomState = game.state.rooms[room];
+    expect(roomState.players).toContain(result.name);
+    expect(roomState.characterSelections[result.name].role).toBe('Tank'); // nobody had a tank
+    expect(roomState.readyPlayers).toContain(result.name);
+  });
+
+  it('runs the whole lobby with a bot: it is never waited on and gets a full loadout', async () => {
+    const { room, sockets: [a] } = await onCharacterScreen();
+    const { name: bot } = await ack(a, 'add_bot', { room });
+
+    a.emit('character_selected', { room, character: { ...character('aggressive_dps_2', 45), name: 'Leo' } });
+    await waitFor(a, 'update_character_selections', sel => !!sel.A);
+    const customization = waitFor(a, 'character_customization');
+    a.emit('player_ready', { room });
+    await customization;
+
+    a.emit('update_attributes', { room, newAttributes: ['Medic', 'Spy'] });
+    await waitFor(a, 'attributes_updated', attrs => !!attrs.A);
+    const abilities = waitFor(a, 'start_main_game');
+    a.emit('attributes_ready', { room });
+    await abilities;
+
+    const roomState = game.state.rooms[room];
+    expect(roomState.attributes[bot]).toHaveLength(10);
+    roomState.attributes.A.forEach((name, slot) => expect(roomState.attributes[bot][slot]).not.toBe(name));
+    // The bot chose after A, from what A left.
+    expect(['Medic', 'Spy']).not.toContain(roomState.attributes[bot][0]);
+    expect(['Medic', 'Spy']).not.toContain(roomState.attributes[bot][1]);
+    expect(roomState.characterSelections[bot].abilities).toHaveLength(1);
+    expect(roomState.abilityReadyPlayers).toEqual([bot]);
+
+    const started = waitFor(a, 'start_game');
+    a.emit('ability_ready', { room });
+    await started;
+  });
+
+  it('lets the host remove a bot, and resets drop bots', async () => {
+    const { room, sockets: [a] } = await onCharacterScreen();
+    const { name: first } = await ack(a, 'add_bot', { room });
+    const { name: second } = await ack(a, 'add_bot', { room });
+    expect(first).not.toBe(second);
+
+    expect((await ack(a, 'remove_bot', { room, name: first })).ok).toBe(true);
+    expect(game.state.rooms[room].players).toEqual(['A', second]);
+    expect((await ack(a, 'remove_bot', { room, name: 'A' })).ok).toBe(false); // not a bot
+
+    const reset = waitFor(a, 'game_reset');
+    a.emit('reset_game');
+    await reset;
+    expect(game.state.rooms[room].players).toEqual(['A']);
+    expect(game.state.rooms[room].bots).toEqual([]);
+  });
+
+  it('stops at six seats', async () => {
+    const { room, sockets: [a] } = await onCharacterScreen();
+    for (let i = 0; i < 5; i++) expect((await ack(a, 'add_bot', { room })).ok).toBe(true);
+    const full = await ack(a, 'add_bot', { room });
+    expect(full.ok).toBe(false);
+    expect(game.state.rooms[room].players).toHaveLength(6);
+  });
+
+  it('closes the room when the last person leaves, even with bots seated', async () => {
+    const { room, sockets: [a] } = await onCharacterScreen();
+    await ack(a, 'add_bot', { room });
+    a.emit('leave_room');
+    await new Promise(resolve => setTimeout(resolve, 100));
+    expect(game.state.rooms[room]).toBeUndefined();
+  });
+
+  it('plays its own turns in combat and is a target like anyone else', async () => {
+    const { room, sockets: [a] } = await createRoomWith([['u1', 'A']]);
+    const bot = 'Nova (bot)';
+    const roomState = game.state.rooms[room];
+    roomState.players.push(bot);
+    roomState.bots = [bot];
+    seedCharacters(room, {
+      A: character('a', 10),
+      [bot]: { ...character('bot', 50), weapon: { name: 'blade', damage: 9, range: 1 } }
+    });
+    nextEnemies = [enemy('e1', 5, 40)];
+
+    // The bot is fastest; the fight should come round to A without A doing anything.
+    const aTurn = waitFor(a, 'combat_state', state => state.currentTurn?.id === 'A', 4000);
+    a.emit('start_combat', { room, sceneKey: 'street', playerPositions: { A: { row: 6, col: 0 }, [bot]: { row: 4, col: 4 } } });
+    await aTurn;
+
+    const fight = game.state.combat[room];
+    expect(fight.positions[bot]).not.toEqual({ row: 4, col: 4 });
+    expect(fight.turnOrder.map(entry => entry.id)).toContain(bot);
+  });
+
+  it('levels bots up automatically and never asks them to pick abilities', async () => {
+    const { room, sockets: [a] } = await createRoomWith([['u1', 'A']]);
+    const bot = 'Nova (bot)';
+    const roomState = game.state.rooms[room];
+    roomState.players.push(bot);
+    roomState.bots = [bot];
+    seedCharacters(room, {
+      A: { ...character('a', 30), level: 2 },
+      [bot]: { ...character('bot', 30), role: 'Tank', level: 2 }
+    });
+
+    a.emit('level_up', { room, encounterIndex: 2 });
+    await waitFor(a, 'level_up');
+    expect(roomState.characterSelections[bot].level).toBe(3);
+    expect(roomState.characterSelections[bot].ultimate?.id).toBeTruthy();
+    expect(roomState.characterSelections[bot].abilities).toHaveLength(2);
+
+    const complete = waitFor(a, 'level_up_complete');
+    a.emit('level_up_ready', { room, updatedCharacter: roomState.characterSelections.A });
+    expect((await complete).chooseAbilities).toEqual(['A']);
+  });
+
+  it('keeps story decisions with people', async () => {
+    const { room } = await createRoomWith([['u1', 'A']]);
+    const roomState = game.state.rooms[room];
+    roomState.players.push('Nova (bot)');
+    roomState.bots = ['Nova (bot)'];
+    roomState.attributes = { A: ['Spy'], 'Nova (bot)': ['Medic'] };
+    const context = game.sockets.buildNarratorContext(room);
+    expect(context.players).toEqual(['A']);
+    expect(context.connectedPlayers).toEqual(['A']);
   });
 });
 

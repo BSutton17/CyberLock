@@ -6,8 +6,7 @@ import {
   getEnemySpawnDepth,
   getEnemySpawnColumnOrder,
   generateEnemySpawnPositions,
-  generatePlayerSpawnPositions,
-  sanitizeProposedPlayerPositions
+  generatePlayerSpawnPositions
 } from './spawning.js';
 
 const cellKey = ({ row, col }) => `${row},${col}`;
@@ -87,6 +86,10 @@ describe('generatePlayerSpawnPositions', () => {
     p5: { role: 'DPS' },
     p6: {}
   };
+  const seeded = (seed) => () => {
+    seed = (seed * 16807) % 2147483647;
+    return (seed - 1) / 2147483646;
+  };
 
   it('gives a full party of six unique cells in the bottom two rows', () => {
     const cells = Object.values(generatePlayerSpawnPositions(players, selections));
@@ -95,46 +98,37 @@ describe('generatePlayerSpawnPositions', () => {
     expect(new Set(cells.map(cellKey)).size).toBe(6);
   });
 
-  it('puts tanks in front (row 5) and everyone else behind (row 6)', () => {
-    const positions = generatePlayerSpawnPositions(players, selections);
-    expect(positions.p1.row).toBe(5);
-    expect(positions.p4.row).toBe(5);
-    expect(positions.p2.row).toBe(6);
-    expect(positions.p6.row).toBe(6);
+  it('puts tanks on the second row from the bottom and everyone else on the bottom row', () => {
+    for (let seed = 1; seed < 30; seed++) {
+      const positions = generatePlayerSpawnPositions(players, selections, 'street', seeded(seed));
+      expect(positions.p1.row).toBe(5);
+      expect(positions.p4.row).toBe(5);
+      for (const player of ['p2', 'p3', 'p5', 'p6']) expect(positions[player].row).toBe(6);
+    }
+  });
+
+  it('never puts anyone against a side wall', () => {
+    for (let seed = 1; seed < 50; seed++) {
+      for (const scene of ['street', 'sewer']) {
+        const cells = Object.values(generatePlayerSpawnPositions(players, selections, scene, seeded(seed)));
+        expect(cells.every(cell => cell.col > 0 && cell.col < 9), `seed ${seed} ${scene}`).toBe(true);
+      }
+    }
+  });
+
+  it('mixes up the columns from fight to fight', () => {
+    const layouts = new Set();
+    for (let seed = 1; seed < 20; seed++) {
+      layouts.add(JSON.stringify(generatePlayerSpawnPositions(players, selections, 'street', seeded(seed))));
+    }
+    expect(layouts.size).toBeGreaterThan(10);
   });
 
   it('avoids blocked sewer tiles', () => {
-    const cells = Object.values(generatePlayerSpawnPositions(players, selections, 'sewer'));
-    expect(cells.some(cell => isSewerSpawnBlockedTile('sewer', cell.row, cell.col))).toBe(false);
-    expect(new Set(cells.map(cellKey)).size).toBe(6);
-  });
-});
-
-describe('sanitizeProposedPlayerPositions', () => {
-  const players = ['p1', 'p2'];
-
-  it('accepts valid, distinct positions and coerces numeric strings', () => {
-    expect(sanitizeProposedPlayerPositions(players, {
-      p1: { row: '6', col: '3' },
-      p2: { row: 5, col: 4 }
-    })).toEqual({ p1: { row: 6, col: 3 }, p2: { row: 5, col: 4 } });
-  });
-
-  it.each([
-    ['a player is missing', { p1: { row: 6, col: 3 } }],
-    ['two players share a cell', { p1: { row: 6, col: 3 }, p2: { row: 6, col: 3 } }],
-    ['a position is off the grid', { p1: { row: 7, col: 3 }, p2: { row: 6, col: 4 } }],
-    ['a coordinate is not an integer', { p1: { row: 6.5, col: 3 }, p2: { row: 6, col: 4 } }],
-    ['a player is standing in the enemy half', { p1: { row: 1, col: 3 }, p2: { row: 6, col: 4 } }],
-    ['the payload is not an object', 'nope']
-  ])('rejects the proposal when %s', (_label, proposal) => {
-    expect(sanitizeProposedPlayerPositions(players, proposal)).toBeNull();
-  });
-
-  it('rejects positions on blocked sewer tiles', () => {
-    expect(sanitizeProposedPlayerPositions(players, {
-      p1: { row: 6, col: 4 },
-      p2: { row: 6, col: 7 }
-    }, 'sewer')).toBeNull();
+    for (let seed = 1; seed < 30; seed++) {
+      const cells = Object.values(generatePlayerSpawnPositions(players, selections, 'sewer', seeded(seed)));
+      expect(cells.some(cell => isSewerSpawnBlockedTile('sewer', cell.row, cell.col))).toBe(false);
+      expect(new Set(cells.map(cellKey)).size).toBe(6);
+    }
   });
 });

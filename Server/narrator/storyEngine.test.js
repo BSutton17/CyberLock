@@ -153,7 +153,7 @@ describe('narrator flow', () => {
 
   it('runs a decision interlude after a fight, rotates the decision owner, then leads into the next fight', async () => {
     const provider = scriptedProvider([beat()]);
-    const narrator = createNarrator({ provider, logger: quietLogger, decisionsPerInterlude: 2 });
+    const narrator = createNarrator({ provider, logger: quietLogger, decisionsPerInterlude: 2, personalMoments: false });
     await narrator.handleEvent({ room: 'r1', eventType: 'choice_made', data: { faction: 'rebels' }, context: context() });
 
     const first = await narrator.handleEvent({ room: 'r1', eventType: 'encounter_end', context: context({ encounterIndex: 1 }) });
@@ -200,7 +200,7 @@ describe('narrator flow', () => {
   });
 
   it('falls back to pre-written text with real options when the model fails', async () => {
-    const narrator = createNarrator({ provider: scriptedProvider([new Error('boom')]), logger: quietLogger });
+    const narrator = createNarrator({ provider: scriptedProvider([new Error('boom')]), logger: quietLogger, personalMoments: false });
     await narrator.handleEvent({ room: 'r1', eventType: 'choice_made', data: { faction: 'enforcers' }, context: context() });
     const result = await narrator.handleEvent({ room: 'r1', eventType: 'encounter_end', context: context({ encounterIndex: 1 }) });
 
@@ -210,7 +210,7 @@ describe('narrator flow', () => {
   });
 
   it('uses the model\'s two options only when it returns exactly two', async () => {
-    const narrator = createNarrator({ provider: scriptedProvider([beat({ options: ['Only one'] })]), logger: quietLogger });
+    const narrator = createNarrator({ provider: scriptedProvider([beat({ options: ['Only one'] })]), logger: quietLogger, personalMoments: false });
     await narrator.handleEvent({ room: 'r1', eventType: 'choice_made', data: { faction: 'rebels' }, context: context() });
     const result = await narrator.handleEvent({ room: 'r1', eventType: 'encounter_end', context: context({ encounterIndex: 1 }) });
     expect(result.options).toHaveLength(2);
@@ -246,17 +246,26 @@ describe('narrator flow', () => {
 });
 
 describe('combat narration', () => {
-  it('uses the game summary for routine turns without calling the model', async () => {
+  it('narrates routine turns from templates, without the model and without numbers', async () => {
     const provider = scriptedProvider([{ narration: 'should not be used' }]);
-    const narrator = createNarrator({ provider, logger: quietLogger });
+    const narrator = createNarrator({ provider, logger: quietLogger, random: () => 0 });
     const result = await narrator.handleEvent({
       room: 'r1',
       eventType: 'turn_action',
-      message: "Shipment's turn ends: Shipment strikes Enforcer Drone with Hammer for 9.5 damage.",
-      context: context()
+      message: "Shipment's turn ends: Shipment hits Enforcer Drone with the Hammer for 9 damage.",
+      data: { actor: 'Shipment', summaries: ['Shipment hits Enforcer Drone with the Hammer for 9 damage.'] },
+      context: { ...context(), enemies: [{ name: 'Enforcer Drone', tier: 'generic', isDead: false }] }
     });
     expect(provider.calls).toHaveLength(0);
-    expect(result.response).toBe('Shipment strikes Enforcer Drone with Hammer for 9 damage.');
+    expect(result.response).toBe('Shipment brings the hammer down on the Enforcer Drone, landing a solid blow.');
+  });
+
+  it('asks the model for one sentence per action and strips any numbers it writes', async () => {
+    const provider = scriptedProvider([{ narration: 'Ghost Shell fries every circuit for 40 damage.' }]);
+    const narrator = createNarrator({ provider, logger: quietLogger });
+    const result = await narrator.handleEvent({ room: 'r1', eventType: 'turn_action', message: 'Ghost Shell uses EMP.', context: context() });
+    expect(provider.calls[0].messages[0].content).toMatch(/one short sentence per action/);
+    expect(result.response).toBe('Ghost Shell fries every circuit.');
   });
 
   it('asks the model for notable turns and limits it to two short sentences', async () => {
@@ -281,7 +290,7 @@ describe('combat narration', () => {
     expect(provider.calls).toHaveLength(3);
   });
 
-  it('falls back to the summary if the model mentions an outsider', async () => {
+  it('falls back to the game log (minus numbers) if the model mentions an outsider', async () => {
     const narrator = createNarrator({ provider: scriptedProvider([{ narration: 'Aaron Bray cheers.' }]), logger: quietLogger });
     const result = await narrator.handleEvent({ room: 'r1', eventType: 'turn_action', message: 'Shipment uses Charge!', context: context() });
     expect(result.response).toBe('Shipment uses Charge!');
@@ -310,7 +319,7 @@ describe('rules help', () => {
 
 describe('mock provider end to end', () => {
   it('plays through a whole interlude offline', async () => {
-    const narrator = createNarrator({ provider: createMockProvider(), logger: quietLogger });
+    const narrator = createNarrator({ provider: createMockProvider(), logger: quietLogger, personalMoments: false });
     const start = await narrator.handleEvent({ room: 'm', eventType: 'game_start', context: context() });
     expect(start.response).toContain('Shipment');
     expect(start.options).toEqual(FACTION_OPTIONS);

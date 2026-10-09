@@ -30,6 +30,8 @@ export const useGameContext = () => {
 export const GameProvider = ({ children }) => {
     const debugLogLevel = normalizeDebugLogLevel(DEBUG_LOG_LEVEL);
     const [players, setPlayers] = useState([]);
+    // Seats played by the computer (they are in `players` too).
+    const [bots, setBots] = useState([]);
     const [isAdmin, setAdmin] = useState(false);
     const [room, setRoom] = useState("");
     const [displayGame, setDisplayGame] = useState(false);
@@ -126,6 +128,7 @@ export const GameProvider = ({ children }) => {
     <GameContext.Provider
       value={{
         players, setPlayers,
+        bots, setBots,
         isAdmin, setAdmin,
         room, setRoom,
         displayGame, setDisplayGame,

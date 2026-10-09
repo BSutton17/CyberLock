@@ -71,15 +71,23 @@ const STEPS = [
   { row: 0, col: -1 }
 ];
 
+// Tiles held by units the mover may walk through (its own side) but not stop on.
+function passableCells(positions, passThrough) {
+  return new Set((passThrough || []).map(id => positions?.[id]).filter(isCell).map(pos => tileKey(pos.row, pos.col)));
+}
+
 // Shortest walk from `start` to `end` around units and barriers, as the list of tiles stepped on
-// (excluding `start`). Returns [] when already there and null when there is no way through.
-export function findPath(start, end, { positions = {}, movingId = null, activeEffects = [] } = {}) {
+// (excluding `start`). Units listed in `passThrough` (teammates) can be walked through but never
+// ended on. Returns [] when already there and null when there is no way through.
+export function findPath(start, end, { positions = {}, movingId = null, activeEffects = [], passThrough = [] } = {}) {
   if (!isInBounds(start) || !isInBounds(end)) return null;
   if (samePosition(start, end)) return [];
 
-  const blocked = occupiedCells(positions, movingId);
-  for (const key of barrierCells(activeEffects)) blocked.add(key);
-  if (blocked.has(tileKey(end.row, end.col))) return null;
+  const occupied = occupiedCells(positions, movingId);
+  for (const key of barrierCells(activeEffects)) occupied.add(key);
+  if (occupied.has(tileKey(end.row, end.col))) return null;
+  const blocked = new Set(occupied);
+  for (const key of passableCells(positions, passThrough)) blocked.delete(key);
 
   const queue = [{ row: start.row, col: start.col, path: [] }];
   const visited = new Set([tileKey(start.row, start.col)]);
@@ -102,11 +110,14 @@ export function findPath(start, end, { positions = {}, movingId = null, activeEf
   return null;
 }
 
-// Every tile reachable within `maxSteps`, with its walking distance.
-export function reachableCells(start, maxSteps, { positions = {}, movingId = null, activeEffects = [], avoid = () => false } = {}) {
+// Every tile reachable within `maxSteps`, with its walking distance. Teammates in `passThrough`
+// can be walked through, but their tiles are never a place to stop.
+export function reachableCells(start, maxSteps, { positions = {}, movingId = null, activeEffects = [], avoid = () => false, passThrough = [] } = {}) {
   if (!isInBounds(start)) return [];
   const blocked = occupiedCells(positions, movingId);
   for (const key of barrierCells(activeEffects)) blocked.add(key);
+  const throughOnly = passableCells(positions, passThrough);
+  for (const key of throughOnly) blocked.delete(key);
 
   const queue = [{ row: start.row, col: start.col, steps: 0 }];
   const visited = new Set([tileKey(start.row, start.col)]);
@@ -114,7 +125,9 @@ export function reachableCells(start, maxSteps, { positions = {}, movingId = nul
 
   while (queue.length > 0) {
     const current = queue.shift();
-    if (current.steps > 0) reachable.push({ row: current.row, col: current.col, distance: current.steps });
+    if (current.steps > 0 && !throughOnly.has(tileKey(current.row, current.col))) {
+      reachable.push({ row: current.row, col: current.col, distance: current.steps });
+    }
     if (current.steps >= maxSteps) continue;
 
     for (const step of STEPS) {

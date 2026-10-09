@@ -90,7 +90,7 @@ const livingPlayerIds = (ctx) => Object.keys(ctx.characters || {}).filter(id => 
 const livingEnemies = (ctx) => (ctx.combat.enemies || []).filter(isLiving);
 
 // What an ability sees as "the other side" and "my side", from the caster's point of view.
-function abilityParams(ctx, casterId) {
+export function abilityParams(ctx, casterId) {
     const effectivePlayers = Object.fromEntries(livingPlayerIds(ctx).map(id => [id, { ...effective(ctx, id), id }]));
     const effectiveEnemies = Object.fromEntries(livingEnemies(ctx).map(enemy => [enemy.id, effective(ctx, enemy.id)]));
 
@@ -463,7 +463,10 @@ export function finishTurn(ctx) {
     if (getUnit(ctx, turn.id)) {
         setCooldowns(ctx, turn.id, tickCooldowns(cooldownsOf(ctx, turn.id)));
         const enemy = findEnemy(ctx, turn.id);
-        if (enemy) enemy.usedAbilityLastTurn = turn.usedAbility;
+        if (enemy) {
+            enemy.usedAbilityLastTurn = turn.usedAbility;
+            enemy.turnsTaken = (enemy.turnsTaken || 0) + 1;
+        }
     }
 
     tickEffects(ctx, out, turn.id);
@@ -508,6 +511,11 @@ const dropGtgMarkers = (ctx, unitId) => {
     );
 };
 
+/** Living party members other than `playerId` (they can be walked through, not stood on). */
+export function teammatesOf(ctx, playerId) {
+    return livingPlayerIds(ctx).filter(id => id !== playerId);
+}
+
 export function movePlayer(ctx, playerId, to) {
     const problem = checkActor(ctx, playerId);
     if (problem) return problem;
@@ -515,7 +523,8 @@ export function movePlayer(ctx, playerId, to) {
     if (hasControlLock(ctx, playerId, 'preventMovement')) return fail('immobilized', "You can't move right now.");
 
     const start = ctx.combat.positions[playerId];
-    const path = findPath(start, to, { positions: ctx.combat.positions, movingId: playerId, activeEffects: ctx.combat.activeEffects });
+    // Party members can walk through each other, so nobody gets boxed in by their own side.
+    const path = findPath(start, to, { positions: ctx.combat.positions, movingId: playerId, activeEffects: ctx.combat.activeEffects, passThrough: teammatesOf(ctx, playerId) });
     if (!path) return fail('blocked', "You can't get there.");
     if (path.length === 0) return fail('no_move', 'You are already there.');
     if (path.length > movementLeft(ctx, playerId)) return fail('too_far', 'Not enough movement left.');

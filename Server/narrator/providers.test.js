@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createOpenAiCompatibleProvider, GEMINI_OPENAI_BASE_URL } from './providers/openaiCompatible.js';
-import { createAnthropicProvider } from './providers/anthropic.js';
+import { createAnthropicProvider, createAnthropicClient, ANTHROPIC_MAX_RETRIES } from './providers/anthropic.js';
 import { createMockProvider } from './providers/mock.js';
 import { createProvider } from './providers/index.js';
 import { getDecisionOwner, chooseDecisionAttribute, normalizeAttribute } from './decisions.js';
@@ -56,8 +56,62 @@ describe('openai-compatible provider (Gemini)', () => {
     expect(JSON.parse(fetchImpl.mock.calls[2][1].body).response_format).toBeUndefined();
   });
 
+  it('waits and retries when the model is busy (503) or rate limited (429)', async () => {
+    const sleep = vi.fn(async () => {});
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(503, { error: { status: 'UNAVAILABLE' } }))
+      .mockResolvedValueOnce(jsonResponse(429, 'slow down'))
+      .mockResolvedValue(jsonResponse(200, chatBody('{"narration":"back"}')));
+    const provider = createOpenAiCompatibleProvider({ ...baseConfig, fetchImpl, sleep });
+
+    await expect(provider.generate({ kind: 'story', system: 's', messages: [] })).resolves.toBe('{"narration":"back"}');
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(sleep.mock.calls.map(([ms]) => ms)).toEqual([1000, 2500]);
+  });
+
+  it('gives up with the status after two retries', async () => {
+    const sleep = vi.fn(async () => {});
+    const fetchImpl = vi.fn(async () => jsonResponse(503, 'busy'));
+    const provider = createOpenAiCompatibleProvider({ ...baseConfig, fetchImpl, sleep });
+
+    await expect(provider.generate({ kind: 'story', system: 's', messages: [] })).rejects.toMatchObject({ status: 503 });
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(sleep).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry a spent quota, and skips calling until the requested wait is over', async () => {
+    const sleep = vi.fn(async () => {});
+    let clock = 0;
+    const quotaBody = { error: { code: 429, message: 'You exceeded your current quota', details: [{ retryDelay: '37s' }] } };
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(429, quotaBody))
+      .mockResolvedValue(jsonResponse(200, chatBody('{"narration":"back"}')));
+    const provider = createOpenAiCompatibleProvider({ ...baseConfig, fetchImpl, sleep, now: () => clock });
+
+    await expect(provider.generate({ kind: 'story', system: 's', messages: [] })).rejects.toMatchObject({ status: 429 });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(sleep).not.toHaveBeenCalled();
+
+    clock = 30_000; // still inside the 37 seconds: no request at all
+    await expect(provider.generate({ kind: 'story', system: 's', messages: [] })).rejects.toThrow(/out of quota/);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+
+    clock = 38_000;
+    await expect(provider.generate({ kind: 'story', system: 's', messages: [] })).resolves.toBe('{"narration":"back"}');
+  });
+
+  it('does not retry other errors', async () => {
+    const sleep = vi.fn(async () => {});
+    const fetchImpl = vi.fn(async () => jsonResponse(401, 'bad key'));
+    const provider = createOpenAiCompatibleProvider({ ...baseConfig, fetchImpl, sleep });
+
+    await expect(provider.generate({ kind: 'story', system: 's', messages: [] })).rejects.toMatchObject({ status: 401 });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
   it('throws with the status on other errors and on empty replies', async () => {
-    const failing = createOpenAiCompatibleProvider({ ...baseConfig, fetchImpl: async () => jsonResponse(429, 'slow down') });
+    const failing = createOpenAiCompatibleProvider({ ...baseConfig, sleep: async () => {}, fetchImpl: async () => jsonResponse(429, 'slow down') });
     await expect(failing.generate({ kind: 'story', system: 's', messages: [] })).rejects.toMatchObject({ status: 429 });
 
     const empty = createOpenAiCompatibleProvider({ ...baseConfig, fetchImpl: async () => jsonResponse(200, chatBody('')) });
@@ -70,6 +124,13 @@ describe('openai-compatible provider (Gemini)', () => {
 });
 
 describe('anthropic provider (Claude)', () => {
+  it('lets the SDK retry busy or rate-limited replies twice, like Gemini', () => {
+    expect(ANTHROPIC_MAX_RETRIES).toBe(2);
+    const client = createAnthropicClient({ apiKey: 'key', timeoutMs: 15000 });
+    expect(client.maxRetries).toBe(2);
+    expect(client.timeout).toBe(15000);
+  });
+
   const fakeClient = (response) => {
     const create = vi.fn(async () => response);
     return { client: { beta: { messages: { create } } }, create };

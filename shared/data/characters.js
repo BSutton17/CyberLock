@@ -1,8 +1,11 @@
-// Playable characters (base stats at level 1).
+// Playable characters (base stats at level 1). `behavior` is how the character moves when a bot
+// plays it: aggressive (closes in), defensive (keeps weapon range) or intelligent (falls back to a
+// healer when badly hurt).
 export default {
   "characters": [
     {
       "id": "offensive_tank_1",
+      "behavior": "aggressive",
       "name": "Shipment",
       "role": "Tank",
       "level": 1,
@@ -24,6 +27,7 @@ export default {
     },
     {
       "id": "defensive_tank_2",
+      "behavior": "intelligent",
       "name": "E.N.C.A.G.E",
       "role": "Tank",
       "level": 1,
@@ -45,6 +49,7 @@ export default {
     },
     {
       "id": "spellcaster_dps_1",
+      "behavior": "defensive",
       "name": "Gene Shock",
       "role": "DPS",
       "level": 1,
@@ -66,6 +71,7 @@ export default {
     },
     {
       "id": "aggressive_dps_2",
+      "behavior": "aggressive",
       "name": "Leo",
       "role": "DPS",
       "level": 1,
@@ -87,6 +93,7 @@ export default {
     },
     {
       "id": "traditional_warrior_dps_3",
+      "behavior": "intelligent",
       "name": "Last Legion",
       "role": "DPS",
       "level": 1,
@@ -95,8 +102,8 @@ export default {
         "maxHealth": 85,
         "speed": 35,
         "resistance": 30,
-        "strength": 45,
-        "ta": 5
+        "strength": 25,
+        "ta": 25
       },
       "weapon": {
         "range": 2,
@@ -108,6 +115,7 @@ export default {
     },
     {
       "id": "healing_support_1",
+      "behavior": "intelligent",
       "name": "Patchwork",
       "role": "Support",
       "level": 1,
@@ -129,6 +137,7 @@ export default {
     },
     {
       "id": "offensive_support_2",
+      "behavior": "intelligent",
       "name": "Livewire",
       "role": "Support",
       "level": 1,
@@ -150,6 +159,7 @@ export default {
     },
     {
       "id": "jack_of_all_trades_support_3",
+      "behavior": "intelligent",
       "name": "True North",
       "role": "Support",
       "level": 1,
@@ -171,6 +181,7 @@ export default {
     },
     {
       "id": "hacker_support_4",
+      "behavior": "intelligent",
       "name": "Ghost Shell",
       "role": "Support",
       "level": 1,

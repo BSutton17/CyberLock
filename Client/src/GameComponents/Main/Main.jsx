@@ -9,6 +9,7 @@ import { FaRegSnowflake, FaSkullCrossbones, FaFireAlt, FaShieldAlt } from 'react
 import './Main.css';
 import ChatBot from '../ChatBot/ChatBot';
 import SettingsMenu from '../../Components/SettingsMenu';
+import DialogueChoices from './DialogueChoices';
 
 const SCENE_BACKGROUNDS = {
     city_square: '/backgrounds/Background-City Square.png',
@@ -246,7 +247,8 @@ function Main() {
         isMuted,
         connectedPlayers,
         serverStoryState,
-        combatState
+        combatState,
+        bots = []
     } = useGameContext();
     const [currentPlayerCharacter, setCurrentPlayerCharacter] = useState(null);
     const [characterPositions, setCharacterPositions] = useState({});
@@ -274,7 +276,13 @@ function Main() {
     const [pendingPostEncounterChoice, setPendingPostEncounterChoice] = useState(false);
     const [pendingNextEncounterChoice, setPendingNextEncounterChoice] = useState(false);
     const [aiText, setAiText] = useState('');
+    // A personal moment in the narration: one party member answers (or asks) an NPC. Its choices
+    // show where the story choices go; the group's options follow once it's answered.
+    const [dialogue, setDialogue] = useState(null);
+    const [dialogueBusy, setDialogueBusy] = useState(false);
     const [aiSentences, setAiSentences] = useState([]);
+    // The text the sentences above were split from (to tell a fresh message from the last one).
+    const [sentencesSource, setSentencesSource] = useState('');
     const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0);
     // Typewriter: how many characters of the current sentence are showing.
     const [typingIndex, setTypingIndex] = useState(0);
@@ -405,15 +413,19 @@ function Main() {
     const [allowFallbackPostEncounterChoices, setAllowFallbackPostEncounterChoices] = useState(false);
     const [allowFallbackNextEncounterChoice, setAllowFallbackNextEncounterChoice] = useState(false);
 
-    const livingStoryController = players.find(player => (playerCharacters[player]?.stats?.health || 0) > 0) || players[0] || null;
+    // Bots never hold story decisions or control the story.
+    const humanPlayers = players.filter(player => !bots.includes(player));
+    const livingStoryController = humanPlayers.find(player => (playerCharacters[player]?.stats?.health || 0) > 0) || humanPlayers[0] || null;
     const previousStoryControllerRef = useRef(livingStoryController);
     const isStoryController = livingStoryController === playerName;
     const storyControllerLabel = livingStoryController || 'Admin';
     const currentAiSentence = aiSentences[currentSentenceIndex] || '';
     const displayText = currentAiSentence.slice(0, typingIndex);
+    // The sentences must belong to the current text: right after new narration arrives they still
+    // hold the previous (fully typed) message for a moment, which would show the choices too early.
     const isAiNarrationComplete = aiNarrationComplete || (!aiBusy && (
         !aiText?.trim() ||
-        (aiSentences.length > 0 && currentSentenceIndex >= aiSentences.length - 1 && typingIndex >= currentAiSentence.length)
+        (sentencesSource === aiText.trim() && aiSentences.length > 0 && currentSentenceIndex >= aiSentences.length - 1 && typingIndex >= currentAiSentence.length)
     ));
 
     const getDecisionOwner = (requiredAttribute) => {
@@ -422,7 +434,7 @@ function Main() {
 
         // allPlayerAttributes is an object where each player maps to an array of attributes
         // We need to find players who have this attribute, prioritizing those with it earliest in their list
-        const playersWithAttribute = players
+        const playersWithAttribute = humanPlayers
             .map(player => {
                 const playerAttributes = allPlayerAttributes?.[player];
                 if (!Array.isArray(playerAttributes)) return null;
@@ -505,10 +517,22 @@ function Main() {
 
     const effectiveAiDecisionAttribute = normalizeDecisionAttribute(aiAttribute || 'politician') || 'politician';
 
-    const hasDynamicAiChoices = !!(aiOptions && aiOptions.length > 0 && isAiNarrationComplete);
-    const hasFallbackFactionChoices = !!(pendingFactionChoice && !aiOptions && allowFallbackFactionChoices && isAiNarrationComplete);
-    const hasFallbackPostEncounterChoices = !!(pendingPostEncounterChoice && !aiOptions && allowFallbackPostEncounterChoices && isAiNarrationComplete);
-    const hasFallbackNextEncounterChoices = !!(pendingNextEncounterChoice && !aiOptions && allowFallbackNextEncounterChoice && isAiNarrationComplete);
+    const handleDialogueReply = (optionId) => {
+        if (!dialogue || dialogueBusy) return;
+        setDialogueBusy(true);
+        socket.emit('dialogue_reply', { room, dialogueId: dialogue.id, optionId }, (result) => {
+            if (!result?.ok) setDialogueBusy(false);
+        });
+    };
+    // Shown where the story choices go once the narration has finished, never during a fight.
+    const showDialogue = !!dialogue && isAiNarrationComplete && gamePhase !== 'combat';
+
+    // While a personal moment waits for its answer, only its choices are shown.
+    const awaitingDialogue = !!dialogue;
+    const hasDynamicAiChoices = !!(aiOptions && aiOptions.length > 0 && isAiNarrationComplete && !awaitingDialogue);
+    const hasFallbackFactionChoices = !!(pendingFactionChoice && !aiOptions && allowFallbackFactionChoices && isAiNarrationComplete && !awaitingDialogue);
+    const hasFallbackPostEncounterChoices = !!(pendingPostEncounterChoice && !aiOptions && allowFallbackPostEncounterChoices && isAiNarrationComplete && !awaitingDialogue);
+    const hasFallbackNextEncounterChoices = !!(pendingNextEncounterChoice && !aiOptions && allowFallbackNextEncounterChoice && isAiNarrationComplete && !awaitingDialogue);
     const hasAnyVisibleAiChoices =
         hasDynamicAiChoices ||
         hasFallbackFactionChoices ||
@@ -518,7 +542,8 @@ function Main() {
         isIntroNarrationGateActive ||
         aiBusy ||
         Boolean(displayText?.trim()) ||
-        hasAnyVisibleAiChoices
+        hasAnyVisibleAiChoices ||
+        (!!dialogue && gamePhase !== 'combat')
     );
     const [showYouDiedScreen, setShowYouDiedScreen] = useState(false);
     const [showEnemiesDefeatedScreen, setShowEnemiesDefeatedScreen] = useState(false);
@@ -739,6 +764,7 @@ function Main() {
             hasRequestedIntroRef.current = true;
             setAiText(sanitizeAiNarrationText(last.response || ''));
             setAiOptions(last.options);
+            setDialogue(null);
             setAiAttribute(normalizeDecisionAttribute(last.attribute || '') || null);
             setAiNarrationComplete(true);
             setIntroNarrationGate(false);
@@ -747,6 +773,15 @@ function Main() {
             } else {
                 setPendingPostEncounterChoice(true);
             }
+        }
+
+        if (last?.dialogue && !hasPendingServerChoice && gamePhaseRef.current !== 'combat') {
+            hasRequestedIntroRef.current = true;
+            setAiText(sanitizeAiNarrationText(last.response || ''));
+            setAiOptions(null);
+            setDialogue(last.dialogue);
+            setAiNarrationComplete(true);
+            setIntroNarrationGate(false);
         }
 
         if (serverStoryState.gameOver) {
@@ -1114,6 +1149,7 @@ function Main() {
 
         const segments = splitAiTextSegments(message);
 
+        setSentencesSource(message);
         setAiSentences(segments.length > 0 ? segments : [message]);
         setCurrentSentenceIndex(0);
         setTypingIndex(0);
@@ -1284,7 +1320,7 @@ function Main() {
             );
         };
 
-        const handleAiMessage = ({ requestId, eventType, response, location, attribute, startCombat, options, fallback }) => {
+        const handleAiMessage = ({ requestId, eventType, response, location, attribute, startCombat, options, fallback, dialogue: incomingDialogue }) => {
             const normalizedIncomingOptions = Array.isArray(options)
                 ? options.map(option => String(option || '').trim()).filter(Boolean)
                 : [];
@@ -1294,11 +1330,12 @@ function Main() {
                 ? (normalizedIncomingAttribute || inferDecisionAttributeFromOptions(eventType, normalizedIncomingOptions))
                 : normalizedIncomingAttribute;
 
-            const isStoryDecisionEvent = eventType === 'encounter_end' || eventType === 'choice_made' || eventType === 'story_choice';
+            const isStoryDecisionEvent = eventType === 'encounter_end' || eventType === 'choice_made' || eventType === 'story_choice' || eventType === 'dialogue_reply';
             let resolvedIncomingOptions = normalizedIncomingOptions;
             let resolvedIncomingAttribute = effectiveIncomingAttribute;
 
-            if (isStoryDecisionEvent && !startCombat && resolvedIncomingOptions.length === 0) {
+            // A personal moment comes first: the group's options arrive with the narration after it.
+            if (isStoryDecisionEvent && !startCombat && resolvedIncomingOptions.length === 0 && !incomingDialogue) {
                 resolvedIncomingOptions = buildFallbackStoryOptions(eventType);
                 resolvedIncomingAttribute =
                     normalizeDecisionAttribute(
@@ -1325,7 +1362,12 @@ function Main() {
             markAiRequestCompleted(requestId);
             markAiTypingExpectedCompletion(requestId, safeResponse);
             setAiBusy(false);
+            // New narration types out first; its choices appear once it has finished.
+            setAiNarrationComplete(false);
             setAiText(safeResponse);
+            // A new story beat replaces any earlier personal moment.
+            setDialogue(incomingDialogue || null);
+            setDialogueBusy(false);
 
             const isCombatPhaseActive = gamePhaseRef.current === 'combat';
             const isSceneTransitionEvent = SCENE_TRANSITION_EVENTS.has(eventType);
@@ -1372,6 +1414,16 @@ function Main() {
                     return;
                 }
 
+                // A personal moment comes first: only its choices show now. The group's options
+                // arrive with the narration after the answer (a 'dialogue_reply' message).
+                if (incomingDialogue) {
+                    setPendingPostEncounterChoice(true);
+                    setPendingNextEncounterChoice(false);
+                    setAllowFallbackPostEncounterChoices(false);
+                    setAiOptions(null);
+                    return;
+                }
+
                 proceedPostCombatAction(postCombatAction);
                 setAllowFallbackPostEncounterChoices(Boolean(fallback));
                 return;
@@ -1399,7 +1451,7 @@ function Main() {
             }
 
             // Sync decision state for all clients so decision UI renders for everyone.
-            if (eventType === 'encounter_end' || eventType === 'choice_made' || eventType === 'story_choice') {
+            if (eventType === 'encounter_end' || eventType === 'choice_made' || eventType === 'story_choice' || eventType === 'dialogue_reply') {
                 setPendingPostEncounterChoice(true);
                 setPendingNextEncounterChoice(false);
             }
@@ -1413,6 +1465,7 @@ function Main() {
                     eventType === 'encounter_end' ||
                     eventType === 'choice_made' ||
                     eventType === 'story_choice' ||
+                    eventType === 'dialogue_reply' ||
                     (!selectedFactionRef.current && (eventType === 'game_start' || resolvedIncomingAttribute === 'politician'))
                 );
 
@@ -1771,7 +1824,10 @@ function Main() {
             return <GiPoisonBottle />;
         }
 
-        if (hasStatus(effect => effect.type === 'stat_buff' && effect.stat === 'resistance')) {
+        if (hasStatus(effect =>
+            (effect.type === 'stat_buff' && effect.stat === 'resistance') ||
+            (effect.type === 'damage_taken_multiplier' && effect.value < 1)
+        )) {
             return <FaShieldAlt />;
         }
 
@@ -2169,7 +2225,6 @@ function Main() {
                     ? getHighestPriorityStatusIcon(characterOnCell[0])
                     : null;
                 const isGuardedBreathAlly = !isEnemy && !!characterOnCell && activeEffects.some(effect =>
-                    effect.type === 'stat_buff' &&
                     effect.source === 'guarded_breath' &&
                     effect.target === characterOnCell[0] &&
                     effect.turnsRemaining > 0
@@ -2558,6 +2613,9 @@ function Main() {
                             <button onClick={() => handleStoryPointChoice('Push the story forward')} disabled={aiBusy || !canPlayerDecide(effectiveAiDecisionAttribute)}>Push the story forward</button>
                         </div>
                     )}
+                    {showDialogue && (
+                        <DialogueChoices dialogue={dialogue} playerName={playerName} onChoose={handleDialogueReply} busy={dialogueBusy || aiBusy} />
+                    )}
                     {/* <button style={{ width: '150px' }} onClick={handleLevelUp}>Level Up</button> */}
                     {/* <button style={{ width: '150px' }} onClick={() => handleStoryComplete()}>Combat</button> */}
                 </div>
@@ -2612,6 +2670,9 @@ function Main() {
                                 </div>
                                 <button onClick={() => handleStoryPointChoice('Push the story forward')} disabled={aiBusy || !canPlayerDecide(effectiveAiDecisionAttribute)}>Push the story forward</button>
                             </div>
+                        )}
+                        {showDialogue && (
+                            <DialogueChoices dialogue={dialogue} playerName={playerName} onChoose={handleDialogueReply} busy={dialogueBusy || aiBusy} mobile />
                         )}
                     </div>
                 </div>

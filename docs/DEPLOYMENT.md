@@ -136,7 +136,7 @@ heroku config:set ANTHROPIC_COMBAT_MODEL=claude-haiku-4-5 -a cs-capstone
 ```
 
 Routine combat turns never call the AI (the game's own text is used); only notable moments do, at
-most `AI_COMBAT_LINES_PER_MINUTE` (default 12) per minute.
+most `AI_COMBAT_LINES_PER_MINUTE` (default 6) per minute.
 
 ## 6. Smoke test after deploying
 

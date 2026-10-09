@@ -1,19 +1,20 @@
-// Offline narrator for local development and tests. No API key, no network, instant.
-// It writes simple but readable text from the hints the story engine passes along.
-import { optionsForAttribute } from '../fallbacks.js';
+// Offline narrator for local development, playtests without an AI key, and tests. No network,
+// instant. Story beats come from mockStory.js (hand-written pieces fitted to the party, their side,
+// the act and their last decision); combat lines from the same templates the real narrator uses
+// for routine turns.
+import { mockStoryBeat } from '../mockStory.js';
+import { flavorCombatLog } from '../combatFlavor.js';
 
-const pick = (list, seed) => list[Math.abs(seed) % list.length];
-
-export function createMockProvider({ delayMs = 0 } = {}) {
-  let counter = 0;
-
+export function createMockProvider({ delayMs = 0, combatDelayMs = delayMs, random = Math.random } = {}) {
+  // Lines used lately, so the same situation or consequence doesn't come up twice in a row.
+  const recent = [];
   return {
     name: 'mock',
     model: 'mock',
     async generate({ kind, hints = {} }) {
-      counter += 1;
-      if (delayMs > 0) {
-        await new Promise(resolve => setTimeout(resolve, delayMs));
+      const wait = kind === 'combat' ? combatDelayMs : delayMs;
+      if (wait > 0) {
+        await new Promise(resolve => setTimeout(resolve, wait));
       }
 
       if (kind === 'rules') {
@@ -23,31 +24,11 @@ export function createMockProvider({ delayMs = 0 } = {}) {
       }
 
       if (kind === 'combat') {
-        return JSON.stringify({ narration: hints.summary || 'Steel meets steel and the line holds.' });
+        const lines = hints.lines || String(hints.summary || '').split(/(?<=[.!?])\s+/).filter(Boolean);
+        return JSON.stringify({ narration: flavorCombatLog(lines, { enemies: hints.enemies || [] }, random) || 'Steel meets steel and the line holds.' });
       }
 
-      const party = hints.partyNames?.length ? hints.partyNames.join(', ') : 'The party';
-      const owner = hints.ownerName || 'the party';
-      const options = hints.needsOptions ? (hints.fixedOptions || optionsForAttribute(hints.attribute)) : [];
-
-      const openers = [
-        `${party} move through the smoke, weapons low.`,
-        `Sirens fade somewhere behind ${party}.`,
-        `${party} regroup under a flickering transit sign.`
-      ];
-
-      const lines = [pick(openers, counter)];
-      if (hints.setup) lines.push(hints.setup);
-      if (hints.lastChoice) lines.push(`The choice to "${hints.lastChoice}" is already changing things.`);
-      if (hints.needsOptions) lines.push(`All eyes turn to ${owner}. It is their call.`);
-      if (hints.startsCombat) lines.push('Then the shooting starts.');
-
-      return JSON.stringify({
-        narration: lines.join(' '),
-        options,
-        location: hints.location || 'none',
-        memory: hints.lastChoice ? `The party chose to ${hints.lastChoice}.` : `${party} pressed on.`
-      });
+      return JSON.stringify(mockStoryBeat(hints, random, recent));
     }
   };
 }

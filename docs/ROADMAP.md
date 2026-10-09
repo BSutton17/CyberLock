@@ -59,15 +59,19 @@ Step-by-step instructions with exact commands: [DEPLOYMENT.md](DEPLOYMENT.md).
 - [x] Campaign outline per side, named villains, recurring NPCs (DRAFT; needs your edits)
 - [x] World state in every prompt, story memory, rotating decision owners, party-name guard
 - [ ] Story flags: let specific choices change later scenes (e.g. sparing an NPC brings them back)
+- [x] Personal dialogue: NPCs speak to one party member, who answers for themselves; NPCs remember
+- [x] Offline narrator that can carry a whole campaign without an AI
 - [ ] NPC conversations: players type to NPCs during story beats (separate from the rules helper)
 - [ ] Boss mid-fight lines in their own voice
 - [ ] Two full playthroughs per side to tune prompts with a real model
 
 ## Phase 4: Balance & content
 
-- [ ] Level curve and enemy scaling for 1–6 players (use the simulator)
+- [x] Balance simulator and report (`docs/BALANCE.md`)
+- [x] Enemy scaling for 1–6 players, tuned by simulation; bots to fill empty seats
+- [x] Ability tuning within each slot (buffs only)
 - [ ] Shop: designed but never wired into the encounter flow
-- [ ] Ability tuning so every character is worth picking
+- [ ] Re-run `scripts/balance.js` after playtests and re-tune
 
 ## Phase 5: Polish & release
 

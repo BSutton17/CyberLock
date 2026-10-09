@@ -8,12 +8,15 @@ import {
   removePlayer,
   clearReadyFlags,
   isCharacterTaken,
-  everyoneIn
+  everyoneIn,
+  seatBot
 } from '../game/rooms.js';
+import { isBot, humanPlayers, nextBotName, chooseBotCharacter, levelUpBot, fillBotAbilities, chooseBotAttributes } from '../game/bots.js';
 import { isEnemyAlive } from '../../shared/combat/turnOrder.js';
 import { applyLevelUp, isMaxLevel, getLevel } from '../game/progression.js';
 import { sanitizeDisplayName } from '../auth/session.js';
 import { normalizeAttribute } from '../narrator/decisions.js';
+import { completeAttributeRankings } from '../game/attributes.js';
 import { createCombatController } from './combat.js';
 
 const ROOM_CODE_PATTERN = /^\d{4,6}$/;
@@ -30,15 +33,18 @@ export function createGameState() {
     pendingDisconnects: {}, // room -> { playerName: timeoutId }
     combatTimers: {},       // room -> the fight's next scheduled step
     combatNarration: {},    // room -> Promise chain, so combat lines arrive in order
+    dialogueTimers: {},     // room -> timer that closes an unanswered personal moment
     storyQueues: {},        // room -> Promise chain, so story events run one at a time
     seenAiRequests: new Map()
   };
 }
 
 /**
- * @param combatOptions - optional { generateEnemies, random } overrides for the fight engine (tests)
+ * @param combatOptions - optional { generateEnemies, random } overrides for the fight engine (tests);
+ *   `random` also drives the attribute shuffle
  */
 export function registerGameSockets({ io, state, narrator, timing, logger = console, combatOptions = {} }) {
+  const random = combatOptions.random || Math.random;
   // buildNarratorContext is a function declaration below, so it can be handed over here.
   const combat = createCombatController({ io, state, timing, narrator, logger, buildNarratorContext, ...combatOptions });
 
@@ -49,6 +55,22 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
   const emitPresence = (room) => {
     if (!state.rooms[room]) return;
     io.to(room).emit('presence_updated', { connected: combat.connectedPlayers(room) });
+  };
+
+  const emitBots = (room, target = io.to(room)) => {
+    const roomState = state.rooms[room];
+    if (roomState) target.emit('bots_updated', roomState.bots || []);
+  };
+
+  const botsIn = (roomState) => (roomState?.bots || []).filter(name => roomState.players.includes(name));
+
+  // Bots fill their empty ability slots (new slots open at levels 3 and 5).
+  const equipBots = (room) => {
+    const roomState = state.rooms[room];
+    for (const bot of botsIn(roomState)) {
+      const character = roomState.characterSelections[bot];
+      if (character) roomState.characterSelections[bot] = fillBotAbilities(character, random);
+    }
   };
 
   const emitReadyStatuses = (room, target = io.to(room)) => {
@@ -81,6 +103,8 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
 
   const deleteRoom = (room) => {
     combat.stopRoom(room);
+    clearTimeout(state.dialogueTimers[room]);
+    delete state.dialogueTimers[room];
     for (const timeoutId of Object.values(state.pendingDisconnects[room] || {})) clearTimeout(timeoutId);
     delete state.pendingDisconnects[room];
     delete state.rooms[room];
@@ -94,9 +118,43 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
   const scheduleEmptyRoomCleanup = (room) => {
     setTimeout(() => {
       const roomState = state.rooms[room];
-      if (roomState && roomState.players.length === 0) deleteRoom(room);
+      if (roomState && humanPlayers(roomState).length === 0) deleteRoom(room);
     }, EMPTY_ROOM_TTL_MS).unref?.();
   };
+
+  // ---- Personal moments (see narrator/dialogue.js) ----
+
+  // The answer (or silence, if time ran out) is told as the next narration, which also brings
+  // back the group's decision.
+  function resolveDialogue(room, result) {
+    if (!result) return false;
+    clearTimeout(state.dialogueTimers[room]);
+    delete state.dialogueTimers[room];
+    const roomState = state.rooms[room];
+    if (!roomState) return false;
+    const message = {
+      eventType: 'dialogue_reply',
+      response: result.response,
+      options: result.options,
+      attribute: result.attribute,
+      startCombat: false,
+      dialogue: null
+    };
+    roomState.lastStoryMessage = message;
+    io.to(room).emit('ai_message', { requestId: null, location: null, from: result.playerName, ...message });
+    return true;
+  }
+
+  // A moment nobody answers can't hold up the group forever.
+  function startDialogueTimer(room, dialogue) {
+    clearTimeout(state.dialogueTimers[room]);
+    const timer = setTimeout(() => {
+      delete state.dialogueTimers[room];
+      resolveDialogue(room, narrator?.expireDialogue?.(room, dialogue.id));
+    }, timing.dialogueTimeoutMs ?? 60000);
+    timer.unref?.();
+    state.dialogueTimers[room] = timer;
+  }
 
   // ---- Ready gates. Each moves the room forward once everyone seated is ready. ----
 
@@ -106,32 +164,32 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
     const allChosen = roomState.players.every(player => roomState.characterSelections[player]);
     if (!allChosen || !everyoneIn(roomState.players, roomState.readyPlayers)) return;
 
-    roomState.stage = 'attributes1';
-    roomState.attributeReadyPlayers = [];
+    roomState.stage = 'attributes';
+    // Bots don't pick attributes; the shuffle gives them a full ranking.
+    roomState.attributeReadyPlayers = botsIn(roomState);
     setScreens(room, 'characterBuilder');
     io.to(room).emit('character_customization');
   }
 
+  // Everyone picked a primary and secondary: shuffle the rest of each ranking, then go to abilities.
   function maybeCompleteAttributes(room) {
     const roomState = state.rooms[room];
-    if (!roomState || !everyoneIn(roomState.players, roomState.attributeReadyPlayers)) return;
+    if (!roomState || roomState.stage !== 'attributes') return;
+    if (!everyoneIn(roomState.players, roomState.attributeReadyPlayers)) return;
 
-    if (roomState.stage === 'attributes1') {
-      roomState.stage = 'attributes2';
-      roomState.attributeReadyPlayers = [];
-      roomState.abilityReadyPlayers = [];
-      setScreens(room, 'characterBuilderPart2');
-      io.to(room).emit('attribute_ready_status', []);
-      io.to(room).emit('attribute_part1_complete');
-      io.to(room).emit('attributes_updated', roomState.attributes);
-    } else if (roomState.stage === 'attributes2') {
-      roomState.stage = 'abilities';
-      roomState.attributeReadyPlayers = [];
-      roomState.abilityReadyPlayers = [];
-      setScreens(room, 'chooseAbilities');
-      io.to(room).emit('ability_ready_status', []);
-      io.to(room).emit('start_main_game');
-    }
+    // People choose first; bots then take a primary and secondary from what's left.
+    Object.assign(roomState.attributes, chooseBotAttributes(roomState, random));
+    roomState.attributes = completeAttributeRankings(roomState.players, roomState.attributes, random);
+    roomState.stage = 'abilities';
+    roomState.attributeReadyPlayers = [];
+    equipBots(room);
+    roomState.abilityReadyPlayers = botsIn(roomState);
+    setScreens(room, 'chooseAbilities');
+    io.to(room).emit('attributes_updated', roomState.attributes);
+    io.to(room).emit('update_character_selections', roomState.characterSelections);
+    io.to(room).emit('attribute_ready_status', []);
+    io.to(room).emit('ability_ready_status', roomState.abilityReadyPlayers);
+    io.to(room).emit('start_main_game');
   }
 
   function maybeCompleteAbilities(room) {
@@ -172,7 +230,10 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
 
     const chooseAbilities = levelUp.unlocks.filter(player => roomState.players.includes(player));
     roomState.abilityReadyPlayers = [];
-    roomState.abilityRound = chooseAbilities.length ? { required: chooseAbilities } : null;
+    // Remember each player's ultimate so a swap can carry its cooldown over (see ability_ready).
+    roomState.abilityRound = chooseAbilities.length
+      ? { required: chooseAbilities, ultimatesBefore: Object.fromEntries(chooseAbilities.map(player => [player, ultimateIdOf(roomState.characterSelections[player])])) }
+      : null;
     setScreens(room, player => (chooseAbilities.includes(player) ? 'chooseAbilities' : 'main'));
 
     io.to(room).emit('ability_ready_status', []);
@@ -202,12 +263,14 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
     delete roomState.cooldowns?.[playerName];
     combat.removeFromFight(room, playerName, { leftForGood: true });
 
-    if (roomState.players.length === 0) {
+    // Bots can't keep a game going on their own.
+    if (humanPlayers(roomState).length === 0) {
       deleteRoom(room);
       return;
     }
 
     io.to(room).emit('updatePlayerList', roomState.players);
+    emitBots(room);
     io.to(room).emit('update_character_selections', roomState.characterSelections);
     if (newAdmin) {
       io.to(room).emit('admin_changed', { admin: newAdmin });
@@ -215,6 +278,22 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
     emitReadyStatuses(room);
     emitPresence(room);
     maybeAdvanceGates(room);
+  }
+
+  const ultimateIdOf = (character) => (typeof character?.ultimate === 'string' ? character.ultimate : character?.ultimate?.id) || null;
+
+  // Swapping one ultimate for another can't be used to dodge a cooldown: the new ultimate starts
+  // with whatever was left on the old one, plus 3 turns.
+  const ULTIMATE_SWAP_PENALTY = 3;
+  function applyUltimateSwap(roomState, player) {
+    const before = roomState.abilityRound?.ultimatesBefore?.[player];
+    const after = ultimateIdOf(roomState.characterSelections[player]);
+    if (!before || !after || before === after) return;
+    roomState.cooldowns = roomState.cooldowns || {};
+    const cooldowns = (roomState.cooldowns[player] = roomState.cooldowns[player] || {});
+    cooldowns[after] = (cooldowns[before] || 0) + ULTIMATE_SWAP_PENALTY;
+    delete cooldowns[before];
+    roomState.abilityRound.ultimatesBefore[player] = after;
   }
 
   // Keeps level and stats server-owned once the game is underway.
@@ -250,11 +329,12 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
         };
       });
 
+    // Story decisions always belong to people, never to bots.
     return {
       party,
-      players: roomState?.players || [],
+      players: humanPlayers(roomState),
       attributesByPlayer,
-      connectedPlayers: combat.connectedPlayers(room),
+      connectedPlayers: combat.connectedPlayers(room).filter(player => !isBot(roomState, player)),
       partyFaction: roomState?.selectedFaction || null,
       encounterIndex: roomState?.encountersStarted || 0,
       enemies: (fight?.enemies || []).map(enemy => ({ name: enemy.name, tier: enemy.tier, isDead: !isEnemyAlive(enemy) }))
@@ -333,6 +413,7 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
       socket.emit('setAdmin', roomState.admin === playerName);
       io.to(code).emit('updatePlayerList', roomState.players);
       io.to(code).emit('admin_changed', { admin: roomState.admin });
+      emitBots(code, socket);
       emitPresence(code);
 
       if (Object.keys(roomState.characterSelections).length > 0) {
@@ -423,6 +504,9 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
       if (!room) return;
       const roomState = state.rooms[room];
 
+      // Bots are added on the character screen, so a new game starts without them.
+      for (const bot of [...(roomState.bots || [])]) removePlayer(roomState, bot);
+
       Object.assign(roomState, {
         characterSelections: {},
         readyPlayers: [],
@@ -447,6 +531,9 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
       combat.stopRoom(room);
       delete state.combat[room];
       narrator?.resetSession(room);
+      io.to(room).emit('updatePlayerList', roomState.players);
+      emitBots(room);
+      emitPresence(room);
       io.to(room).emit('game_reset');
     });
 
@@ -463,6 +550,11 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
       }
 
       const allowFullReplace = roomState.stage === 'lobby' || roomState.stage === 'characterSelect';
+      // Mid-game, abilities only change on the ability screen after a level-up.
+      if (roomState.stage === 'playing' && !roomState.abilityRound?.required?.includes(playerName)) {
+        socket.emit('update_character_selections', roomState.characterSelections);
+        return;
+      }
       roomState.characterSelections[playerName] = mergeCharacterUpdate(roomState.characterSelections[playerName], character, allowFullReplace);
       io.to(room).emit('update_character_selections', roomState.characterSelections);
     });
@@ -488,24 +580,59 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
       maybeCompleteCharacterSelect(room);
     });
 
+    // The room's admin can fill empty seats with bots while characters are being picked.
+    socket.on('add_bot', ({ room: payloadRoom } = {}, ack) => {
+      const room = currentRoom(payloadRoom);
+      const reply = (payload) => { if (typeof ack === 'function') ack(payload); };
+      if (!room) return reply({ ok: false, message: 'You are not in a game.' });
+      const roomState = state.rooms[room];
+      if (roomState.admin !== me()) return reply({ ok: false, message: 'Only the host can add bots.' });
+      if (roomState.stage !== 'characterSelect') return reply({ ok: false, message: 'Bots can only join on the character screen.' });
+
+      const character = chooseBotCharacter(roomState, random);
+      if (!character) return reply({ ok: false, message: 'Every character is taken.' });
+      const name = nextBotName(roomState);
+      if (!seatBot(roomState, name, character)) return reply({ ok: false, message: 'The party is full.' });
+      roomState.playerScreens[name] = 'characterSelect';
+
+      io.to(room).emit('updatePlayerList', roomState.players);
+      emitBots(room);
+      io.to(room).emit('update_character_selections', roomState.characterSelections);
+      io.to(room).emit('update_ready_status', roomState.readyPlayers);
+      emitPresence(room);
+      reply({ ok: true, name });
+    });
+
+    socket.on('remove_bot', ({ room: payloadRoom, name } = {}, ack) => {
+      const room = currentRoom(payloadRoom);
+      const reply = (payload) => { if (typeof ack === 'function') ack(payload); };
+      if (!room) return reply({ ok: false, message: 'You are not in a game.' });
+      const roomState = state.rooms[room];
+      if (roomState.admin !== me()) return reply({ ok: false, message: 'Only the host can remove bots.' });
+      if (roomState.stage !== 'characterSelect' || !isBot(roomState, name)) return reply({ ok: false, message: 'That bot cannot be removed now.' });
+      finalizePlayer(room, name);
+      reply({ ok: true });
+    });
+
     socket.on('update_attributes', ({ room: payloadRoom, newAttributes } = {}) => {
       const room = currentRoom(payloadRoom);
       if (!room || !Array.isArray(newAttributes)) return;
       const roomState = state.rooms[room];
-      roomState.attributes[me()] = newAttributes.slice(0, 10).map(value => (typeof value === 'string' ? value.slice(0, 30) : null));
+      // Only the primary and secondary are chosen by hand, and only on the Character Feats screen.
+      if (roomState.stage !== 'attributes') return;
+      roomState.attributes[me()] = newAttributes.slice(0, 2).map(value => (typeof value === 'string' ? value.slice(0, 30) : null));
       io.to(room).emit('attributes_updated', roomState.attributes);
     });
 
-    const markAttributesReady = ({ room: payloadRoom } = {}) => {
+    socket.on('attributes_ready', ({ room: payloadRoom } = {}) => {
       const room = currentRoom(payloadRoom);
       if (!room) return;
       const roomState = state.rooms[room];
+      if (roomState.stage !== 'attributes') return;
       if (!roomState.attributeReadyPlayers.includes(me())) roomState.attributeReadyPlayers.push(me());
       io.to(room).emit('attribute_ready_status', roomState.attributeReadyPlayers);
       maybeCompleteAttributes(room);
-    };
-    socket.on('attribute_part1_ready', markAttributesReady);
-    socket.on('attributes_part2_ready', markAttributesReady);
+    });
 
     socket.on('select_ability', ({ room: payloadRoom, abilities } = {}) => {
       const room = currentRoom(payloadRoom);
@@ -519,6 +646,7 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
       const room = currentRoom(payloadRoom);
       if (!room) return;
       const roomState = state.rooms[room];
+      if (roomState.stage === 'playing' && roomState.abilityRound?.required?.includes(me())) applyUltimateSwap(roomState, me());
       if (!roomState.abilityReadyPlayers.includes(me())) roomState.abilityReadyPlayers.push(me());
       io.to(room).emit('ability_ready_status', roomState.abilityReadyPlayers);
       maybeCompleteAbilities(room);
@@ -562,9 +690,23 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
         unlocks: []
       };
       roomState.levelUpReadyPlayers = [...alreadyMax];
+
+      // Bots level up straight away and fill any ability slot that opens.
+      const leveledBots = {};
+      for (const bot of required.filter(player => isBot(roomState, player) && !alreadyMax.includes(player))) {
+        const result = levelUpBot(roomState.levelUp.snapshot[bot], random);
+        if (!result.leveledUp) continue;
+        roomState.characterSelections[bot] = fillBotAbilities(result.character, random);
+        leveledBots[bot] = roomState.characterSelections[bot];
+        roomState.levelUp.done.push(bot);
+        roomState.levelUpReadyPlayers.push(bot);
+      }
+
       setScreens(room, 'levelup');
+      if (Object.keys(leveledBots).length) io.to(room).emit('characters_updated', leveledBots);
       io.to(room).emit('level_up_ready_status', roomState.levelUpReadyPlayers);
       io.to(room).emit('level_up', { maxLevelPlayers: alreadyMax });
+      maybeCompleteLevelUp(room);
     });
 
     socket.on('level_up_ready', ({ room: payloadRoom, updatedCharacter } = {}) => {
@@ -632,9 +774,11 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
               response: result.response,
               options: result.options || null,
               attribute: result.attribute || null,
-              startCombat: !!result.startCombat
+              startCombat: !!result.startCombat,
+              dialogue: result.dialogue || null
             };
           }
+          if (result?.dialogue) startDialogueTimer(room, result.dialogue);
           return result;
         } catch (error) {
           logger.error?.('[AI] Narrator failed:', error);
@@ -661,6 +805,7 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
         attribute: result.attribute || null,
         startCombat: !!result.startCombat,
         options: result.options || null,
+        dialogue: result.dialogue || null,
         from,
         ...(result.fallback ? { fallback: true } : {})
       };
@@ -672,6 +817,18 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
         io.to(room).emit('ai_thinking', { requestId: requestId || null, thinking: false });
         io.to(room).emit('ai_message', payload);
       }
+    });
+
+    // ---------------- Personal dialogue ----------------
+
+    // Only the chosen party member can pick; everyone then reads the answer in the narration.
+    socket.on('dialogue_reply', ({ room: payloadRoom, dialogueId, optionId } = {}, ack) => {
+      const room = currentRoom(payloadRoom);
+      const result = room && narrator?.answerDialogue
+        ? narrator.answerDialogue(room, { playerName: me(), dialogueId: String(dialogueId || ''), optionId: String(optionId || '') })
+        : null;
+      if (typeof ack === 'function') ack(result ? { ok: true } : { ok: false, message: 'That choice is not yours to make, or the moment has passed.' });
+      resolveDialogue(room, result);
     });
 
     // ---------------- Combat ----------------

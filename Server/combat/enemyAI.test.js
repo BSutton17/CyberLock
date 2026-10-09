@@ -19,7 +19,30 @@ describe('selectAttackTarget', () => {
   it('finishes off whoever it can kill, otherwise hits the most fragile target', () => {
     const positions = { e1: { row: 1, col: 1 }, weak: { row: 1, col: 2 }, tank: { row: 0, col: 1 } };
     const characters = { weak: player(5, 'Support'), tank: player(80, 'Tank') };
-    expect(selectAttackTarget(enemy(), ['weak', 'tank'], characters, positions)).toBe('weak');
+    expect(selectAttackTarget(enemy({ turnsTaken: 1 }), ['weak', 'tank'], characters, positions)).toBe('weak');
+  });
+
+  it('goes for the toughest party member in reach on its first turn', () => {
+    const positions = { e1: { row: 1, col: 1 }, support: { row: 1, col: 2 }, tank: { row: 0, col: 1 } };
+    const characters = {
+      support: { role: 'Support', stats: { health: 55, maxHealth: 55, resistance: 10 } },
+      tank: { role: 'Tank', stats: { health: 100, maxHealth: 100, resistance: 50 } }
+    };
+    expect(selectAttackTarget(enemy(), ['support', 'tank'], characters, positions)).toBe('tank');
+    // Only one in reach: it hits that one even on the first turn.
+    expect(selectAttackTarget(enemy(), ['support'], characters, positions)).toBe('support');
+  });
+
+  it('aims a first-turn damage ability at the toughest target too', () => {
+    const positions = { e1: { row: 1, col: 1 }, support: { row: 1, col: 2 }, tank: { row: 1, col: 4 } };
+    const characters = {
+      support: { role: 'Support', stats: { health: 55, maxHealth: 55, resistance: 10 } },
+      tank: { role: 'Tank', stats: { health: 100, maxHealth: 100, resistance: 50 } }
+    };
+    const caster = enemy({ abilities: [{ id: 'sparkshot', level: 1 }], cooldowns: { sparkshot: 0 } });
+    const plan = planEnemyTurn(caster, ['support', 'tank'], [], [caster], characters, positions);
+    expect(plan.abilityToUse?.id).toBe('sparkshot');
+    expect(plan.target).toBe('tank');
   });
 });
 

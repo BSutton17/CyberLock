@@ -135,90 +135,50 @@ export function generateEnemySpawnPositions(enemies = [], sceneKey = null, occup
   return positions;
 }
 
-export function generatePlayerSpawnPositions(players = [], characterSelections = {}, sceneKey = null) {
+// Players spawn with tanks one row in front (row 5) and everyone else on the bottom row (row 6), in
+// columns shuffled every fight. The outer columns are never used, so nobody starts against a wall.
+export const TANK_SPAWN_ROW = 5;
+export const PLAYER_SPAWN_ROW = 6;
+const SPAWN_COLUMNS = Array.from({ length: GRID_COLS - 2 }, (_, i) => i + 1);
+
+export function generatePlayerSpawnPositions(players = [], characterSelections = {}, sceneKey = null, random = Math.random) {
   const positions = {};
   const usedCells = new Set();
-
-  const getPlayerSpawnRow = (playerName) => {
-    const role = (characterSelections?.[playerName]?.role || '').toLowerCase();
-
-    if (role === 'tank') {
-      return 5;
+  const shuffled = (list) => {
+    const copy = [...list];
+    for (let i = copy.length - 1; i > 0; i--) {
+      const j = Math.floor(random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
     }
-
-    return 6;
+    return copy;
   };
+  const isFree = (row, col) => !usedCells.has(`${row},${col}`) && !isSewerSpawnBlockedTile(sceneKey, row, col);
 
-  const findPlayerSpawnCell = (preferredRow, preferredCol) => {
-    const candidateRows = [preferredRow, preferredRow === 5 ? 6 : 5];
-
-    for (let offset = 0; offset < 10; offset++) {
-      const candidateCols = offset === 0
-        ? [preferredCol]
-        : [preferredCol - offset, preferredCol + offset];
-
-      for (const row of candidateRows) {
-        for (const col of candidateCols) {
-          if (col < 0 || col >= GRID_COLS) continue;
-          if (isSewerSpawnBlockedTile(sceneKey, row, col)) continue;
-
-          const key = `${row},${col}`;
-          if (!usedCells.has(key)) {
-            usedCells.add(key);
-            return { row, col };
-          }
-        }
+  // A random free column in `row` (away from the walls); if the row is full, the other player row.
+  const takeCell = (row) => {
+    for (const candidateRow of [row, row === TANK_SPAWN_ROW ? PLAYER_SPAWN_ROW : TANK_SPAWN_ROW]) {
+      const col = shuffled(SPAWN_COLUMNS).find(candidate => isFree(candidateRow, candidate));
+      if (col !== undefined) {
+        usedCells.add(`${candidateRow},${col}`);
+        return { row: candidateRow, col };
       }
     }
-
-    for (const row of candidateRows) {
+    // Only reachable on a board too crowded for the rules above: any free tile in the bottom rows.
+    for (const candidateRow of [PLAYER_SPAWN_ROW, TANK_SPAWN_ROW, PLAYER_ZONE_MIN_ROW]) {
       for (let col = 0; col < GRID_COLS; col++) {
-        if (isSewerSpawnBlockedTile(sceneKey, row, col)) continue;
-
-        const key = `${row},${col}`;
-        if (!usedCells.has(key)) {
-          usedCells.add(key);
-          return { row, col };
+        if (isFree(candidateRow, col)) {
+          usedCells.add(`${candidateRow},${col}`);
+          return { row: candidateRow, col };
         }
       }
     }
-
-    return { row: preferredRow, col: preferredCol };
+    return { row, col: 1 };
   };
 
-  players.forEach((player, index) => {
-    const preferredRow = getPlayerSpawnRow(player);
-    const preferredCol = index + 3;
-    positions[player] = findPlayerSpawnCell(preferredRow, preferredCol);
-  });
-  return positions;
-}
-
-// Accepts the positions players stood on before the fight, but only if every one is a free tile
-// on the players' side of the board. Otherwise returns null and fresh spawns are used.
-export function sanitizeProposedPlayerPositions(players = [], proposedPlayerPositions = {}, sceneKey = null, minRow = PLAYER_ZONE_MIN_ROW) {
-  if (!proposedPlayerPositions || typeof proposedPlayerPositions !== 'object') return null;
-
-  const sanitized = {};
-  const usedCells = new Set();
-
-  for (const player of players) {
-    const position = proposedPlayerPositions[player];
-    if (!position) return null;
-
-    const row = Number(position.row);
-    const col = Number(position.col);
-
-    if (!Number.isInteger(row) || !Number.isInteger(col)) return null;
-    if (row < minRow || row > GRID_ROWS - 1 || col < 0 || col > GRID_COLS - 1) return null;
-    if (isSewerSpawnBlockedTile(sceneKey, row, col)) return null;
-
-    const key = `${row},${col}`;
-    if (usedCells.has(key)) return null;
-
-    usedCells.add(key);
-    sanitized[player] = { row, col };
+  // Tanks first so they get the front row.
+  const isTank = (player) => (characterSelections?.[player]?.role || '').toLowerCase() === 'tank';
+  for (const player of [...players.filter(isTank), ...players.filter(player => !isTank(player))]) {
+    positions[player] = takeCell(isTank(player) ? TANK_SPAWN_ROW : PLAYER_SPAWN_ROW);
   }
-
-  return Object.keys(sanitized).length === players.length ? sanitized : null;
+  return positions;
 }

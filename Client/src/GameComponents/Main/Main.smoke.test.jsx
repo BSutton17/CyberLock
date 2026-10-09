@@ -191,6 +191,46 @@ describe('Main (story flow)', () => {
     expect(aiRequests(socket, 'game_start')).toHaveLength(0);
   });
 
+  it("shows only a personal moment's choices until it is answered, then the group decision", async () => {
+    const socket = createFakeSocket();
+    render(<Harness socket={socket} serverStoryState={{ combatFlowIndex: 1, selectedFaction: 'rebels', lastStoryMessage: null }} />);
+
+    act(() => {
+      socket.serverSends('ai_message', {
+        requestId: 'after-fight',
+        eventType: 'encounter_end',
+        response: 'A checkpoint guard looks straight at Leo. "Why are you here?"',
+        options: null,
+        attribute: 'spy',
+        startCombat: false,
+        dialogue: {
+          id: 'd1', kind: 'reply', npc: 'A checkpoint guard', playerName: 'bryson', characterName: 'Leo',
+          options: [{ id: 'honest', text: "We're just passing through.", attribute: null }, { id: 'defiant', text: "It's none of your business.", attribute: null }]
+        }
+      });
+    });
+
+    const answers = await screen.findAllByText("It's none of your business.", {}, { timeout: 8000 });
+    expect(screen.queryByText('Investigate the nearest lead')).toBeNull();
+    expect(screen.queryByText('Take a cautious route forward')).toBeNull();
+    fireEvent.click(answers[0]);
+    expect(socket.emitted.some(({ event, args }) => event === 'dialogue_reply' && args[0].optionId === 'defiant')).toBe(true);
+
+    act(() => {
+      socket.serverSends('ai_message', {
+        requestId: null,
+        eventType: 'dialogue_reply',
+        response: `Leo: "It's none of your business." The guard scowls. It's Leo's call.`,
+        options: ['Tail the courier quietly', 'Plant a tracker and wait'],
+        attribute: 'spy',
+        startCombat: false,
+        dialogue: null
+      });
+    });
+    expect((await screen.findAllByText('Tail the courier quietly', {}, { timeout: 8000 })).length).toBeGreaterThan(0);
+    expect(screen.queryByText("It's none of your business.")).toBeNull();
+  }, 30000); // the narration types out before choices appear
+
   it('cleans up every socket listener on unmount', async () => {
     const socket = createFakeSocket();
     const { unmount } = render(<Harness socket={socket} />);

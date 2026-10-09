@@ -188,6 +188,8 @@ const resolveSceneKey = (rawKeyword = '') => {
 
 const TYPEWRITER_CHAR_INTERVAL_MS = 20;
 const TYPEWRITER_SENTENCE_GAP_FACTOR_MS = 18;
+// After a narration finishes typing, it stays up this long before the next one replaces it.
+const NARRATION_READ_PAUSE_MS = 500;
 const TURN_ADVANCE_AFTER_TYPING_MS = 1000;
 // Real models can take several seconds for a story beat; fall back only if the server is truly stuck.
 const POST_COMBAT_NARRATION_TIMEOUT_MS = 25000;
@@ -215,7 +217,7 @@ const estimateTypewriterDurationMs = (message = '') => {
             : 0;
 
         return durationMs + typingDurationMs + sentencePauseMs;
-    }, 0);
+    }, NARRATION_READ_PAUSE_MS);
 };
 
 
@@ -1139,22 +1141,50 @@ function Main() {
         }
     }, [playerCharacters, playerName]);
 
+    // New narration waits for the one on screen to finish typing, plus a short pause to read it.
+    // Only the newest waiting narration is kept, so the text never falls behind the board.
+    const narrationTypingRef = useRef(false);
+    const narrationDoneAtRef = useRef(0);
+    const pendingNarrationRef = useRef(null);
+    const narrationHoldTimerRef = useRef(null);
+
+    const showNextNarration = () => {
+        clearTimeout(narrationHoldTimerRef.current);
+        if (narrationTypingRef.current || pendingNarrationRef.current === null) return;
+
+        const waitMs = narrationDoneAtRef.current + NARRATION_READ_PAUSE_MS - Date.now();
+        if (waitMs > 0) {
+            narrationHoldTimerRef.current = setTimeout(showNextNarration, waitMs);
+            return;
+        }
+
+        const message = pendingNarrationRef.current;
+        pendingNarrationRef.current = null;
+        const segments = splitAiTextSegments(message);
+        narrationTypingRef.current = true;
+        setSentencesSource(message);
+        setAiSentences(segments.length > 0 ? segments : [message]);
+        setCurrentSentenceIndex(0);
+        setTypingIndex(0);
+    };
+
     useEffect(() => {
         const message = (aiText || '').trim();
         if (!message) {
+            clearTimeout(narrationHoldTimerRef.current);
+            pendingNarrationRef.current = null;
+            narrationTypingRef.current = false;
             setAiSentences([]);
             setCurrentSentenceIndex(0);
             setTypingIndex(0);
             return;
         }
 
-        const segments = splitAiTextSegments(message);
-
-        setSentencesSource(message);
-        setAiSentences(segments.length > 0 ? segments : [message]);
-        setCurrentSentenceIndex(0);
-        setTypingIndex(0);
+        pendingNarrationRef.current = message;
+        showNextNarration();
     }, [aiText]);
+
+    useEffect(() => () => clearTimeout(narrationHoldTimerRef.current), []);
 
     useEffect(() => {
         const currentSentence = aiSentences[currentSentenceIndex] || '';
@@ -1175,7 +1205,13 @@ function Main() {
         }
 
         if (currentSentenceIndex >= aiSentences.length - 1) {
-            setAiNarrationComplete(true);
+            if (narrationTypingRef.current) {
+                narrationTypingRef.current = false;
+                narrationDoneAtRef.current = Date.now();
+            }
+            // Newer narration is waiting its turn; its choices must wait for its text.
+            if (pendingNarrationRef.current === null) setAiNarrationComplete(true);
+            showNextNarration();
             return;
         }
 

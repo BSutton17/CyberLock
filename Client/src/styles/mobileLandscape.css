@@ -680,30 +680,43 @@
     }
 
     /* ---------- Main game (story and combat), on the half-scale canvas ---------- */
-    /* Scene bar, then party list + board, then the character bar along the bottom. */
+    /* The board is what matters, so it gets the height: a slim top bar, the party down the left,
+       a short character bar along the bottom with End Turn at its right end. */
     body .main-game-container {
-        grid-template-columns: 300px minmax(0, 1fr) !important;
-        grid-template-rows: 88px minmax(0, 1fr) 0 248px !important;
-        gap: 10px !important;
-        padding: 10px !important;
+        grid-template-columns: 240px minmax(0, 1fr) !important;
+        grid-template-rows: 56px minmax(0, 1fr) 0 168px !important;
+        gap: 8px !important;
+        padding: 8px !important;
     }
 
-    body .main-game-container .inventory {
-        height: 248px !important;
-        min-height: 248px !important;
+    /* The art fills the board without being stretched out of shape. */
+    body .main-game-container .main-game {
+        background-size: cover !important;
     }
 
-    /* Location name sits just right of the Leave/settings buttons, leaving room for End Turn. */
+    body .main-game-container .battle-grid {
+        width: 100% !important;
+        height: 100% !important;
+        aspect-ratio: auto !important;
+    }
+
+    /* ----- Top bar ----- */
     body .main-game-container .scene-name {
         box-sizing: border-box !important;
+        min-height: 0 !important;
         justify-content: flex-start !important;
-        padding-left: 290px !important;
+        padding-left: 400px !important;
+    }
+
+    body .main-game-container .scene-actions-left {
+        gap: 8px !important;
     }
 
     body .main-game-container .scene-name h2 {
-        font-size: 28px !important;
+        font-size: 22px !important;
         letter-spacing: 0.06em !important;
         white-space: nowrap;
+        margin: 0 !important;
     }
 
     /* Narrow phones: the top bar's buttons and turn indicator need the room more than the
@@ -717,62 +730,83 @@
     body .leave-main,
     body .mock-toggle-inline,
     body .settings-cog-btn.battle-screen-cog {
-        min-height: 64px !important;
-        min-width: 72px;
-        padding: 0 20px !important;
-        font-size: 22px !important;
+        min-height: 44px !important;
+        min-width: 56px;
+        padding: 0 14px !important;
+        font-size: 18px !important;
     }
 
     body .main-game-container .turn {
-        font-size: 24px !important;
-        gap: 12px;
+        font-size: 20px !important;
+        gap: 10px;
+        padding: 4px 16px !important;
     }
 
     body .turn-moves,
     body .turn-timer {
-        font-size: 22px !important;
+        font-size: 18px !important;
     }
 
-    /* End Turn sits in the top bar, just left of the turn indicator, clear of the board. */
+    /* ----- End Turn: a big button at the right end of the character bar, under the thumb ----- */
     body .end-turn {
         position: fixed !important;
-        top: 14px !important;
-        right: 440px !important;
-        bottom: auto !important;
+        top: auto !important;
+        right: 8px !important;
+        bottom: 8px !important;
         left: auto !important;
-        height: auto !important;
-        min-height: var(--phone-button) !important;
-        padding: 0 36px !important;
-        font-size: 28px !important;
+        width: 210px !important;
+        height: 168px !important;
+        min-height: 0 !important;
+        padding: 0 16px !important;
+        font-size: 30px !important;
+        line-height: 1.2;
+        white-space: normal;
         z-index: 30 !important;
     }
 
-    /* The party list scrolls when it doesn't all fit. */
+    /* ----- Party ----- */
     body .main-game-container .party {
         overflow-y: auto !important;
         min-height: 0;
+        padding: 8px !important;
     }
 
     body .main-game-container .party-member {
-        padding: 6px 12px !important;
+        padding: 4px 10px !important;
         margin-top: 6px !important;
     }
 
     body .main-game-container .character-stats {
         display: flex !important;
         flex-wrap: wrap;
-        gap: 4px 16px !important;
+        gap: 2px 12px !important;
     }
 
     body .main-game-container .party h3,
     body .main-game-container .char-name {
-        font-size: 26px !important;
+        font-size: 20px !important;
+        margin: 0 !important;
+    }
+
+    body .main-game-container .char-name {
+        font-size: 18px !important;
+        letter-spacing: 0.02em !important;
     }
 
     body .stat-speed,
     body .stat-hp,
     body .char-role {
-        font-size: var(--phone-small) !important;
+        font-size: 17px !important;
+    }
+
+    /* ----- Character bar: smaller text so it stays short ----- */
+    body .main-game-container .inventory {
+        height: 168px !important;
+        min-height: 168px !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        padding: 6px 226px 6px 8px !important;
+        gap: 8px !important;
     }
 
     body .main-game-container h4,
@@ -780,17 +814,23 @@
     body .weapon-section h4,
     body .abilities-section h4,
     body .ultimate-section h4 {
-        font-size: var(--phone-small) !important;
+        font-size: 16px !important;
+        margin: 0 0 4px !important;
     }
 
     body .stat-label,
     body .stat-value,
     body .stat-item {
-        font-size: var(--phone-small) !important;
+        font-size: 16px !important;
     }
 
     body .main-game-container .stat-item {
-        gap: 8px;
+        gap: 6px;
+        padding: 2px 8px !important;
+    }
+
+    body .main-game-container .stats-grid {
+        gap: 4px !important;
     }
 
     body .main-game-container .stat-label {
@@ -805,28 +845,51 @@
     body .ability-cd-ultimate,
     body .ability-range,
     body .ultimate-name {
-        font-size: var(--phone-small) !important;
+        font-size: 16px !important;
     }
 
     body .ability-name {
-        font-size: 26px !important;
+        font-size: 22px !important;
     }
 
     body .ability-desc,
     body .ultimate-desc {
-        font-size: var(--phone-small) !important;
-        line-height: 1.25 !important;
+        font-size: 18px !important;
+        line-height: 1.2 !important;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
     }
 
     body .weapon-card,
     body .ability-card,
     body .ultimate-card {
-        height: 200px !important;
+        height: 128px !important;
+        min-height: 0 !important;
+        padding: 6px 10px !important;
+    }
+
+    /* During the story (no fight), the narration and choices rise over the board, which only
+       shows scenery then. In a fight, the short combat lines stay in the character bar. */
+    /* Its top edge sits just under the top bar: the bar's top is at 8px + 56px + 8px from the
+       top of the screen, and the character bar starts 176px above the bottom. */
+    body .inventory.mobile-ai-active.story-phase .mobile-ai-overlay {
+        inset: auto 0 0 0 !important;
+        top: calc(248px - 100vh / var(--phone-scale)) !important;
+        top: calc(248px - 100dvh / var(--phone-scale)) !important;
+        border-radius: 12px;
     }
 
     /* Story choices and personal moments over the character bar. */
     body .mobile-ai-overlay-text {
         font-size: 30px !important;
+    }
+
+    /* In a fight the narration line shares the short character bar. */
+    body .inventory:not(.story-phase) .mobile-ai-overlay-text {
+        font-size: 24px !important;
+        line-height: 1.3 !important;
     }
 
     body .mobile-ai-choice-owner,

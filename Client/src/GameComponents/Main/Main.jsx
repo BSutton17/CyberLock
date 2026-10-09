@@ -2622,7 +2622,7 @@ function Main() {
                     {/* <button style={{ width: '150px' }} onClick={() => handleStoryComplete()}>Combat</button> */}
                 </div>
             </div>
-            <div className={`inventory ${shouldShowMobileAiOverlay ? 'mobile-ai-active' : ''}`}>
+            <div className={`inventory ${shouldShowMobileAiOverlay ? 'mobile-ai-active' : ''} ${gamePhase === 'combat' ? '' : 'story-phase'}`}>
                 <div className="mobile-ai-overlay" aria-hidden={!shouldShowMobileAiOverlay}>
                     <div className="mobile-ai-overlay-content">
                         {aiBusy && (

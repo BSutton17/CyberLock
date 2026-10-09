@@ -6,6 +6,10 @@
  * and text and buttons get explicit sizes. Because of the half scale, sizes here are double what
  * appears on the phone: 24px text shows as 12px, an 80px tall button as 40px.
  *
+ * Heights use dvh, the part of the screen actually visible with the browser's address bar and
+ * toolbar showing (plain vh assumes they're hidden, which pushed the bottom of each screen
+ * under the toolbar). Each dvh line follows a vh line for browsers without dvh.
+ *
  * Nothing scrolls as a page: every screen fits the phone exactly. Only small lists inside a
  * screen (the party, the team's feats, an open ability menu) scroll on their own.
  *
@@ -48,7 +52,9 @@
         width: calc(100vw / var(--phone-scale)) !important;
         min-width: calc(100vw / var(--phone-scale)) !important;
         height: calc(100vh / var(--phone-scale)) !important;
+        height: calc(100dvh / var(--phone-scale)) !important;
         min-height: calc(100vh / var(--phone-scale)) !important;
+        min-height: calc(100dvh / var(--phone-scale)) !important;
         max-width: none !important;
         transform: scale(var(--phone-scale)) !important;
         transform-origin: top left !important;
@@ -120,6 +126,7 @@
 
     body .login-card {
         max-height: calc(100vh - 16px);
+        max-height: calc(100dvh - 16px);
         overflow-y: auto;
         padding: 12px 20px !important;
         gap: 8px;
@@ -155,7 +162,9 @@
         transform: translateX(-50%);
         width: auto !important;
         height: 26vh !important;
+        height: 26dvh !important;
         max-height: 26vh !important;
+        max-height: 26dvh !important;
         margin: 0 !important;
     }
 
@@ -212,12 +221,43 @@
     body .waiting-room-container {
         width: calc(100vw / var(--phone-scale)) !important;
         height: calc(100vh / var(--phone-scale)) !important;
+        height: calc(100dvh / var(--phone-scale)) !important;
         transform: scale(var(--phone-scale)) !important;
         transform-origin: top left !important;
+        box-sizing: border-box;
         margin-top: 0 !important;
-        padding: 230px 60px 40px !important;
+        /* Room at the top for the CyberLock logo, which is 26% of the screen tall. */
+        padding: calc(27vh / var(--phone-scale)) 60px 24px !important;
+        padding: calc(27dvh / var(--phone-scale)) 60px 24px !important;
         justify-content: flex-start !important;
+        overflow: hidden !important;
+        overflow: clip !important;
+    }
+
+    body .waiting-room-container .player-list-section {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        margin: 0 !important;
+    }
+
+    /* Six players fit as three across, two down; the list scrolls only if it somehow can't. */
+    body .waiting-room-container .player-list-section ul {
+        display: grid !important;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        align-content: start;
+        gap: 12px !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        min-height: 0;
         overflow-y: auto;
+    }
+
+    body .waiting-room-container .footer-controls {
+        flex-shrink: 0;
+        margin: 16px 0 0 !important;
+        padding: 0 !important;
     }
 
     body .waiting-room-container > * {
@@ -252,7 +292,12 @@
     }
 
     body .player-card {
-        min-height: 72px;
+        min-height: 60px;
+    }
+
+    body .waiting-room-container .player-list-section {
+        padding: 12px 20px !important;
+        gap: 8px !important;
     }
 
     body .start-button {
@@ -378,6 +423,24 @@
         min-height: 0 !important;
     }
 
+    /* The team list gives up height first, so Clear and Add bot stay on screen. */
+    body .character-select-container .selected-team {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    body .character-select-container .team-slots {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto !important;
+    }
+
+    body .character-select-container .team-controls {
+        flex-shrink: 0;
+    }
+
     /* Ready sits in the footer row (it floated off the bottom of the screen before). */
     body .character-select-container .footer-controls {
         flex-direction: row !important;
@@ -410,8 +473,15 @@
         gap: 16px !important;
     }
 
+    /* The portrait is left out on phones; its room goes to the attribute buttons. */
+    body .allocation-image {
+        display: none !important;
+    }
+
     body .allocation-grid {
-        grid-template-columns: 180px 260px minmax(0, 1fr) !important;
+        grid-template-columns: 240px minmax(0, 1fr) !important;
+        align-items: stretch !important;
+        height: auto !important;
         margin: 0 !important;
         gap: 16px !important;
     }
@@ -462,20 +532,49 @@
         font-size: var(--phone-small) !important;
     }
 
+    /* The attribute buttons share whatever height the screen has, so all ten always show. */
+    body .builder-content,
+    body .attribute-allocation,
+    body .allocation-grid,
+    body .allocation-attributes {
+        min-height: 0 !important;
+    }
+
+    body .attribute-allocation,
+    body .allocation-attributes {
+        display: flex;
+        flex-direction: column;
+    }
+
+    body .allocation-grid,
+    body .attributes-list {
+        flex: 1;
+    }
+
     body .attributes-list {
         display: grid !important;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-auto-rows: minmax(0, 1fr);
         gap: 10px !important;
-        overflow-y: auto;
+        overflow: hidden !important;
     }
 
     body .attribute-item {
-        min-height: 72px !important;
+        min-height: 0 !important;
+        height: auto !important;
         padding: 0 12px !important;
     }
 
     body .attribute-info h4 {
         font-size: var(--phone-text) !important;
+        letter-spacing: 0.04em !important;
+    }
+
+    /* Very short screens (a small phone with the browser's bars showing): title only. */
+    @media (max-height: 340px) {
+        body .builder-header p {
+            display: none;
+        }
     }
 
     body .primary-ability,

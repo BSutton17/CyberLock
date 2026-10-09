@@ -189,9 +189,9 @@ const resolveSceneKey = (rawKeyword = '') => {
 
 const TYPEWRITER_CHAR_INTERVAL_MS = 20;
 const TYPEWRITER_SENTENCE_GAP_FACTOR_MS = 18;
-// Every narration stays up at least this long, however short it is...
+// Every sentence on screen stays up at least this long, however short it is ("Good.")...
 const NARRATION_MIN_DISPLAY_MS = 2000;
-// ...and once it has finished typing, this much longer before the next one replaces it.
+// ...and once a whole narration has finished, this much longer before the next one replaces it.
 const NARRATION_READ_PAUSE_MS = 1000;
 const TURN_ADVANCE_AFTER_TYPING_MS = 1000;
 // Real models can take several seconds for a story beat; fall back only if the server is truly stuck.
@@ -209,22 +209,20 @@ const splitAiTextSegments = (message = '') => {
     return segments.length > 0 ? segments : [trimmedMessage];
 };
 
-const estimateTypingMs = (message = '') => {
+// How long one sentence is on screen: typed out, then (unless it's the last) a pause that grows
+// with its length, but never less than the minimum in all.
+const sentenceOnScreenMs = (sentence, isLast) => Math.max(
+    NARRATION_MIN_DISPLAY_MS,
+    sentence.length * TYPEWRITER_CHAR_INTERVAL_MS + (isLast ? 0 : sentence.length * TYPEWRITER_SENTENCE_GAP_FACTOR_MS)
+);
+
+// How long a narration holds the screen: each sentence in turn, then the reading pause.
+const narrationHoldMs = (message = '') => {
     const segments = splitAiTextSegments(message);
     if (segments.length === 0) return 0;
-
-    return segments.reduce((durationMs, segment, index) => {
-        const typingDurationMs = segment.length * TYPEWRITER_CHAR_INTERVAL_MS;
-        const sentencePauseMs = index < segments.length - 1
-            ? segment.length * TYPEWRITER_SENTENCE_GAP_FACTOR_MS
-            : 0;
-
-        return durationMs + typingDurationMs + sentencePauseMs;
-    }, 0);
+    return segments.reduce((total, segment, index) => total + sentenceOnScreenMs(segment, index === segments.length - 1), 0)
+        + NARRATION_READ_PAUSE_MS;
 };
-
-// How long a narration holds the screen: typing (at least the minimum), then the reading pause.
-const narrationHoldMs = (message = '') => Math.max(NARRATION_MIN_DISPLAY_MS, estimateTypingMs(message)) + NARRATION_READ_PAUSE_MS;
 const estimateTypewriterDurationMs = (message = '') => narrationHoldMs(message);
 
 
@@ -1158,7 +1156,8 @@ function Main() {
     // New narration waits for the one on screen to finish typing, plus a short pause to read it.
     // Only the newest waiting narration is kept, so the text never falls behind the board.
     const narrationTypingRef = useRef(false);
-    const narrationStartedAtRef = useRef(0);
+    // When the sentence now on screen appeared (each one stays up at least the minimum).
+    const sentenceStartedAtRef = useRef(0);
     const narrationDoneAtRef = useRef(0);
     const pendingNarrationRef = useRef(null);
     const narrationHoldTimerRef = useRef(null);
@@ -1168,7 +1167,7 @@ function Main() {
         if (narrationTypingRef.current || pendingNarrationRef.current === null) return;
 
         // Free once the last one has been up for the minimum and then for the reading pause.
-        const waitMs = Math.max(narrationDoneAtRef.current, narrationStartedAtRef.current + NARRATION_MIN_DISPLAY_MS)
+        const waitMs = Math.max(narrationDoneAtRef.current, sentenceStartedAtRef.current + NARRATION_MIN_DISPLAY_MS)
             + NARRATION_READ_PAUSE_MS - Date.now();
         if (waitMs > 0) {
             narrationHoldTimerRef.current = setTimeout(showNextNarration, waitMs);
@@ -1179,7 +1178,7 @@ function Main() {
         pendingNarrationRef.current = null;
         const segments = splitAiTextSegments(message);
         narrationTypingRef.current = true;
-        narrationStartedAtRef.current = Date.now();
+        sentenceStartedAtRef.current = Date.now();
         setSentencesSource(message);
         setAiSentences(segments.length > 0 ? segments : [message]);
         setCurrentSentenceIndex(0);
@@ -1233,10 +1232,14 @@ function Main() {
             return;
         }
 
+        // The next sentence replaces this one after its pause, and never before the minimum.
+        const pauseMs = currentSentence.length * TYPEWRITER_SENTENCE_GAP_FACTOR_MS;
+        const minimumLeftMs = sentenceStartedAtRef.current + NARRATION_MIN_DISPLAY_MS - Date.now();
         const timer = setTimeout(() => {
+            sentenceStartedAtRef.current = Date.now();
             setCurrentSentenceIndex((prevIndex) => prevIndex + 1);
             setTypingIndex(0);
-        }, currentSentence.length * TYPEWRITER_SENTENCE_GAP_FACTOR_MS);
+        }, Math.max(pauseMs, minimumLeftMs));
 
         return () => clearTimeout(timer);
     }, [aiSentences, currentSentenceIndex, typingIndex]);

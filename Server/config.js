@@ -96,6 +96,7 @@ export const config = {
     // character of the sentence before, and a moment to read the end. The next turn waits for it.
     narrationCharMs: 20,
     narrationSentenceGapCharMs: 18,
+    // Every sentence stays on screen at least this long, however short.
     narrationMinDisplayMs: 2000,
     narrationReadPauseMs: 1000,
     // Allowance for the network and a slow phone.

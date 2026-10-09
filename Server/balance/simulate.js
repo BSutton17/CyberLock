@@ -125,7 +125,7 @@ export const POLICIES = {
  *   enemyDamage: share of the enemies' total health removed (1 on a win)
  *   score: 1 + hpLeft on a win, otherwise enemyDamage (a loss that nearly won scores close to 1)
  */
-export function runFight({ party, encounterIndex, level, faction = 'rebels', seed = 1, cooldowns = {}, policy = 'lookahead', sceneKey = 'street', enemies = null, power = null }) {
+export function runFight({ party, encounterIndex, level, faction = 'rebels', seed = 1, cooldowns = {}, policy = 'lookahead', sceneKey = 'street', enemies = null, power = null, onTurn = null }) {
     const random = seededRandom(seed);
     const characters = Object.fromEntries(party.map(member => [member.name, buildCharacter(member.characterId, { level, abilities: member.loadout })]));
     const names = Object.keys(characters);
@@ -156,7 +156,7 @@ export function runFight({ party, encounterIndex, level, faction = 'rebels', see
     engine.beginTurn(ctx);
 
     const usage = {};
-    const outcome = playUntil(ctx, countingPolicy(POLICIES[policy](seed), usage), { maxTurns: 800 }) || 'stalled';
+    const outcome = playUntil(ctx, countingPolicy(POLICIES[policy](seed), usage), { maxTurns: 800, onTurn }) || 'stalled';
     const hpLeft = names.reduce((total, name) => total + Math.max(0, ctx.characters[name].stats.health), 0)
         / names.reduce((total, name) => total + ctx.characters[name].stats.maxHealth, 0);
     const rounds = ctx.combat.turnNumber / Math.max(1, names.length + foes.length);

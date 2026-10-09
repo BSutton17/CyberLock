@@ -55,7 +55,18 @@ Character names in `lore.js` must match the names players see in `shared/data/ch
   The engine records each turn as beats (who moved toward whom, which hits landed and how hard,
   what scored each kill, including poison and fire that finish someone later), and
   `combatLines/index.js` picks a line for each, avoiding lines the room heard recently. The next
-  turn waits until the narration has been typed out and read. Tests check every character, enemy,
+  turn waits until the narration has been typed out and read.
+
+  Names, articles and pronouns come from the fight's real state, not the line text:
+  - Several of a kind standing: "an Enforcer Drone", "one of the Enforcer Drones", "the closest
+    Enforcer Drone" (when the engine says it's the nearest), "another Enforcer Drone" for a second
+    one; alone: "the Enforcer Drone"; the others fell: "the last Enforcer Drone"; once pointed
+    out: "the enemy drone". Each individual is tracked by its id, within a turn and into the next.
+  - A sentence that carries on with the same subject uses he / she / it (from the character's
+    pronouns), never when someone else just mentioned shares that pronoun, never three in a row,
+    and never "They" to open a sentence ("The tech fires" instead).
+  - `narration.fights.test.js` plays whole simulated fights and checks every turn: placeholders,
+    capitals, a/an, doubled words, "They" openers, bare "the" among several, pronoun runs. Tests check every character, enemy,
   ability and weapon has its full set, and that no line repeats or contains a number.
 - **No numbers**: narration never states damage, healing or stat amounts; anything the model
   slips in is scrubbed. The combat log keeps the numbers.

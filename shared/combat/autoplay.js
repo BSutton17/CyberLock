@@ -76,12 +76,15 @@ export function playTurn(ctx, allyPolicy) {
  * Plays turns until the fight ends, `stop(ctx)` returns true (checked before each turn), or
  * `maxTurns` turns have been played. Returns 'win', 'loss' or null (stopped early).
  */
-export function playUntil(ctx, allyPolicy, { stop = () => false, maxTurns = 400 } = {}) {
+export function playUntil(ctx, allyPolicy, { stop = () => false, maxTurns = 400, onTurn = null } = {}) {
     for (let played = 0; played < maxTurns; played++) {
         const outcome = fightOutcome(ctx);
         if (outcome) return outcome;
         if (stop(ctx)) return null;
+        const turn = ctx.combat.turn;
         const result = playTurn(ctx, allyPolicy);
+        // The finished turn (with its log and beats), e.g. for checking narration.
+        if (onTurn && turn) onTurn(turn, ctx);
         if (result) return result;
     }
     return fightOutcome(ctx);

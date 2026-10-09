@@ -93,18 +93,39 @@ const livingEnemies = (ctx) => (ctx.combat.enemies || []).filter(isLiving);
  * Who a unit is, for the narrator: its name, which line set it uses (a character's id, or the
  * enemy's template id), its side, and whether it's a boss (bosses go by name, others get "the").
  */
-export function unitInfo(ctx, id) {
+export function unitInfo(ctx, id, { from = null } = {}) {
     const unit = getUnit(ctx, id);
     if (!unit) return null;
     const player = isPlayer(ctx, id);
-    return {
+    const key = player ? unit.id : templateKeyOf(unit);
+    const info = {
         id,
         name: unit.name || id,
-        key: player ? unit.id : (unit.templateId || String(unit.id || '').replace(/_\d+$/, '')),
+        key,
         side: player ? 'ally' : 'enemy',
-        boss: !player && unit.tier === 'boss'
+        boss: !player && unit.tier === 'boss',
+        alive: isLiving(unit)
     };
+    if (!player) {
+        // How many of this kind are in the fight and still standing, so the narrator can say
+        // "an Enforcer Drone", "one of the Enforcer Drones" or "the last Enforcer Drone".
+        const kind = (ctx.combat.enemies || []).filter(enemy => templateKeyOf(enemy) === key);
+        const standing = kind.filter(isLiving);
+        info.kindTotal = kind.length;
+        info.kindAlive = standing.length;
+        // Whether it's the nearest of its kind to whoever is acting on it.
+        const fromPos = from ? ctx.combat.positions[from] : null;
+        const pos = ctx.combat.positions[id];
+        if (fromPos && pos && standing.length > 1) {
+            const mine = distance(fromPos, pos);
+            info.closest = standing.every(other => other.id === id || !ctx.combat.positions[other.id] || distance(fromPos, ctx.combat.positions[other.id]) >= mine)
+                && standing.some(other => other.id !== id && ctx.combat.positions[other.id] && distance(fromPos, ctx.combat.positions[other.id]) > mine);
+        }
+    }
+    return info;
 }
+
+const templateKeyOf = (enemy) => enemy?.templateId || String(enemy?.id || '').replace(/_\d+$/, '');
 
 // What an ability sees as "the other side" and "my side", from the caster's point of view.
 export function abilityParams(ctx, casterId) {
@@ -549,7 +570,7 @@ export function moveBeat(ctx, id, from, to) {
         return !best || d < best.d ? { id: other, d } : best;
     }, null);
 
-    const beat = (direction, otherId) => ({ kind: 'move', actor: unitInfo(ctx, id), from: { ...from }, direction, other: otherId ? unitInfo(ctx, otherId) : null });
+    const beat = (direction, otherId) => ({ kind: 'move', actor: unitInfo(ctx, id), from: { ...from }, direction, other: otherId ? unitInfo(ctx, otherId, { from: id }) : null });
     const foeNow = nearest(to, foes);
     if (foeNow && distance(from, at(foeNow.id)) > foeNow.d) return beat('advance', foeNow.id);
     const foeBefore = nearest(from, foes);
@@ -635,7 +656,7 @@ function weaponBeat(ctx, actorId, targetId, dealt) {
     return {
         kind: 'weapon',
         actor: unitInfo(ctx, actorId),
-        target: unitInfo(ctx, targetId),
+        target: unitInfo(ctx, targetId, { from: actorId }),
         weapon: getUnit(ctx, actorId)?.weapon?.name || null,
         share: dealt / Math.max(1, target?.stats?.maxHealth || target?.stats?.health || 1)
     };
@@ -722,7 +743,7 @@ function validateAbilityTarget(ctx, casterId, ability, { targetId, targets, targ
 }
 
 function abilityBeat(ctx, actorId, abilityId, targetId) {
-    return { kind: 'ability', abilityId, actor: unitInfo(ctx, actorId), target: targetId ? unitInfo(ctx, targetId) : null };
+    return { kind: 'ability', abilityId, actor: unitInfo(ctx, actorId), target: targetId ? unitInfo(ctx, targetId, { from: actorId }) : null };
 }
 
 export function isBonusAction(ability) {

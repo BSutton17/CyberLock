@@ -136,17 +136,19 @@ const architect = { id: 'enforcer_the_architect_1', name: 'The Architect', key: 
 const weaponStrike = { kind: 'weapon', actorId: 'bryson', weapon: 'Hammer', actor: shipment };
 
 describe('narrating a turn', () => {
-    it('tells a move, a bonus action and a weapon kill as three sentences, in order', () => {
+    it('tells a move, a bonus action and a weapon kill as three sentences, carrying the subject with a pronoun', () => {
         const narrator = createCombatNarrator({ random: () => 0 });
         const text = narrator.narrateTurn([
             { kind: 'move', actor: shipment, direction: 'advance', other: soldier },
             { kind: 'ability', abilityId: 'rallying_guard', actor: shipment, target: null },
             { kind: 'weapon', actor: shipment, target: soldier, weapon: 'Hammer', share: 0.5 },
-            { kind: 'kill', victim: soldier, strike: weaponStrike }
+            { kind: 'kill', victim: { ...soldier, alive: false }, strike: weaponStrike }
         ]);
-        const [move, bonus, kill] = [MOVEMENT.offensive_tank_1.advance[0], ABILITY_LINES.rallying_guard[0], WEAPON_KILLS.Hammer.enforcer_soldier[0]];
-        const fill = (line) => line.replace(/\{user\}/g, 'Shipment').replace(/\{user\.their\}/g, 'his').replace(/\{other\}|\{victim\}/g, 'the Enforcer Soldier');
-        expect(text).toBe([fill(move), fill(bonus), fill(kill)].map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' '));
+        expect(text).toBe(
+            'Shipment walks straight at the Enforcer Soldier, hammer swinging loose at his side. ' +
+            'He bangs a fist on his chest and digs in, suddenly much harder to move. ' +
+            "He brings the hammer down on the soldier's helmet. The visor cracks, the radio keeps talking, and nobody answers it."
+        );
     });
 
     it('uses the character name, never the player account, and "the" for rank-and-file enemies', () => {
@@ -206,3 +208,123 @@ describe('narrating a turn', () => {
         expect(guarding.narrateTurn([{ kind: 'ability', abilityId: 'guarded_breath', actor: trueNorth, target: leo }])).toContain('herself');
     });
 });
+
+// ---------------------------------------------------------------------------
+// Grammar: articles from the enemy count, pronouns, continuity
+// ---------------------------------------------------------------------------
+
+describe('naming enemies by how many are standing', () => {
+    const drone = (n, overrides = {}) => ({ id: `enforcer_drone_${n}`, name: 'Enforcer Drone', key: 'enforcer_drone', side: 'enemy', boss: false, alive: true, kindAlive: 3, kindTotal: 3, ...overrides });
+    const patchwork = { id: 'p', name: 'Patchwork', key: 'healing_support_1', side: 'ally', boss: false };
+    const first = () => createCombatNarrator({ random: () => 0 });
+    const hit = (target) => ({ kind: 'weapon', actor: patchwork, target, weapon: 'Drone', share: 0.2 });
+    const droneHit = WEAPON_HITS.Drone.medium[0]; // "{user} sends the drone zooming at {target}, and ..."
+
+    it('says "one of the Enforcer Drones" for an unpicked target among several', () => {
+        expect(first().narrateTurn([hit(drone(1))])).toContain('zooming at one of the Enforcer Drones');
+        expect(droneHit).toContain('{target}');
+    });
+
+    it('says "the closest Enforcer Drone" when the game says it is the nearest', () => {
+        expect(first().narrateTurn([hit(drone(1, { closest: true }))])).toContain('zooming at the closest Enforcer Drone');
+    });
+
+    it('says "the Enforcer Drone" when it is the only one, and "the last" when the others fell', () => {
+        expect(first().narrateTurn([hit(drone(1, { kindAlive: 1, kindTotal: 1 }))])).toContain('zooming at the Enforcer Drone,');
+        expect(first().narrateTurn([hit(drone(1, { kindAlive: 1, kindTotal: 3 }))])).toContain('zooming at the last Enforcer Drone');
+    });
+
+    it('opens with "An Enforcer Drone" as a subject among several, then calls it "the drone"', () => {
+        const mover = drone(2);
+        const text = first().narrateTurn([
+            { kind: 'move', actor: mover, direction: 'advance', other: patchwork },
+            { kind: 'weapon', actor: mover, target: patchwork, weapon: 'Pulse Carbine', share: 0.2 }
+        ]);
+        expect(text).toMatch(/^An Enforcer Drone glides toward Patchwork/);
+        // Second sentence: same subject, so "It" (drones are "it").
+        expect(text).toMatch(/\. It /);
+    });
+
+    it('calls a second drone in the same breath "another Enforcer Drone"', () => {
+        const narrator = first();
+        const text = narrator.narrateTurn([hit(drone(1)), hit(drone(2))]);
+        expect(text).toContain('one of the Enforcer Drones');
+        expect(text).toContain('another Enforcer Drone');
+    });
+
+    it('picks up next turn with the drone the last narration ended on', () => {
+        const narrator = first();
+        const memory = { recent: new Set(), carried: null };
+        narrator.narrateTurn([hit(drone(1))], { memory });
+        expect(memory.carried).toEqual({ id: 'enforcer_drone_1' });
+        const next = narrator.narrateTurn([{ kind: 'move', actor: drone(1), direction: 'advance', other: patchwork }], { memory });
+        expect(next).toMatch(/^The enemy drone /);
+    });
+
+    it('uses "an" before a vowel sound and "a" otherwise', () => {
+        const initiate = { id: 'rebel_initiate_1', name: 'Rebel Initiate', key: 'rebel_initiate', side: 'enemy', boss: false, alive: true, kindAlive: 2, kindTotal: 2 };
+        const text = first().narrateTurn([{ kind: 'move', actor: initiate, direction: 'advance', other: patchwork }]);
+        expect(text).toMatch(/^A Rebel Initiate /);
+    });
+});
+
+describe('pronouns', () => {
+    const leo = { id: 'l', name: 'Leo', key: 'aggressive_dps_2', side: 'ally', boss: false };
+    const geneShock = { id: 'g', name: 'Gene Shock', key: 'spellcaster_dps_1', side: 'ally', boss: false };
+    const alone = { id: 'enforcer_soldier_1', name: 'Enforcer Soldier', key: 'enforcer_soldier', side: 'enemy', boss: false, alive: true, kindAlive: 1, kindTotal: 1 };
+
+    it('keeps the name when a pronoun could mean someone else', () => {
+        const narrator = createCombatNarrator({ random: () => 0 });
+        const text = narrator.narrateTurn([
+            { kind: 'move', actor: shipment, direction: 'regroup', other: leo },
+            { kind: 'ability', abilityId: 'rallying_guard', actor: shipment, target: null }
+        ]);
+        expect(text).toContain('Leo');
+        expect(text).toMatch(/\. Shipment bangs/);
+    });
+
+    it('never opens a sentence with "They": a "they" enemy becomes "The tech", Gene Shock keeps the name', () => {
+        const drone = { id: 'enforcer_drone_1', name: 'Enforcer Drone', key: 'enforcer_drone', side: 'enemy', boss: false, alive: true, kindAlive: 1, kindTotal: 1 };
+        const own = createCombatNarrator({ random: () => 0 }).narrateTurn([
+            { kind: 'move', actor: geneShock, direction: 'advance', other: drone },
+            { kind: 'weapon', actor: geneShock, target: drone, weapon: 'Ray Gun', share: 0.2 }
+        ]);
+        expect(own).toMatch(/\. Gene Shock levels the ray gun/);
+
+        const tech = { id: 'rebel_field_tech_1', name: 'Rebel Field Tech', key: 'rebel_field_tech', side: 'enemy', boss: false, alive: true, kindAlive: 2, kindTotal: 2 };
+        const enemyTurn = createCombatNarrator({ random: () => 0 }).narrateTurn([
+            { kind: 'move', actor: tech, direction: 'advance', other: shipment },
+            { kind: 'weapon', actor: tech, target: shipment, weapon: 'Arc Launcher', share: 0.2 }
+        ]);
+        expect(enemyTurn).toMatch(/^A Rebel Field Tech moves up on Shipment/);
+        expect(enemyTurn).toMatch(/\. The tech fires an arc/);
+        expect(enemyTurn).not.toMatch(/They/);
+    });
+
+    it('tells an ally ability used on yourself as looking after yourself', () => {
+        const trueNorth = { id: 'tn', name: 'True North', key: 'jack_of_all_trades_support_3', side: 'ally', boss: false };
+        const text = createCombatNarrator({ random: () => 0 }).narrateTurn([{ kind: 'ability', abilityId: 'the_show_must_go_on', actor: trueNorth, target: trueNorth }]);
+        expect(text).toBe('True North patches herself up and gets right back to it.');
+    });
+
+    it('keeps a "they" name when a "they" enemy was just mentioned', () => {
+        const text = createCombatNarrator({ random: () => 0 }).narrateTurn([
+            { kind: 'move', actor: geneShock, direction: 'advance', other: alone },
+            { kind: 'weapon', actor: geneShock, target: alone, weapon: 'Ray Gun', share: 0.2 }
+        ]);
+        expect(text).toMatch(/\. Gene Shock levels/);
+    });
+
+    it('brings the name back after two pronoun sentences in a row', () => {
+        const narrator = createCombatNarrator({ random: () => 0 });
+        const text = narrator.narrateTurn([
+            { kind: 'move', actor: shipment, direction: 'advance', other: alone },
+            { kind: 'ability', abilityId: 'rallying_guard', actor: shipment, target: null },
+            { kind: 'ability', abilityId: 'ability_boost', actor: shipment, target: null },
+            { kind: 'weapon', actor: shipment, target: alone, weapon: 'Hammer', share: 0.05 }
+        ]);
+        const openers = text.split(/(?<=\.)\s+/).map(sentence => sentence.split(' ')[0]);
+        expect(openers.slice(0, 4)).toEqual(['Shipment', 'He', 'He', 'Shipment']);
+    });
+});
+

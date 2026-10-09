@@ -9,29 +9,29 @@ export const WEAPON_HITS = {
             `{user}'s hammer glances off {target}'s shoulder with a dull clang.`,
             `{user} swings wide, and the hammer only kisses {target} on the way past.`,
             `{user} catches {target} with the handle instead of the head. Still hurts. Not much.`,
-            `{user} taps {target} with the hammer, mostly to remind them he's there.`,
+            `{user} taps {target} with the hammer, mostly to remind {target.them} he's there.`,
             `{user} brings the hammer around a beat too late, and {target} rolls with most of it.`
         ],
         medium: [
-            `{user} brings the hammer down on {target}'s guard and something in their arm gives.`,
+            `{user} brings the hammer down on {target}'s guard and something in {target.their} arm gives.`,
             `{user} swings the hammer into {target}'s ribs with a sound like a door slamming.`,
             `{user} plants his feet and drives the hammer into {target}, who stumbles back a step.`,
             `{user} hooks the hammer around and catches {target} square in the hip.`,
-            `{user} hammers {target} once, hard, and lets them think about it.`,
-            `{user} slams the hammer into {target}'s side, knocking the wind clean out of them.`
+            `{user} hammers {target} once, hard, and lets {target.them} think about it.`,
+            `{user} slams the hammer into {target}'s side, knocking the wind clean out of {target.them}.`
         ],
         high: [
             `{user} winds up all the way back and caves {target} in with one swing.`,
             `{user} brings the hammer down on {target} like he's driving a fence post, and {target} folds right over.`,
             `{user}'s hammer lands on {target} with a crunch everyone on the street hears. Nobody likes that sound.`,
-            `{user} swings from the floor, and the hammer launches {target} off their feet.`,
+            `{user} swings from the floor, and the hammer launches {target} off {target.their} feet.`,
             `{user} puts his whole weight behind one swing. {target} meets the pavement the hard way.`,
             `{user} hits {target} so hard the hammer hums afterward.`
         ]
     },
     'Taser Shield': { // E.N.C.A.G.E
         low: [
-            `{user} bumps {target} with the shield, and the charge only nips at them.`,
+            `{user} bumps {target} with the shield, and the charge only nips at {target.them}.`,
             `{user}'s shield sparks against {target}'s armor without much bite.`,
             `{user} jabs the shield's edge at {target}, a quick zap and nothing more.`,
             `{user} nudges {target} back with the shield, which buzzes in mild protest.`,
@@ -39,19 +39,19 @@ export const WEAPON_HITS = {
             `{user} slaps {target} with the flat of the shield, more warning than attack.`
         ],
         medium: [
-            `{user} drives the taser shield into {target}, and the charge locks up their arm.`,
-            `{user} slams the shield into {target}, and a crackle of current knocks them back.`,
+            `{user} drives the taser shield into {target}, and the charge locks up {target.their} arm.`,
+            `{user} slams the shield into {target}, and a crackle of current knocks {target.them} back.`,
             `{user} pins {target} for a second with the shield and lets the current do the rest.`,
-            `{user} rams {target} with the shield's face, leaving them twitching.`,
-            `{user} shoves the electrified shield into {target}'s chest, and their whole body jerks.`,
+            `{user} rams {target} with the shield's face, leaving {target.them} twitching.`,
+            `{user} shoves the electrified shield into {target}'s chest, and {target.their} whole body jerks.`,
             `{user} hammers {target} with the shield's edge, the current biting hard on contact.`
         ],
         high: [
             `{user} slams the shield into {target} at full charge, and the flash lights up the whole street.`,
-            `{user} crushes {target} behind the shield and dumps every volt it has into them.`,
+            `{user} crushes {target} behind the shield and dumps every volt it has into {target.them}.`,
             `{user} brings the shield down on {target} like a falling door, current screaming.`,
             `{user} charges {target} shield first. When it connects, {target} goes rigid and drops.`,
-            `{user} lets the shield's capacitor go all at once into {target}, and they smoke a little afterward.`,
+            `{user} lets the shield's capacitor go all at once into {target}, and {target} smokes a little afterward.`,
             `{user} pins {target} to the nearest wall with the shield and holds the trigger down.`
         ]
     },
@@ -67,14 +67,14 @@ export const WEAPON_HITS = {
         medium: [
             `{user} levels the ray gun and scorches a line across {target}'s chest.`,
             `{user} squeezes off a steady beam that burns straight into {target}'s side.`,
-            `{user}'s ray gun hisses, and {target} staggers back with smoke coming off their armor.`,
+            `{user}'s ray gun hisses, and {target} staggers back with smoke coming off {target.their} armor.`,
             `{user} fires a bright, clean shot into {target}, who doubles over around it.`,
             `{user} holds the trigger down a little longer than usual. {target} feels every extra second.`,
-            `{user} catches {target} mid-step with a beam that melts a hole in their guard.`
+            `{user} catches {target} mid-step with a beam that melts a hole in {target.their} guard.`
         ],
         high: [
             `{user} cranks the ray gun to a color it probably shouldn't make, and the beam punches right through {target}.`,
-            `{user} fires, and the ray hits {target} so hard their armor glows afterward.`,
+            `{user} fires, and the ray hits {target} so hard {target.their} armor glows afterward.`,
             `{user}'s cores flare as they pour everything into one shot. {target} takes all of it.`,
             `{user} lets off a blast that throws {target} back in a cloud of smoke and sparks.`,
             `{user} overcharges the ray gun and lights {target} up from the inside out.`,
@@ -86,16 +86,16 @@ export const WEAPON_HITS = {
             `{user}'s sword flicks across {target}'s guard and leaves a thin, glowing scratch.`,
             `{user} nicks {target} on a fast pass, barely breaking stride.`,
             `{user} tests {target}'s guard with a light cut, learning more than he hurts.`,
-            `{user}'s blade grazes {target}'s arm as they twist away.`,
-            `{user} slashes, and {target} gets their armor in the way just in time.`,
+            `{user}'s blade grazes {target}'s arm as {target} twists away.`,
+            `{user} slashes, and {target} gets {target.their} armor in the way just in time.`,
             `{user} draws a shallow line across {target}'s side. A warning shot.`
         ],
         medium: [
-            `{user} slips inside {target}'s reach and opens a clean cut across their ribs.`,
+            `{user} slips inside {target}'s reach and opens a clean cut across {target.their} ribs.`,
             `{user}'s energy sword carves through {target}'s armor like it isn't there.`,
             `{user} feints left, cuts right, and {target} pays for watching the wrong hand.`,
             `{user} spins and slashes {target} across the back on the way through.`,
-            `{user} parries {target}'s swing and answers with a cut that sends them reeling.`,
+            `{user} parries {target}'s swing and answers with a cut that sends {target.them} reeling.`,
             `{user}'s blade hums through {target}'s guard and leaves a smoking gash.`
         ],
         high: [
@@ -103,7 +103,7 @@ export const WEAPON_HITS = {
             `{user} carves {target} open with one long, quiet stroke. No wasted motion.`,
             `{user} brings the sword down through {target}'s armor, plating and all.`,
             `{user} lunges and runs the blade straight through {target}'s defenses. {target} sags against it.`,
-            `{user}'s sword flashes twice, so fast it looks like one cut, and {target} staggers like they took ten.`,
+            `{user}'s sword flashes twice, so fast it looks like one cut, and {target} staggers like {target.they} took ten.`,
             `{user} catches {target} wide open and doesn't waste the chance.`
         ]
     },
@@ -122,13 +122,13 @@ export const WEAPON_HITS = {
             `{user} fires twice, fast, and the second shot catches {target} square.`,
             `{user} steps around cover and blasts {target} in the side.`,
             `{user}'s shotgun barks, and {target} spins halfway around.`,
-            `{user} leads {target} a half step and the spread meets them right where they land.`
+            `{user} leads {target} a half step and the spread meets {target.them} right where {target} lands.`
         ],
         high: [
             `{user} walks right up to {target} and fires point blank. It's not subtle, and it's not supposed to be.`,
             `{user} unloads at close range, and {target} gets thrown back into the wall.`,
             `{user} pumps the shotgun with one hand and empties it into {target} with the same calm he used to pour drinks.`,
-            `{user}'s blast catches {target} dead center and knocks them flat.`,
+            `{user}'s blast catches {target} dead center and knocks {target.them} flat.`,
             `{user} fires, racks, and fires again before {target} hits the ground.`,
             `{user} puts a slug right through {target}'s guard. Old habits.`
         ]
@@ -143,7 +143,7 @@ export const WEAPON_HITS = {
             `{user}'s drone darts in, nips {target}, and darts right back out.`
         ],
         medium: [
-            `{user} sends the drone zooming at {target}, and its little laser burns a hole in their armor.`,
+            `{user} sends the drone zooming at {target}, and its little laser burns a hole in {target.their} armor.`,
             `{user}'s drone dives at {target}, blasting all the way down.`,
             `{user} spins up the drone and it rattles off a burst straight into {target}.`,
             `{user}'s drone circles {target} twice, firing the whole time.`,
@@ -152,7 +152,7 @@ export const WEAPON_HITS = {
         ],
         high: [
             `{user} overclocks the drone and it tears into {target} with everything it has.`,
-            `{user}'s drone screams down on {target} and empties its whole battery into them.`,
+            `{user}'s drone screams down on {target} and empties its whole battery into {target.them}.`,
             `{user} sends the drone into a kamikaze dive that pulls up just before it hits, firing into {target}'s face the whole time.`,
             `{user}'s drone locks on and holds the beam steady on {target} until it smokes.`,
             `{user}'s drone fires so hard it gets thrown backward through the air. {target} gets thrown farther.`,
@@ -164,14 +164,14 @@ export const WEAPON_HITS = {
             `{user} strums a quick chord, and the shockwave barely ruffles {target}.`,
             `{user} hits a flat note that only rattles {target}'s helmet.`,
             `{user} plays a short riff, and a weak pulse tickles {target}'s armor.`,
-            `{user} plucks one string at {target}. It twangs. They flinch. That's about it.`,
+            `{user} plucks one string at {target}. It twangs. {target} flinches. That's about it.`,
             `{user}'s chord wobbles out of tune, and the blast only grazes {target}.`,
             `{user} slaps the strings, and a little burst of sound clips {target}.`
         ],
         medium: [
             `{user} hits a chord, and the shockwave rattles {target} right down to the boots.`,
             `{user} rips a riff that slams into {target} like an amp falling over.`,
-            `{user} bends a note until it screams, and {target} grabs their head.`,
+            `{user} bends a note until it screams, and {target} grabs {target.their} head.`,
             `{user} plays a fast run that hammers {target} with wave after wave of sound.`,
             `{user} strikes a power chord, and {target} gets knocked back a step.`,
             `{user} turns the dial up and lets {target} have the chorus.`
@@ -189,21 +189,21 @@ export const WEAPON_HITS = {
         low: [
             `{user} flicks a wisp of energy at {target} that leaves a faint scorch.`,
             `{user}'s bolt glances off {target}'s armor in a shower of sparks.`,
-            `{user} throws a small burst of light that stings {target} without slowing them.`,
+            `{user} throws a small burst of light that stings {target} without slowing {target.them}.`,
             `{user} grazes {target} with a quick spark from her fingers.`,
-            `{user}'s energy brushes past {target}, hot enough to make them flinch.`,
+            `{user}'s energy brushes past {target}, hot enough to make {target.them} flinch.`,
             `{user} sends a cautious little bolt at {target}, aiming more to warn than to hurt.`
         ],
         medium: [
             `{user} hurls a bolt of energy that slams into {target}'s chest.`,
-            `{user} pushes a wave of light into {target}, knocking them off balance.`,
+            `{user} pushes a wave of light into {target}, knocking {target.them} off balance.`,
             `{user} fires a steady stream of energy that burns into {target}'s guard.`,
             `{user} spins her staff and launches a crackling burst into {target}.`,
             `{user} lets fly with two quick bolts. Both of them find {target}.`,
-            `{user} catches {target} with a bright blast that sends them stumbling.`
+            `{user} catches {target} with a bright blast that sends {target.them} stumbling.`
         ],
         high: [
-            `{user} gathers everything she has and blasts {target} off their feet.`,
+            `{user} gathers everything she has and blasts {target} off {target.their} feet.`,
             `{user} unleashes a torrent of energy that hammers {target} into the ground.`,
             `{user} brings her staff down, and a column of light crashes onto {target}.`,
             `{user} sets her jaw and fires a beam that tears straight through {target}'s defenses.`,
@@ -213,27 +213,27 @@ export const WEAPON_HITS = {
     },
     Laptop: { // Ghost Shell
         low: [
-            `{user} pushes a cheap exploit into {target}'s gear, and their visor flickers.`,
+            `{user} pushes a cheap exploit into {target}'s gear, and {target.their} visor flickers.`,
             `{user} types a quick line, and {target}'s armor gives off a weak little shock.`,
-            `{user} pings {target}'s implants just to annoy them. It works.`,
-            `{user} sends a minor virus at {target}, and their gear stutters for a moment.`,
-            `{user} hacks {target}'s comms and blasts static into their ears.`,
-            `{user} trips a fault in {target}'s gear. Their whole suit hiccups.`
+            `{user} pings {target}'s implants just to annoy {target.them}. It works.`,
+            `{user} sends a minor virus at {target}, and {target.their} gear stutters for a moment.`,
+            `{user} hacks {target}'s comms and blasts static into {target.their} ears.`,
+            `{user} trips a fault in {target}'s gear. {target.their} whole suit hiccups.`
         ],
         medium: [
             `{user} types fast, and something in {target}'s gear sparks and pops.`,
-            `{user} overloads {target}'s armor, and it shocks them from the inside.`,
-            `{user} fires a burst of code at {target}, and their limbs jerk out of sync.`,
-            `{user} hijacks {target}'s targeting and makes them punch themselves in the visor.`,
-            `{user} overheats {target}'s power pack until it burns them through the armor.`,
-            `{user} hits enter, and {target}'s gear turns on them with a vicious jolt.`
+            `{user} overloads {target}'s armor, and it shocks {target.them} from the inside.`,
+            `{user} fires a burst of code at {target}, and {target.their} limbs jerk out of sync.`,
+            `{user} hijacks {target}'s targeting and makes {target.them} punch {target.self} in the visor.`,
+            `{user} overheats {target}'s power pack until it burns {target.them} through the armor.`,
+            `{user} hits enter, and {target}'s gear turns on {target.them} with a vicious jolt.`
         ],
         high: [
-            `{user} cracks {target}'s security wide open and fries every system they're wearing.`,
+            `{user} cracks {target}'s security wide open and fries every system in {target.their} gear.`,
             `{user} tells {target}'s power core to explode, and it tries its absolute best.`,
-            `{user} slams a whole library of viruses into {target}, and their suit goes haywire.`,
+            `{user} slams a whole library of viruses into {target}, and {target.their} suit goes haywire.`,
             `{user} finds a backdoor into {target}'s implants and turns everything up to eleven.`,
-            `{user} bricks {target}'s armor while they're still wearing it, and it locks up hard.`,
+            `{user} bricks {target}'s armor from the inside, and it locks up hard.`,
             `{user} hits one last key with a flourish. {target}'s gear shorts out in a shower of sparks.`
         ]
     },
@@ -253,7 +253,7 @@ export const WEAPON_HITS = {
             `{user} brings the baton down on {target}, and the current makes {target.their} knees buckle.`
         ],
         high: [
-            `{user} cranks the baton to full charge and slams it into {target}. They go rigid.`,
+            `{user} cranks the baton to full charge and slams it into {target}. {target} goes rigid.`,
             `{user} swings the baton with both hands and lights {target} up like a fuse box.`,
             `{user} jams the baton under {target}'s guard and dumps the whole battery into {target.them}.`,
             `{user} catches {target} across the head with the baton, and the street flashes blue.`
@@ -267,7 +267,7 @@ export const WEAPON_HITS = {
             `{user} chirps and fires, and the pulse nicks {target}'s arm.`
         ],
         medium: [
-            `{user} hovers steady and pumps three pulses into {target}.`,
+            `{user} holds steady in the air and fires three pulses into {target}.`,
             `{user}'s carbine catches {target} in the shoulder with a thudding blast.`,
             `{user} swoops low and strafes {target} with a burst of fire.`,
             `{user} locks on with a beep, and the pulse slams into {target}'s chest.`

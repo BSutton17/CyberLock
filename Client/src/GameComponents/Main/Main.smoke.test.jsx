@@ -338,6 +338,18 @@ describe('Main (combat)', () => {
     await waitFor(() => expect(document.querySelector('.ai-text').textContent).toBe('Leo ducks under the baton.'), { timeout: 3000 });
   });
 
+  it('keeps even a one-word sentence on screen for two seconds before the next sentence', async () => {
+    const socket = createFakeSocket();
+    render(<Harness socket={socket} serverStoryState={storyInProgress} initialCombat={fightSnapshot()} />);
+    const shown = () => document.querySelector('.ai-text').textContent;
+    // The sentence starts appearing the moment it arrives.
+    const appearedAt = Date.now();
+    act(() => socket.serverSends('combat_narration', { text: 'Good. Shipment answers with a shoulder.' }));
+    await waitFor(() => expect(shown()).toBe('Good.'), { timeout: 2000 });
+    await waitFor(() => expect(shown()).not.toBe('Good.'), { timeout: 5000 });
+    expect(Date.now() - appearedAt).toBeGreaterThanOrEqual(1950);
+  }, 10000);
+
   it('holds each narration at least two seconds, then a second more to read, before the next one', async () => {
     const socket = createFakeSocket();
     render(<Harness socket={socket} serverStoryState={storyInProgress} initialCombat={fightSnapshot()} />);

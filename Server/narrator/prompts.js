@@ -44,6 +44,18 @@ FIGHTS
 - Make it clear who is winning, and let it flip.
 - Powers and weapons are described by what they physically do, not by their game names.
 
+GRAMMAR AND CONTINUITY
+- Natural English, not an event log. Combine closely related actions ("the captain steps in and
+  swings"); don't open sentence after sentence with the same name.
+- Once someone is the subject, the next sentence can use he / she / they / it, but only when it
+  can't be confused with anyone else just mentioned. Clarity beats variety: repeat a name if two
+  people share a pronoun. Use the pronouns listed with each party member; drones are "it".
+- Articles follow the count. Several of one kind: "an Enforcer Drone", "one of the drones",
+  "another drone". One left: "the drone", "the last drone". Never "the drone" when several are
+  there and none has been pointed out.
+- Keep present tense, and keep each person or enemy the same individual from sentence to
+  sentence. Describe only what actually happened.
+
 NEVER
 - Never use these words or phrases: neon-soaked, neon-drenched, neon-lit, the air crackles,
   electric tension, palpable, tapestry, symphony, dance of, testament to, shrouded, embark, delve,

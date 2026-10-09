@@ -138,10 +138,12 @@ export function createCombatController({
   function displayMs(text) {
     const sentences = String(text || '').trim().split(/(?<=[.!?])\s+|\n+/).filter(Boolean);
     if (sentences.length === 0) return 0;
-    const typing = sentences.reduce((total, sentence, index) =>
-      total + sentence.length * (timing.narrationCharMs || 0)
-        + (index < sentences.length - 1 ? sentence.length * (timing.narrationSentenceGapCharMs || 0) : 0), 0);
-    return Math.max(typing, timing.narrationMinDisplayMs || 0) + (timing.narrationReadPauseMs || 0) + (timing.narrationSlackMs || 0);
+    // Each sentence is on screen at least the minimum (even "Good."), then the narration's pause.
+    const onScreen = sentences.reduce((total, sentence, index) => total + Math.max(
+      timing.narrationMinDisplayMs || 0,
+      sentence.length * (timing.narrationCharMs || 0) + (index < sentences.length - 1 ? sentence.length * (timing.narrationSentenceGapCharMs || 0) : 0)
+    ), 0);
+    return onScreen + (timing.narrationReadPauseMs || 0) + (timing.narrationSlackMs || 0);
   }
 
   // Narrates one turn: a sentence for each thing that happened, sent a moment after it happened.
@@ -149,7 +151,8 @@ export function createCombatController({
   function narrate(room, actorId, beats = [], summary = []) {
     const combat = state.combat[room];
     if (!combat) return;
-    const memory = ((state.combatLineMemory ||= {})[room] ||= new Set());
+    // Per room: lines used lately, and which enemy the last narration ended on.
+    const memory = ((state.combatLineMemory ||= {})[room] ||= { recent: new Set(), carried: null });
     const text = lines.narrateTurn(beats, { memory }) || flavorCombatLog(summary, buildNarratorContext(room), random);
     if (!text) return;
 

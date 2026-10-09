@@ -39,7 +39,7 @@ export const ABILITY_LINES = {
         `{user} drives a quick strike into {target}, cracking the armor at the seam.`,
         `{user} jabs {target} hard enough to knock a plate loose.`,
         `{user} punches straight through {target}'s defenses and leaves a gap behind.`,
-        `{user} catches {target} with a blunt, efficient strike. Their guard isn't what it was.`,
+        `{user} catches {target} with a blunt, efficient strike. {target.their} guard isn't what it was.`,
         `{user} feints high and drills {target} low, right where the armor's thinnest.`,
         `{user} raps {target} twice in the same spot, and the second hit goes through.`,
         `{user} steps in and jabs {target} in the chest, nothing fancy, just enough to open {target.them} up.`
@@ -252,7 +252,7 @@ export const ABILITY_LINES = {
         `{user} conjures a torrent of freezing water that crashes over {target}.`,
         `{user} blasts {target} with a frosty surge, and {target} slows to a crawl.`,
         `{user} buries {target} in a wave of glittering ice.`,
-        `{user} throws both hands forward, and {target} disappears in a burst of frost. They come out of it moving like molasses.`,
+        `{user} throws both hands forward, and {target} disappears in a burst of frost. {target} comes out of it moving like molasses.`,
         `{user} breathes out a stream of cold that turns {target}'s armor white.`,
         `{user} drowns {target} in ice water that freezes the moment it touches {target.them}.`
     ],
@@ -313,7 +313,7 @@ export const ABILITY_LINES = {
         `{user} opens a swirling black hole, and suddenly the fight has a center of gravity.`,
         `{user} conjures an inky void that pulls in everything around it and doesn't let go.`,
         `{user} closes a fist, and a pinprick of black swells into a whirlpool that swallows the enemy line.`,
-        `{user} drops a spiral of darkness into the middle of the enemies. They slide toward it, clawing at the pavement.`,
+        `{user} drops a spiral of darkness into the middle of the enemies. Every one of them slides toward it, clawing at the pavement.`,
         `{user} bends space until it breaks, and every enemy nearby gets sucked into the crack.`
     ],
 
@@ -364,7 +364,7 @@ export const ABILITY_LINES = {
         `{user} rallies the fighters, and their grips tighten on their weapons.`,
         `{user} fires up the front line with a few hard words and a harder look.`,
         `{user} sends a surge of fighting spirit through every brawler in the party.`,
-        `{user} reminds the fighters exactly why they're here. They swing harder after that.`,
+        `{user} reminds the fighters exactly why they're here. The fighters swing harder after that.`,
         `{user} claps twice and points at the enemy. The party's muscle takes it personally.`,
         `{user} yells something rude about the enemy's mother, and the fighters laugh and hit harder.`
     ],
@@ -466,7 +466,7 @@ export const ABILITY_LINES = {
         `{user} lets loose a burst, and the whole enemy line flickers and goes dark.`,
         `{user} slams a palm onto a homemade device. A heartbeat later, every enemy's gear goes dead in their hands.`,
         `{user} overloads a power cell and throws it. The flash knocks out every enemy system on the street.`,
-        `{user} cuts the power to everything the enemy owns. Their screens go black and their weapons go quiet.`
+        `{user} cuts the power to everything the enemy owns. Every screen over there goes black, and every weapon goes quiet.`
     ],
     love_galore: [
         `{user} opens up, and a flood of warm light washes over the whole party.`,

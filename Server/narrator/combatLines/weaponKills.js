@@ -659,7 +659,7 @@ export const WEAPON_KILLS = {
             `{user} fires, and {victim} falls in a shower of sparks right at her feet.`
         ],
         rebel_initiate: [
-            `{user} knocks {victim} down as gently as she can. "Stay down," she says. They do.`,
+            `{user} knocks {victim} down as gently as she can. "Stay down," she says. {victim} does.`,
             `{user} sends a soft bolt into {victim} that's still enough to end it.`,
             `{user} blasts the scrap blade out of {victim}'s hand, and the kid sinks to the ground without it.`
         ],

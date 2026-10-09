@@ -235,7 +235,7 @@ export const STRIKE_FINAL_BLOWS = {
         ],
         rebel_initiate: [
             `{user} plants a short jab in {victim}'s stomach. The kid's breath goes out, and the rest of them follows it down.`,
-            `{user} knocks {victim}'s guard aside with one punch and taps them with the next. They don't get up.`
+            `{user} knocks {victim}'s guard aside with one punch and taps them with the next. {victim} doesn't get up.`
         ],
         rebel_field_tech: [
             `{user} jabs {victim} square in the battery pack strapped to their chest. It dies with a whine, and so does the fight.`,

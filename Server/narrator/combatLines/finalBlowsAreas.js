@@ -14,7 +14,7 @@ export const AREA_FINAL_BLOWS = {
         ],
         rebel_initiate: [
             `{victim} slashes at {user} with everything they've got, and it all comes right back at them. The kid drops the blade and the fight at once.`,
-            `{victim} lunges at {user}, and their own swing knocks them flat. They lie there, staring at the sky, confused.`
+            `{victim} lunges at {user}, and their own swing knocks them flat. {victim} lies there, staring at the sky, confused.`
         ],
         rebel_field_tech: [
             `{victim} fires the arc launcher at {user}, and the bolt bends back and finds its way home. The field tech goes down sizzling.`,

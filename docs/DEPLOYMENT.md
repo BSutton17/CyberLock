@@ -128,15 +128,13 @@ When you want the best narration:
    heroku config:set AI_PROVIDER=anthropic ANTHROPIC_API_KEY=your-key -a cs-capstone
    ```
 
-Defaults use Claude Sonnet 5.5 for both story beats and combat lines. To cut costs, use Claude
-Haiku 4.5 for the short combat lines:
+Story beats use Claude Sonnet 5.5. Fights never call the AI at all: combat is narrated from the
+game's own hand-written lines, so a fight costs nothing. The in-game rules helper can use the
+cheaper Claude Haiku 4.5:
 
 ```bash
 heroku config:set ANTHROPIC_COMBAT_MODEL=claude-haiku-4-5 -a cs-capstone
 ```
-
-Routine combat turns never call the AI (the game's own text is used); only notable moments do, at
-most `AI_COMBAT_LINES_PER_MINUTE` (default 6) per minute.
 
 ## 6. Smoke test after deploying
 

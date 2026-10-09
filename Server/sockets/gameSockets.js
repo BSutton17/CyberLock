@@ -32,7 +32,8 @@ export function createGameState() {
     sockets: {},            // room -> { playerName: Set(socketId) }
     pendingDisconnects: {}, // room -> { playerName: timeoutId }
     combatTimers: {},       // room -> the fight's next scheduled step
-    combatNarration: {},    // room -> Promise chain, so combat lines arrive in order
+    narrationTimers: {},    // room -> pending combat narration timers
+    combatLineMemory: {},   // room -> combat lines used lately, so they don't repeat
     dialogueTimers: {},     // room -> timer that closes an unanswered personal moment
     storyQueues: {},        // room -> Promise chain, so story events run one at a time
     seenAiRequests: new Map()

@@ -39,11 +39,11 @@ export function createProvider(aiConfig, { logger = console } = {}) {
     }
   } catch (error) {
     logger.warn(`[AI] ${error.message}. Falling back to the offline mock narrator.`);
-    return createMockProvider({ delayMs: aiConfig.mockDelayMs, combatDelayMs: aiConfig.mockCombatDelayMs });
+    return createMockProvider({ delayMs: aiConfig.mockDelayMs });
   }
 
   if (provider !== 'mock') {
     logger.warn(`[AI] Unknown AI_PROVIDER "${provider}". Using the offline mock narrator.`);
   }
-  return createMockProvider({ delayMs: aiConfig.mockDelayMs, combatDelayMs: aiConfig.mockCombatDelayMs });
+  return createMockProvider({ delayMs: aiConfig.mockDelayMs });
 }

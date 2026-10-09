@@ -1,5 +1,6 @@
-// Claude via the official SDK. Story beats use the story model at medium effort; combat lines and
-// rules help use the combat model at low effort. The system prompt is cached between calls.
+// Claude via the official SDK. Story beats use the story model at medium effort; anything else
+// (the rules helper) uses the quicker model at low effort. Combat is never sent here: fights are
+// narrated from hand-written lines (narrator/combatLines). The system prompt is cached between calls.
 import Anthropic from '@anthropic-ai/sdk';
 
 const EFFORT_BY_KIND = { story: 'medium', combat: 'low', rules: 'low' };

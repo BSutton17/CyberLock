@@ -1,13 +1,11 @@
 // The narrator: turns game events into narration, decisions and scene changes.
 // The game decides structure (when a fight starts, who owns a decision, where fights happen);
 // the model writes the words. Every path has a pre-written fallback so the game never stalls.
-import { flavorCombatLog, scrubNumbers } from './combatFlavor.js';
 import {
   STORY_SYSTEM_PROMPT,
   RULES_SYSTEM_PROMPT,
   buildStateBlock,
   STORY_RESPONSE_SCHEMA,
-  COMBAT_RESPONSE_SCHEMA,
   RULES_RESPONSE_SCHEMA
 } from './prompts.js';
 import { CHARACTERS, BOSSES, OPENING_SCENES, VALID_LOCATIONS, LOCATIONS, DECISION_ATTRIBUTES } from './lore.js';
@@ -98,17 +96,6 @@ export function cleanNarration(text, maxChars = MAX_STORY_CHARS) {
   return cleaned;
 }
 
-export function limitSentences(text, maxSentences, maxWords) {
-  const sentences = splitSentences(text).slice(0, maxSentences);
-  let result = sentences.join(' ');
-  const words = result.split(/\s+/).filter(Boolean);
-  if (words.length > maxWords) {
-    result = words.slice(0, maxWords).join(' ').replace(/[,;:]+$/, '');
-    if (!/[.!?]$/.test(result)) result += '.';
-  }
-  return result;
-}
-
 export function cleanOptions(options, count = 2) {
   if (!Array.isArray(options)) return [];
   return options
@@ -153,24 +140,6 @@ export function findOutsiderNames(text, party = []) {
 const stripSentencesMentioning = (text, names) =>
   splitSentences(text).filter(sentence => !names.some(name => sentence.includes(name))).join(' ');
 
-// "Leo's turn ends: Leo strikes X for 12.0 damage." -> "Leo strikes X for 12 damage."
-export function tidyCombatSummary(text) {
-  return String(text || '')
-    .replace(/^[^:]{1,60}'s turn ends:\s*/i, '')
-    .replace(/(\d+)\.\d+/g, '$1')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-const NOTABLE_COMBAT_PATTERN = /defeat|falls|fallen|killed|\bdies\b|\bdown\b|ultimate|unleash|casts|\buses\b|activates|heal|reflect|black hole|teleport|curse|burn|poison|freez|immobil/i;
-
-export function isNotableTurn(message, data = {}, enemies = []) {
-  const text = [message, ...(Array.isArray(data?.summaries) ? data.summaries : [])].join(' ');
-  if (NOTABLE_COMBAT_PATTERN.test(text)) return true;
-  const actor = String(data?.actor || '');
-  return enemies.some(enemy => enemy?.name === actor && (enemy.tier === 'boss' || enemy.tier === 'mini-boss'));
-}
-
 // ---------------------------------------------------------------------------
 // Narrator
 // ---------------------------------------------------------------------------
@@ -178,7 +147,6 @@ export function isNotableTurn(message, data = {}, enemies = []) {
 export function createNarrator({
   provider,
   decisionsPerInterlude = 2,
-  combatLinesPerMinute = 12,
   logger = console,
   random = Math.random,
   now = Date.now,
@@ -190,7 +158,6 @@ export function createNarrator({
   if (!provider) throw new Error('createNarrator requires a provider');
 
   const sessions = new Map();
-  const combatCallTimes = [];
 
   const getSession = (room) => {
     if (!sessions.has(room)) sessions.set(room, createStorySession());
@@ -609,46 +576,6 @@ export function createNarrator({
     return { response: beat.narration, location: 'shop', attribute: 'banker', startCombat: false, options, fallback: !!beat.fallback };
   }
 
-  async function combatLine(session, context, message, data) {
-    const summary = tidyCombatSummary(message);
-    const lines = Array.isArray(data?.summaries) && data.summaries.length
-      ? data.summaries.map(String)
-      : summary.split(/(?<=[.!?])\s+/).filter(Boolean);
-    // Turns the AI doesn't write still read like a story, never like a damage log.
-    const flavored = () => flavorCombatLog(lines, context, random) || 'The fight grinds on.';
-
-    const recent = combatCallTimes.filter(time => now() - time < 60_000);
-    combatCallTimes.length = 0;
-    combatCallTimes.push(...recent);
-
-    const notable = isNotableTurn(message, data, context.enemies);
-    if (!notable || (!session.useMock && combatCallTimes.length >= combatLinesPerMinute)) {
-      return { response: flavored(), location: null, attribute: null, startCombat: false, options: null, fallback: false };
-    }
-
-    if (!session.useMock) combatCallTimes.push(now());
-    const enemyNames = [...new Set((context.enemies || []).filter(e => !e.isDead).map(e => e.name))];
-    // One sentence per action, two at most for a big moment.
-    const maxSentences = Math.min(4, Math.max(2, lines.length + 1));
-    const content = [
-      `Party: ${partyNames(context).join(', ') || 'unknown'}.`,
-      enemyNames.length ? `Enemies still standing: ${enemyNames.join(', ')}.` : '',
-      `What just happened (game log, ${lines.length} action${lines.length === 1 ? '' : 's'}): ${summary}`,
-      `Write one short sentence per action in the log (two for a big moment like a knockout), never more than ${maxSentences} sentences in all. Blow by blow: the move and how the target answers it. Use the names from the log. Never mention numbers: no damage, healing, health or stat amounts. Return JSON {"narration": "..."}.`
-    ].filter(Boolean).join('\n');
-
-    try {
-      const parsed = await callModel({ session, kind: 'combat', system: STORY_SYSTEM_PROMPT, userContent: content, schema: COMBAT_RESPONSE_SCHEMA, maxTokens: 220, hints: { summary, lines, enemies: context.enemies || [] } });
-      let narration = limitSentences(scrubNumbers(cleanNarration(parsed.narration, 600)), maxSentences, maxSentences * 25);
-      const outsiders = findOutsiderNames(narration, context.party);
-      if (outsiders.length > 0 || !narration) narration = flavored();
-      return { response: narration, location: null, attribute: null, startCombat: false, options: null, fallback: false };
-    } catch (error) {
-      logger.warn?.(`[AI] combat line fell back: ${error.message}`);
-      return { response: flavored(), location: null, attribute: null, startCombat: false, options: null, fallback: true };
-    }
-  }
-
   async function rulesHelp(session, context, message, data) {
     const question = String(message || '').slice(0, 600);
     const rulesContext = buildRulesContext(question, data?.rulesContext);
@@ -743,9 +670,6 @@ export function createNarrator({
       switch (eventType) {
         case 'chat_message':
           return rulesHelp(session, safeContext, message, payload);
-
-        case 'turn_action':
-          return combatLine(session, safeContext, message, payload);
 
         case 'game_start':
           return gameStart(session, safeContext);

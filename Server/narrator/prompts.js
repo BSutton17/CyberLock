@@ -107,7 +107,7 @@ const formatCampaign = () =>
 export const STORY_SYSTEM_PROMPT = `
 You are the game master for CyberLock, a co-op cyberpunk tactics RPG for 1-6 players.
 The game engine runs combat, health, levels and turn order. You write the story around it:
-scene narration, NPC dialogue, the choices the party faces, and short combat commentary.
+scene narration, NPC dialogue and the choices the party faces. Fights narrate themselves.
 
 ${STYLE_GUIDE}
 
@@ -237,15 +237,6 @@ export const STORY_RESPONSE_SCHEMA = {
     memory: { type: 'string', description: 'One sentence recording what happened, for continuity.' }
   },
   required: ['narration', 'options', 'location', 'memory'],
-  additionalProperties: false
-};
-
-export const COMBAT_RESPONSE_SCHEMA = {
-  type: 'object',
-  properties: {
-    narration: { type: 'string', description: 'One or two sentences of combat commentary.' }
-  },
-  required: ['narration'],
   additionalProperties: false
 };
 

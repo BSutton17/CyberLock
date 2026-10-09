@@ -89,6 +89,23 @@ export function effective(ctx, id) {
 const livingPlayerIds = (ctx) => Object.keys(ctx.characters || {}).filter(id => isLiving(ctx.characters[id]));
 const livingEnemies = (ctx) => (ctx.combat.enemies || []).filter(isLiving);
 
+/**
+ * Who a unit is, for the narrator: its name, which line set it uses (a character's id, or the
+ * enemy's template id), its side, and whether it's a boss (bosses go by name, others get "the").
+ */
+export function unitInfo(ctx, id) {
+    const unit = getUnit(ctx, id);
+    if (!unit) return null;
+    const player = isPlayer(ctx, id);
+    return {
+        id,
+        name: unit.name || id,
+        key: player ? unit.id : (unit.templateId || String(unit.id || '').replace(/_\d+$/, '')),
+        side: player ? 'ally' : 'enemy',
+        boss: !player && unit.tier === 'boss'
+    };
+}
+
 // What an ability sees as "the other side" and "my side", from the caster's point of view.
 export function abilityParams(ctx, casterId) {
     const effectivePlayers = Object.fromEntries(livingPlayerIds(ctx).map(id => [id, { ...effective(ctx, id), id }]));
@@ -152,10 +169,34 @@ function emitter() {
     };
 }
 
-function logTurn(ctx, text) {
+/**
+ * Records one thing that happened this turn: the plain text, plus a structured beat the narrator
+ * tells it from ({ kind: 'move' | 'weapon' | 'ability' | 'kill' | 'down', ... }). Anything
+ * without a beat of its own is kept as a 'note' with its text.
+ */
+function logTurn(ctx, text, beat = null) {
     if (!text || !ctx.combat.turn) return;
     ctx.combat.turn.log.push(text);
+    (ctx.combat.turn.beats ||= []).push(beat || { kind: 'note', text });
 }
+
+// What is dealing damage right now (a weapon swing, an ability, a lingering effect), so a kill can
+// be credited to it. Each unit remembers the last thing that hurt it.
+function withStrike(ctx, strike, run) {
+    const previous = ctx.strike;
+    ctx.strike = strike;
+    try {
+        return run();
+    } finally {
+        ctx.strike = previous;
+    }
+}
+
+const weaponStrike = (ctx, actorId) => ({ kind: 'weapon', actorId, weapon: getUnit(ctx, actorId)?.weapon?.name || null });
+const abilityStrike = (actorId, abilityId) => ({ kind: 'ability', actorId, abilityId });
+
+// The ability behind each lingering damage effect.
+const EFFECT_ABILITY = { burn: 'fireball', poison: 'poison_apple', damage_over_time: 'white_phospherus', toxic_mist_field: 'toxic_mist' };
 
 // ---------------------------------------------------------------------------
 // Damage, healing, deaths
@@ -179,7 +220,7 @@ export function applyDamage(ctx, out, { sourceId = null, targetId, amount, refle
         const text = `${target.name} turns the blow back on ${nameOf(ctx, sourceId)}!`;
         out.message(text);
         logTurn(ctx, text);
-        applyDamage(ctx, out, { targetId: sourceId, amount: damage, ignoreKeywords: true });
+        withStrike(ctx, abilityStrike(targetId, 'counter'), () => applyDamage(ctx, out, { targetId: sourceId, amount: damage, ignoreKeywords: true }));
         return 0;
     }
 
@@ -194,6 +235,7 @@ export function applyDamage(ctx, out, { sourceId = null, targetId, amount, refle
         ctx.combat.enemies[index] = withHealth(target, (target.stats.health || 0) - remaining);
     }
 
+    if (ctx.strike) (ctx.lastStrikeOn ||= {})[targetId] = ctx.strike;
     out.push({ type: 'damage', targetId, amount: damage });
     return damage;
 }
@@ -231,7 +273,8 @@ export function resolveDeaths(ctx, out) {
         fallen.push(enemy.id);
         const text = `${enemy.name} falls.`;
         out.message(text);
-        logTurn(ctx, text);
+        const strike = ctx.lastStrikeOn?.[enemy.id];
+        logTurn(ctx, text, { kind: 'kill', victim: unitInfo(ctx, enemy.id), strike: strike ? { ...strike, actor: unitInfo(ctx, strike.actorId) } : null });
         out.push({ type: 'death', unitId: enemy.id });
         return markEnemyAsCorpse(enemy);
     });
@@ -244,7 +287,7 @@ export function resolveDeaths(ctx, out) {
         fallen.push(id);
         const text = `${ctx.characters[id].name} goes down.`;
         out.message(text);
-        logTurn(ctx, text);
+        logTurn(ctx, text, { kind: 'down', victim: unitInfo(ctx, id) });
         out.push({ type: 'death', unitId: id });
     });
 
@@ -370,7 +413,8 @@ export function beginTurn(ctx) {
             usedAbility: false,
             startPosition: ctx.combat.positions[entry.id] ? { ...ctx.combat.positions[entry.id] } : null,
             actorDied: false,
-            log: []
+            log: [],
+            beats: []
         }
         : null;
     return ctx.combat.turn;
@@ -401,13 +445,16 @@ function tickEffects(ctx, out, ownerId) {
                 applyHealing(ctx, out, effect.target, effect.amount);
                 break;
             case 'burn':
-                applyDamage(ctx, out, { targetId: effect.target, amount: Math.floor((target.stats.health || 0) * (effect.damagePercent || 0)), minimumDamage: 1 });
+                withStrike(ctx, abilityStrike(effect.ownerTurnId, EFFECT_ABILITY.burn), () =>
+                    applyDamage(ctx, out, { targetId: effect.target, amount: Math.floor((target.stats.health || 0) * (effect.damagePercent || 0)), minimumDamage: 1 }));
                 break;
             case 'poison':
-                applyDamage(ctx, out, { targetId: effect.target, amount: Math.floor(maxHealthOf(target) * (effect.damagePercent || 0)), minimumDamage: 1 });
+                withStrike(ctx, abilityStrike(effect.ownerTurnId, EFFECT_ABILITY.poison), () =>
+                    applyDamage(ctx, out, { targetId: effect.target, amount: Math.floor(maxHealthOf(target) * (effect.damagePercent || 0)), minimumDamage: 1 }));
                 break;
             case 'damage_over_time':
-                applyDamage(ctx, out, { targetId: effect.target, amount: effect.amount || 0, minimumDamage: 1 });
+                withStrike(ctx, abilityStrike(effect.ownerTurnId, EFFECT_ABILITY.damage_over_time), () =>
+                    applyDamage(ctx, out, { targetId: effect.target, amount: effect.amount || 0, minimumDamage: 1 }));
                 break;
             case 'healing_field':
                 // Whoever is standing in the field right now, not whoever was there when it was cast.
@@ -418,7 +465,8 @@ function tickEffects(ctx, out, ownerId) {
                 break;
             case 'toxic_mist_field':
                 unitsInZone(ctx, effect, { helpful: false }).forEach(id => {
-                    const dealt = applyDamage(ctx, out, { targetId: id, amount: effect.amount || 0, minimumDamage: 1 });
+                    const dealt = withStrike(ctx, abilityStrike(effect.ownerTurnId, EFFECT_ABILITY.toxic_mist_field), () =>
+                        applyDamage(ctx, out, { targetId: id, amount: effect.amount || 0, minimumDamage: 1 }));
                     if (dealt > 0) logTurn(ctx, `${nameOf(ctx, id)} chokes in the toxic mist for ${dealt} damage.`);
                 });
                 break;
@@ -453,12 +501,7 @@ function unitsInZone(ctx, zone, { helpful }) {
 export function finishTurn(ctx) {
     const out = emitter();
     const turn = ctx.combat.turn;
-    if (!turn) return { events: out.events, summary: [] };
-
-    if (turn.type === 'ally' && !turn.actionUsed && !turn.usedAbility && turn.startPosition) {
-        const now = ctx.combat.positions[turn.id];
-        if (now && !samePosition(now, turn.startPosition)) logTurn(ctx, `${nameOf(ctx, turn.id)} repositions.`);
-    }
+    if (!turn) return { events: out.events, summary: [], beats: [] };
 
     if (getUnit(ctx, turn.id)) {
         setCooldowns(ctx, turn.id, tickCooldowns(cooldownsOf(ctx, turn.id)));
@@ -472,7 +515,55 @@ export function finishTurn(ctx) {
     tickEffects(ctx, out, turn.id);
     resolveDeaths(ctx, out);
     turn.finished = true;
-    return { events: out.events, summary: [...turn.log] };
+    return { events: out.events, summary: [...turn.log], beats: [...(turn.beats || [])] };
+}
+
+/**
+ * Logs a move. Several steps in a row by the same unit read as one move, from where it started.
+ */
+function logMove(ctx, id, from, to) {
+    const turn = ctx.combat.turn;
+    if (!turn) return;
+    const beats = turn.beats || [];
+    const last = beats[beats.length - 1];
+    if (last?.kind === 'move' && last.actor?.id === id) {
+        beats[beats.length - 1] = moveBeat(ctx, id, last.from, to);
+        return;
+    }
+    logTurn(ctx, `${nameOf(ctx, id)} moves.`, moveBeat(ctx, id, from, to));
+}
+
+/**
+ * A move, told by where it went: closer to the nearest foe
+ * ('advance'), away from the foe that was nearest ('retreat'), or toward a teammate ('regroup').
+ */
+export function moveBeat(ctx, id, from, to) {
+    const at = (unitId) => ctx.combat.positions[unitId];
+    const player = isPlayer(ctx, id);
+    const foes = (player ? livingEnemies(ctx).map(enemy => enemy.id) : livingPlayerIds(ctx)).filter(at);
+    const friends = (player ? livingPlayerIds(ctx) : livingEnemies(ctx).map(enemy => enemy.id)).filter(other => other !== id && at(other));
+    const nearest = (pos, ids) => ids.reduce((best, other) => {
+        const d = distance(pos, at(other));
+        return !best || d < best.d ? { id: other, d } : best;
+    }, null);
+
+    const beat = (direction, otherId) => ({ kind: 'move', actor: unitInfo(ctx, id), from: { ...from }, direction, other: otherId ? unitInfo(ctx, otherId) : null });
+    const foeNow = nearest(to, foes);
+    if (foeNow && distance(from, at(foeNow.id)) > foeNow.d) return beat('advance', foeNow.id);
+    const foeBefore = nearest(from, foes);
+    if (foeBefore && distance(to, at(foeBefore.id)) > foeBefore.d) return beat('retreat', foeBefore.id);
+
+    let closest = null;
+    let gained = 0;
+    for (const friend of friends) {
+        const gain = distance(from, at(friend)) - distance(to, at(friend));
+        if (gain > gained) {
+            gained = gain;
+            closest = friend;
+        }
+    }
+    if (closest) return beat('regroup', closest);
+    return foeNow ? beat('advance', foeNow.id) : beat('regroup', null);
 }
 
 // ---------------------------------------------------------------------------
@@ -532,7 +623,20 @@ export function movePlayer(ctx, playerId, to) {
     ctx.combat.positions[playerId] = { row: to.row, col: to.col };
     ctx.combat.turn.movementUsed += path.length;
     dropGtgMarkers(ctx, playerId);
+    logMove(ctx, playerId, start, to);
     return { ok: true, events: [{ type: 'move', unitId: playerId, path }] };
+}
+
+// A weapon hit, with how big it was next to the target's max health (the narrator never says numbers).
+function weaponBeat(ctx, actorId, targetId, dealt) {
+    const target = getUnit(ctx, targetId);
+    return {
+        kind: 'weapon',
+        actor: unitInfo(ctx, actorId),
+        target: unitInfo(ctx, targetId),
+        weapon: getUnit(ctx, actorId)?.weapon?.name || null,
+        share: dealt / Math.max(1, target?.stats?.maxHealth || target?.stats?.health || 1)
+    };
 }
 
 export function weaponDamage(attacker, defender) {
@@ -559,11 +663,12 @@ export function attack(ctx, playerId, targetId) {
     const out = emitter();
     const raw = weaponDamage(attacker, effective(ctx, targetId));
     out.push({ type: 'attack', actorId: playerId, targetId });
-    const dealt = applyDamage(ctx, out, { sourceId: playerId, targetId, amount: raw, reflectable: true, minimumDamage: 1 });
+    const dealt = withStrike(ctx, weaponStrike(ctx, playerId), () =>
+        applyDamage(ctx, out, { sourceId: playerId, targetId, amount: raw, reflectable: true, minimumDamage: 1 }));
     if (dealt > 0) {
         const text = `${attacker.name} hits ${enemy.name} with the ${attacker.weapon?.name || 'weapon'} for ${dealt} damage.`;
         out.message(text);
-        logTurn(ctx, text);
+        logTurn(ctx, text, weaponBeat(ctx, playerId, targetId, dealt));
     }
 
     if (turn.extraWeaponAttacks > 0) turn.extraWeaponAttacks -= 1;
@@ -612,6 +717,10 @@ function validateAbilityTarget(ctx, casterId, ability, { targetId, targets, targ
         default:
             return fail('bad_target', 'This ability cannot be used.');
     }
+}
+
+function abilityBeat(ctx, actorId, abilityId, targetId) {
+    return { kind: 'ability', abilityId, actor: unitInfo(ctx, actorId), target: targetId ? unitInfo(ctx, targetId) : null };
 }
 
 export function isBonusAction(ability) {
@@ -670,8 +779,8 @@ export function useAbility(ctx, playerId, intent = {}) {
     const out = emitter();
     out.push({ type: 'ability', actorId: playerId, abilityId, targetId: intent.targetId ?? null, targetPosition: intent.targetPosition ?? null });
     out.message(result.message);
-    logTurn(ctx, result.message);
-    applyAbilityResult(ctx, out, playerId, result);
+    logTurn(ctx, result.message, abilityBeat(ctx, playerId, abilityId, intent.targetId));
+    withStrike(ctx, abilityStrike(playerId, abilityId), () => applyAbilityResult(ctx, out, playerId, result));
     resolveDeaths(ctx, out);
     return { ok: true, events: out.events };
 }
@@ -767,8 +876,8 @@ export function runEnemyAbilityAndMove(ctx, enemyId, plan) {
             const text = result.message || `${enemy.name} uses ${ability.name}.`;
             out.push({ type: 'ability', actorId: enemyId, abilityId: ability.id, targetId: plan.target || null });
             out.message(text);
-            logTurn(ctx, text);
-            applyAbilityResult(ctx, out, enemyId, result);
+            logTurn(ctx, text, abilityBeat(ctx, enemyId, ability.id, plan.target));
+            withStrike(ctx, abilityStrike(enemyId, ability.id), () => applyAbilityResult(ctx, out, enemyId, result));
             resolveDeaths(ctx, out);
         }
     }
@@ -784,7 +893,7 @@ export function runEnemyAbilityAndMove(ctx, enemyId, plan) {
             dropGtgMarkers(ctx, enemyId);
             const speed = Math.max(1, effective(ctx, enemyId)?.stats?.speed || 0);
             out.push({ type: 'move', unitId: enemyId, path, stepMs: Math.round(Math.max(120, Math.min(600, 10000 / speed))) });
-            if (!plan.useWeapon && !plan.abilityToUse) logTurn(ctx, `${enemy.name} advances.`);
+            logMove(ctx, enemyId, start, plan.movement);
         }
     }
 
@@ -810,12 +919,13 @@ export function runEnemyAttack(ctx, enemyId, plan) {
     const raw = Math.max(1, Math.round((getEnemyWeaponAttackStatValue(attacker) / 10) * (attacker.weapon?.damage || 0) - (defender.stats.resistance || 0) / 10));
 
     out.push({ type: 'attack', actorId: enemyId, targetId });
-    const dealt = applyDamage(ctx, out, { sourceId: enemyId, targetId, amount: raw, reflectable: true, minimumDamage: 0 });
+    const dealt = withStrike(ctx, weaponStrike(ctx, enemyId), () =>
+        applyDamage(ctx, out, { sourceId: enemyId, targetId, amount: raw, reflectable: true, minimumDamage: 0 }));
     const text = dealt > 0
         ? `${enemy.name} hits ${target.name} for ${dealt} damage.`
         : `${enemy.name} attacks ${target.name}, but the hit does nothing.`;
     out.message(text);
-    logTurn(ctx, text);
+    logTurn(ctx, text, dealt > 0 ? weaponBeat(ctx, enemyId, targetId, dealt) : null);
 
     resolveDeaths(ctx, out);
     return { events: out.events };

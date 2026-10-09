@@ -11,8 +11,7 @@ export function createNarratorFromConfig(aiConfig, { logger = console } = {}) {
   return createNarrator({
     provider,
     decisionsPerInterlude: aiConfig.decisionsPerInterlude,
-    combatLinesPerMinute: aiConfig.combatLinesPerMinute,
-    mockProvider: createMockProvider({ delayMs: aiConfig.mockDelayMs, combatDelayMs: aiConfig.mockCombatDelayMs }),
+    mockProvider: createMockProvider({ delayMs: aiConfig.mockDelayMs }),
     logger
   });
 }

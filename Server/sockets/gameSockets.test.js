@@ -398,6 +398,52 @@ describe('combat turns', () => {
     expect((await line).text.length).toBeGreaterThan(0);
   });
 
+  // Narration pacing on for one test: each character takes `charMs` to type, then a pause to read.
+  async function withNarrationPacing(pacing, run) {
+    const saved = { ...testConfig.timing };
+    Object.assign(testConfig.timing, { combatNarrationDelayMs: 0, narrationCharMs: 0, narrationSentenceGapCharMs: 0, narrationSlackMs: 0, ...pacing });
+    try {
+      await run();
+    } finally {
+      for (const key of Object.keys(testConfig.timing)) if (!(key in saved)) delete testConfig.timing[key];
+      Object.assign(testConfig.timing, saved);
+    }
+  }
+
+  it("waits for a turn's narration to be read before starting the next turn", async () => {
+    await withNarrationPacing({ narrationReadPauseMs: 400 }, async () => {
+      const { room, sockets: [a] } = await startFight([enemy('e1', 20)]);
+      const line = waitFor(a, 'combat_narration');
+      const nextTurn = stateWhere(a, snapshot => turnOf(snapshot) === 'e1');
+      a.emit('combat_move', { room, to: { row: 6, col: 1 } });
+      await stateWhere(a, snapshot => snapshot.positions.A.col === 1);
+      a.emit('combat_end_turn', { room });
+      await line;
+      const toldAt = Date.now();
+      await nextTurn;
+      expect(Date.now() - toldAt).toBeGreaterThanOrEqual(350);
+    });
+  });
+
+  it('tells the final blow before the fight ends', async () => {
+    await withNarrationPacing({ narrationReadPauseMs: 400 }, async () => {
+      const { room, sockets: [a] } = await startFight([enemy('e1', 20, 2)]);
+      fight(room).positions.e1 = { row: 5, col: 3 };
+      const order = [];
+      const line = waitFor(a, 'combat_narration').then(payload => { order.push('narration'); return payload; });
+      const ended = waitFor(a, 'combat_ended').then(() => order.push('ended'));
+      expect(await ack(a, 'combat_attack', { room, targetId: 'e1' })).toEqual({ ok: true });
+      // The fight is over: nobody can act while the last lines play out.
+      expect(await ack(a, 'combat_end_turn', { room })).toMatchObject({ ok: false });
+      const { text } = await line;
+      const toldAt = Date.now();
+      await ended;
+      expect(order).toEqual(['narration', 'ended']);
+      expect(Date.now() - toldAt).toBeGreaterThanOrEqual(350);
+      expect(text).toMatch(/e1/);
+    });
+  });
+
   it('declares victory when the last enemy falls and patches the party up', async () => {
     const { room, sockets: [a] } = await startFight([enemy('e1', 20, 2)]);
     game.state.rooms[room].characterSelections.B.stats.health = 5;

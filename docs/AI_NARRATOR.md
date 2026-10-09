@@ -40,10 +40,23 @@ Character names in `lore.js` must match the names players see in `shared/data/ch
   narrator asks the model to rewrite it once, then strips the offending sentences (or uses fallback text).
 - **Fallbacks**: any error or timeout returns pre-written narration with sensible options, so the
   game never stalls on the AI.
-- **Combat budget**: routine turns (moves, plain attacks) are narrated from templates
-  (`combatFlavor.js`: "Patchwork sends the drone zooming at the Enforcer Soldier, landing a solid
-  blow."). Only notable moments (kills, abilities, bosses) go to the model, at most
-  `AI_COMBAT_LINES_PER_MINUTE` per minute, one sentence per action.
+- **Combat never uses the AI**, with or without mock mode, so fights cost no credits. Every turn
+  is told from 2,086 hand-written lines in `Server/narrator/combatLines/`, one sentence per action
+  (a move, a bonus action and a weapon kill make three):
+
+  | Lines | For | Count |
+  |---|---|---|
+  | `movement.js` | Each character and enemy: 4 advancing, 3 retreating, 3 regrouping with a teammate | 270 |
+  | `abilities.js` | Each of the 47 abilities, whoever uses it | 376 |
+  | `finalBlows*.js` | Each damaging ability finishing each enemy (2 each, 16 abilities x 18 enemies) | 576 |
+  | `weaponHits.js` | Each weapon at low, medium and high damage (6 per tier for the party, 4 for enemies) | 378 |
+  | `weaponKills.js` | Each party weapon finishing each enemy (3 each) | 486 |
+
+  The engine records each turn as beats (who moved toward whom, which hits landed and how hard,
+  what scored each kill, including poison and fire that finish someone later), and
+  `combatLines/index.js` picks a line for each, avoiding lines the room heard recently. The next
+  turn waits until the narration has been typed out and read. Tests check every character, enemy,
+  ability and weapon has its full set, and that no line repeats or contains a number.
 - **No numbers**: narration never states damage, healing or stat amounts; anything the model
   slips in is scrubbed. The combat log keeps the numbers.
 - **Busy or out of quota**: a busy model (503) or rate limit (429) is retried twice. A spent quota
@@ -58,9 +71,9 @@ Set `AI_PROVIDER` in `Server/.env` (local) or Heroku config vars:
 
 | Value | Use | Needs |
 |---|---|---|
-| `mock` (default) | Offline play and tests: a story assembled from hand-written pieces (see below), slower combat pacing | Nothing |
+| `mock` (default) | Offline play and tests: a story assembled from hand-written pieces (see below) | Nothing |
 | `gemini` | Free-tier testing with a real model | `GEMINI_API_KEY` (model: `GEMINI_MODEL`, default `gemini-flash-latest`) |
-| `anthropic` | Production quality | `ANTHROPIC_API_KEY` (models: `ANTHROPIC_STORY_MODEL` / `ANTHROPIC_COMBAT_MODEL`, default `claude-sonnet-5-5`) |
+| `anthropic` | Production quality | `ANTHROPIC_API_KEY` (models: `ANTHROPIC_STORY_MODEL` for the story, `ANTHROPIC_COMBAT_MODEL` for the rules helper, default `claude-sonnet-5-5`) |
 | `openai-compatible` | Any other OpenAI-style API (Groq, OpenRouter...) | `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL` |
 
 If a key is missing, the server logs a warning and uses the mock, so it never fails to start.
@@ -70,10 +83,9 @@ If a key is missing, the server logs a warning and uses the mock, so it never fa
 | Setting | Default | Effect |
 |---|---|---|
 | `STORY_DECISIONS_PER_INTERLUDE` | 2 | Decisions between fights (the old Python service used 3) |
-| `AI_COMBAT_LINES_PER_MINUTE` | 6 | Cap on AI-written combat commentary |
 | `AI_TIMEOUT_MS` | 20000 | Give up on a model call and use fallback text |
 | `MOCK_AI_DELAY_MS` | 400 | Fake latency for the offline narrator |
-| `MOCK_AI_COMBAT_DELAY_MS` | 900 | How long after a move the offline narrator's combat line arrives |
+| `COMBAT_NARRATION_DELAY_MS` | 900 | How long after a turn its combat narration arrives (all rooms) |
 
 With `AI_PROVIDER=mock`, combat also runs slower (turn changes, enemy thinking, bot steps) so it can
 be followed without AI latency to pace it. Any timing set explicitly in `.env` still wins.

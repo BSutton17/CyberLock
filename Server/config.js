@@ -49,7 +49,8 @@ export const config = {
     // Thinking depth for Gemini models that support it. Empty string sends nothing.
     geminiReasoningEffort: env.GEMINI_REASONING_EFFORT ?? 'low',
     anthropicApiKey: env.ANTHROPIC_API_KEY || '',
-    // Story beats get the stronger model; quick combat lines can use a cheaper one.
+    // Story beats get the stronger model; the rules helper can use a cheaper one. (The env name is
+    // older than that: combat used to be AI-narrated, and now never is.)
     anthropicStoryModel: env.ANTHROPIC_STORY_MODEL || 'claude-sonnet-5-5',
     anthropicCombatModel: env.ANTHROPIC_COMBAT_MODEL || env.ANTHROPIC_STORY_MODEL || 'claude-sonnet-5-5',
     openAiCompatibleBaseUrl: env.AI_BASE_URL || '',
@@ -58,14 +59,8 @@ export const config = {
     requestTimeoutMs: toInt(env.AI_TIMEOUT_MS, 20000),
     // Fake latency for the offline mock so the UI behaves like it will with a real model.
     mockDelayMs: toInt(env.MOCK_AI_DELAY_MS, 400),
-    // The mock writes combat lines instantly; wait a moment so a line lands after the move it describes.
-    mockCombatDelayMs: toInt(env.MOCK_AI_COMBAT_DELAY_MS, 900),
     // Story decisions between fights before the next fight starts.
-    decisionsPerInterlude: toInt(env.STORY_DECISIONS_PER_INTERLUDE, 3),
-    // Routine combat turns use the game's own summary text; only notable moments go to the AI,
-    // and at most this many per minute (protects free-tier rate limits).
-    // AI-written combat lines per minute; other turns use template narration. Kept low for free tiers.
-    combatLinesPerMinute: toInt(env.AI_COMBAT_LINES_PER_MINUTE, 6)
+    decisionsPerInterlude: toInt(env.STORY_DECISIONS_PER_INTERLUDE, 3)
   },
 
   timing: {
@@ -90,7 +85,16 @@ export const config = {
     // How long a player has to answer a personal moment before their character stays silent.
     dialogueTimeoutMs: toInt(env.DIALOGUE_TIMEOUT_MS, 60000),
     // How long a disconnected player keeps their seat before being removed.
-    disconnectGraceMs: toInt(env.DISCONNECT_GRACE_MS, 60000)
+    disconnectGraceMs: toInt(env.DISCONNECT_GRACE_MS, 60000),
+    // Combat narration (hand-written lines, never the AI) arrives this long after the turn it tells.
+    combatNarrationDelayMs: toInt(env.COMBAT_NARRATION_DELAY_MS ?? env.MOCK_AI_COMBAT_DELAY_MS, 900),
+    // How the client types narration out (Main.jsx): per character, a pause between sentences per
+    // character of the sentence before, and a moment to read the end. The next turn waits for it.
+    narrationCharMs: 20,
+    narrationSentenceGapCharMs: 18,
+    narrationReadPauseMs: 500,
+    // Allowance for the network and a slow phone.
+    narrationSlackMs: 400
   }
 };
 

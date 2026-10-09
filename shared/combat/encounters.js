@@ -165,6 +165,7 @@ export function createEnemyInstance(template, instanceNumber, { level: enemyLeve
         },
         weapon: { ...template.weapon },
         id: `${template.id}_${instanceNumber + 1}`,
+        templateId: template.id,
         isDeadBody: false,
         corpseTurnsRemaining: 0,
         usedAbilityLastTurn: false

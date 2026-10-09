@@ -1,6 +1,7 @@
 // Runs each room's fight on the server. Players send intents; the rules engine (shared/combat)
-// decides what happens; this module paces turns, runs enemies, keeps time limits, narrates,
-// and broadcasts the result to everyone as `combat_state`.
+// decides what happens; this module paces turns, runs enemies, keeps time limits, narrates
+// (hand-written lines, never the AI) and broadcasts the result to everyone as `combat_state`.
+// The next turn waits until the last one's narration has been typed out on screen.
 import * as engine from '../../shared/combat/engine.js';
 import {
   advanceTurn,
@@ -16,6 +17,7 @@ import { generateEnemySpawnPositions, generatePlayerSpawnPositions } from '../ga
 import { isBot } from '../game/bots.js';
 import { chooseStep } from '../../shared/combat/partyAI.js';
 import { flavorCombatLog } from '../narrator/combatFlavor.js';
+import { createCombatNarrator } from '../narrator/combatLines/index.js';
 
 const ENDED_COMBAT_CLEANUP_MS = 5000;
 const DISCONNECTED_TURN_TIMEOUT_MS = 5000;
@@ -29,7 +31,6 @@ export function createCombatController({
   io,
   state,
   timing,
-  narrator = null,
   logger = console,
   buildNarratorContext = () => ({}),
   generateEnemies = generateEncounterEnemies,
@@ -54,6 +55,8 @@ export function createCombatController({
     if (!roomState) return [];
     return roomState.players.filter(player => (roomState.characterSelections?.[player]?.stats?.health || 0) > 0);
   };
+
+  const lines = createCombatNarrator({ random });
 
   const activeCombat = (room) => {
     const combat = state.combat[room];
@@ -129,32 +132,51 @@ export function createCombatController({
     if (snapshot) socket.emit('combat_state', snapshot);
   }
 
-  // Combat commentary runs one line at a time per room so lines arrive in order.
-  function narrate(room, actorId, summary) {
-    if (!summary?.length) return;
-    const roomState = state.rooms[room];
-    const actorName = roomState?.characterSelections?.[actorId]?.name
-      || state.combat[room]?.enemies?.find(enemy => enemy.id === actorId)?.name
-      || actorId;
-    const message = `${actorName}'s turn ends: ${summary.join(' ')}`;
-    // If the narrator is missing or fails, still tell it as a story rather than a damage log.
-    const fallbackText = flavorCombatLog(summary, buildNarratorContext(room), random) || summary.join(' ');
-
-    const previous = state.combatNarration[room] || Promise.resolve();
-    const next = previous.then(async () => {
-      let text = fallbackText;
-      try {
-        const result = narrator
-          ? await narrator.handleEvent({ room, eventType: 'turn_action', message, data: { actor: actorName, summaries: summary }, context: buildNarratorContext(room) })
-          : null;
-        text = result?.response || fallbackText;
-      } catch (error) {
-        logger.warn?.(`[COMBAT] narration failed: ${error.message}`);
-      }
-      if (state.rooms[room]) io.to(room).emit('combat_narration', { actor: actorName, text });
-    });
-    state.combatNarration[room] = next.catch(() => {});
+  // How long the client takes to type `text` out and leave it up to be read (see Main.jsx).
+  function displayMs(text) {
+    const sentences = String(text || '').trim().split(/(?<=[.!?])\s+|\n+/).filter(Boolean);
+    if (sentences.length === 0) return 0;
+    const typing = sentences.reduce((total, sentence, index) =>
+      total + sentence.length * (timing.narrationCharMs || 0)
+        + (index < sentences.length - 1 ? sentence.length * (timing.narrationSentenceGapCharMs || 0) : 0), 0);
+    return typing + (timing.narrationReadPauseMs || 0) + (timing.narrationSlackMs || 0);
   }
+
+  // Narrates one turn: a sentence for each thing that happened, sent a moment after it happened.
+  // Remembers when the narration will be off the screen, so the next turn can wait for it.
+  function narrate(room, actorId, beats = [], summary = []) {
+    const combat = state.combat[room];
+    if (!combat) return;
+    const memory = ((state.combatLineMemory ||= {})[room] ||= new Set());
+    const text = lines.narrateTurn(beats, { memory }) || flavorCombatLog(summary, buildNarratorContext(room), random);
+    if (!text) return;
+
+    const roomState = state.rooms[room];
+    const actor = roomState?.characterSelections?.[actorId]?.name
+      || combat.enemies?.find(enemy => enemy.id === actorId)?.name
+      || actorId;
+    const delayMs = timing.combatNarrationDelayMs || 0;
+    const startAt = Math.max(Date.now(), combat.narrationUntil || 0) + delayMs;
+    combat.narrationUntil = startAt + displayMs(text);
+
+    const send = () => {
+      if (state.rooms[room]) io.to(room).emit('combat_narration', { actor, text });
+    };
+    const waitMs = startAt - Date.now();
+    if (waitMs <= 0) {
+      send();
+      return;
+    }
+    const timer = setTimeout(() => {
+      state.narrationTimers?.[room]?.delete(timer);
+      send();
+    }, waitMs);
+    timer.unref?.();
+    ((state.narrationTimers ||= {})[room] ||= new Set()).add(timer);
+  }
+
+  // Milliseconds until the room's narration has been read.
+  const narrationLeftMs = (room) => Math.max(0, (state.combat[room]?.narrationUntil || 0) - Date.now());
 
   // ---------------------------------------------------------------------------
   // Ending the fight
@@ -216,22 +238,33 @@ export function createCombatController({
     }, ENDED_COMBAT_CLEANUP_MS).unref?.();
   }
 
-  // Ends the fight if one side is gone. Returns true when it ended.
+  // Ends the fight if one side is gone, once the last turn's narration has been read.
+  // Returns true when it ended (or is ending).
   function checkEnd(room) {
     const combat = state.combat[room];
     if (!combat) return true;
-    if (combat.endedResult) return true;
+    if (combat.endedResult || combat.ending) return true;
 
-    if (!(combat.enemies || []).some(isEnemyAlive)) {
-      endCombat(room, 'enemies_defeated');
-      return true;
-    }
+    let result = null;
+    if (!(combat.enemies || []).some(isEnemyAlive)) result = 'enemies_defeated';
     // Disconnected players don't count as dead.
-    if ((state.rooms[room]?.players || []).length > 0 && livingPlayers(room).length === 0) {
-      endCombat(room, 'all_dead');
-      return true;
+    else if ((state.rooms[room]?.players || []).length > 0 && livingPlayers(room).length === 0) result = 'all_dead';
+    if (!result) return false;
+
+    // The turn was cut short by the fight ending: tell what happened in it first.
+    const turn = combat.turn;
+    if (turn && !turn.finished && !turn.narrated) {
+      turn.narrated = true;
+      narrate(room, turn.id, turn.beats || [], turn.log || []);
     }
-    return false;
+    const waitMs = narrationLeftMs(room);
+    if (waitMs <= 0) {
+      endCombat(room, result);
+    } else {
+      combat.ending = result;
+      schedule(room, waitMs, () => endCombat(room, result));
+    }
+    return true;
   }
 
   // ---------------------------------------------------------------------------
@@ -389,18 +422,20 @@ export function createCombatController({
 
     clearTimer(room);
     ctx.combat.turnDeadline = null;
-    const { events, summary } = engine.finishTurn(ctx);
+    const { events, summary, beats } = engine.finishTurn(ctx);
     broadcast(room, events);
-    narrate(room, turn.id, summary);
+    turn.narrated = true;
+    narrate(room, turn.id, beats, summary);
     if (checkEnd(room)) return;
 
+    // Whichever is longer: the usual pause, or the time left to read this turn's narration.
     const pause = delayMs ?? (turn.type === 'ally' ? timing.allyTurnAdvanceDelayMs : (timing.enemyTurnAdvanceDelayMs ?? 0));
-    schedule(room, pause, () => advance(room));
+    schedule(room, Math.max(pause, narrationLeftMs(room)), () => advance(room));
   }
 
   function advance(room) {
     const ctx = contextFor(room);
-    if (!ctx || ctx.combat.endedResult) return;
+    if (!ctx || ctx.combat.endedResult || ctx.combat.ending) return;
     const { combat } = ctx;
     const finished = combat.turn ? { type: combat.turn.type, id: combat.turn.id } : null;
 
@@ -491,6 +526,7 @@ export function createCombatController({
   function handleIntent(room, playerName, kind, payload) {
     const ctx = contextFor(room);
     if (!ctx || ctx.combat.endedResult) return { ok: false, error: 'no_combat', message: 'There is no fight going on.' };
+    if (ctx.combat.ending) return { ok: false, error: 'combat_over', message: 'The fight is over.' };
 
     if (kind === 'end_turn') {
       const allowed = engine.canEndTurn(ctx, playerName);
@@ -560,7 +596,9 @@ export function createCombatController({
 
   function stopRoom(room) {
     clearTimer(room);
-    delete state.combatNarration[room];
+    for (const timer of state.narrationTimers?.[room] || []) clearTimeout(timer);
+    delete state.narrationTimers?.[room];
+    delete state.combatLineMemory?.[room];
   }
 
   return {

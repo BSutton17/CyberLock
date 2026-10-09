@@ -4,10 +4,7 @@ import {
   resolveFaction,
   cleanNarration,
   cleanOptions,
-  limitSentences,
-  tidyCombatSummary,
   findOutsiderNames,
-  isNotableTurn,
   buildRulesContext,
   FACTION_OPTIONS
 } from './storyEngine.js';
@@ -74,26 +71,10 @@ describe('text helpers', () => {
     expect(cleanOptions('nope')).toEqual([]);
   });
 
-  it('limitSentences caps sentences and words', () => {
-    expect(limitSentences('One. Two. Three.', 2, 50)).toBe('One. Two.');
-    expect(limitSentences('a b c d e f', 1, 3)).toBe('a b c.');
-  });
-
-  it('tidyCombatSummary removes the turn prefix and decimal damage', () => {
-    expect(tidyCombatSummary("Leo's turn ends: Leo strikes Enforcer Soldier for 12.0 damage.")).toBe('Leo strikes Enforcer Soldier for 12 damage.');
-  });
-
   it('findOutsiderNames flags characters outside the party, case-sensitively', () => {
     expect(findOutsiderNames('Shipment and Ghost Shell hold the door.', party)).toEqual([]);
     expect(findOutsiderNames('Leo laughs. Aaron Bray reloads.', party)).toEqual(expect.arrayContaining(['Aaron Bray', 'Leo']));
     expect(findOutsiderNames('the true north of the city, a patchwork of streets', party)).toEqual([]);
-  });
-
-  it('isNotableTurn spots kills, abilities and bosses but not plain attacks', () => {
-    expect(isNotableTurn('Leo strikes the drone.', {})).toBe(false);
-    expect(isNotableTurn('Leo uses Flash Step.', {})).toBe(true);
-    expect(isNotableTurn('The drone falls.', {})).toBe(true);
-    expect(isNotableTurn('The Architect moves.', { actor: 'The Architect' }, [{ name: 'The Architect', tier: 'boss' }])).toBe(true);
   });
 
   it('buildRulesContext includes the character and only abilities the question mentions', () => {
@@ -245,55 +226,12 @@ describe('narrator flow', () => {
   });
 });
 
-describe('combat narration', () => {
-  it('narrates routine turns from templates, without the model and without numbers', async () => {
+describe('combat', () => {
+  it('never asks the model to narrate a fight (combat lines are hand-written, see combatLines/)', async () => {
     const provider = scriptedProvider([{ narration: 'should not be used' }]);
-    const narrator = createNarrator({ provider, logger: quietLogger, random: () => 0 });
-    const result = await narrator.handleEvent({
-      room: 'r1',
-      eventType: 'turn_action',
-      message: "Shipment's turn ends: Shipment hits Enforcer Drone with the Hammer for 9 damage.",
-      data: { actor: 'Shipment', summaries: ['Shipment hits Enforcer Drone with the Hammer for 9 damage.'] },
-      context: { ...context(), enemies: [{ name: 'Enforcer Drone', tier: 'generic', isDead: false }] }
-    });
+    const narrator = createNarrator({ provider, logger: quietLogger });
+    await narrator.handleEvent({ room: 'r1', eventType: 'turn_action', message: 'Shipment swings.', context: context() });
     expect(provider.calls).toHaveLength(0);
-    expect(result.response).toBe('Shipment brings the hammer down on the Enforcer Drone, landing a solid blow.');
-  });
-
-  it('asks the model for one sentence per action and strips any numbers it writes', async () => {
-    const provider = scriptedProvider([{ narration: 'Ghost Shell fries every circuit for 40 damage.' }]);
-    const narrator = createNarrator({ provider, logger: quietLogger });
-    const result = await narrator.handleEvent({ room: 'r1', eventType: 'turn_action', message: 'Ghost Shell uses EMP.', context: context() });
-    expect(provider.calls[0].messages[0].content).toMatch(/one short sentence per action/);
-    expect(result.response).toBe('Ghost Shell fries every circuit.');
-  });
-
-  it('asks the model for notable turns and limits it to two short sentences', async () => {
-    const provider = scriptedProvider([{ narration: 'One. Two. Three. Four.' }]);
-    const narrator = createNarrator({ provider, logger: quietLogger });
-    const result = await narrator.handleEvent({ room: 'r1', eventType: 'turn_action', message: 'Ghost Shell uses EMP.', context: context() });
-    expect(provider.calls).toHaveLength(1);
-    expect(provider.calls[0].kind).toBe('combat');
-    expect(result.response).toBe('One. Two.');
-  });
-
-  it('stops calling the model past the per-minute limit', async () => {
-    const provider = scriptedProvider([{ narration: 'AI line.' }]);
-    let clock = 0;
-    const narrator = createNarrator({ provider, logger: quietLogger, combatLinesPerMinute: 2, now: () => clock });
-    for (let i = 0; i < 4; i++) {
-      await narrator.handleEvent({ room: 'r1', eventType: 'turn_action', message: 'Leo uses Flash Step.', context: context() });
-    }
-    expect(provider.calls).toHaveLength(2);
-    clock = 61_000;
-    await narrator.handleEvent({ room: 'r1', eventType: 'turn_action', message: 'Leo uses Flash Step.', context: context() });
-    expect(provider.calls).toHaveLength(3);
-  });
-
-  it('falls back to the game log (minus numbers) if the model mentions an outsider', async () => {
-    const narrator = createNarrator({ provider: scriptedProvider([{ narration: 'Aaron Bray cheers.' }]), logger: quietLogger });
-    const result = await narrator.handleEvent({ room: 'r1', eventType: 'turn_action', message: 'Shipment uses Charge!', context: context() });
-    expect(result.response).toBe('Shipment uses Charge!');
   });
 });
 

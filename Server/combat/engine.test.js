@@ -811,3 +811,54 @@ describe('combatSnapshot', () => {
     expect(JSON.parse(JSON.stringify(snapshot)).enemies).toHaveLength(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// What the narrator is told
+// ---------------------------------------------------------------------------
+
+describe('turn beats for the narrator', () => {
+  const fight = (enemyHealth = 100) => setup({
+    players: { bryson: player('Shipment', { strength: 90 }) },
+    enemies: [{ ...enemy('enforcer_soldier_1', { health: enemyHealth, maxHealth: 100 }), templateId: 'enforcer_soldier', name: 'Enforcer Soldier' }],
+    positions: { bryson: { row: 6, col: 2 }, enforcer_soldier_1: { row: 3, col: 2 } }
+  });
+
+  it('records a move, then the hit, then the kill credited to the weapon, in that order', () => {
+    const ctx = fight(5);
+    expect(movePlayer(ctx, 'bryson', { row: 5, col: 2 }).ok).toBe(true);
+    expect(movePlayer(ctx, 'bryson', { row: 4, col: 2 }).ok).toBe(true);
+    expect(attack(ctx, 'bryson', 'enforcer_soldier_1').ok).toBe(true);
+    const { beats } = finishTurn(ctx);
+
+    expect(beats.map(beat => beat.kind)).toEqual(['move', 'weapon', 'kill']);
+    // Two steps read as one advance toward the soldier, by the character (not the player's name).
+    expect(beats[0]).toMatchObject({ direction: 'advance', actor: { name: 'Shipment', key: 'dps_test' }, other: { key: 'enforcer_soldier' } });
+    expect(beats[1]).toMatchObject({ weapon: 'Blade', target: { name: 'Enforcer Soldier' } });
+    expect(beats[2]).toMatchObject({ victim: { key: 'enforcer_soldier' }, strike: { kind: 'weapon', weapon: 'Blade', actor: { name: 'Shipment' } } });
+  });
+
+  it('tells retreating from regrouping', () => {
+    const ctx = setup({
+      players: { a: player('Leo'), b: player('Patchwork') },
+      enemies: [enemy('e1')],
+      positions: { a: { row: 4, col: 4 }, b: { row: 6, col: 8 }, e1: { row: 3, col: 4 } }
+    });
+    movePlayer(ctx, 'a', { row: 5, col: 4 });
+    expect(finishTurn(ctx).beats[0]).toMatchObject({ direction: 'retreat', other: { id: 'e1' } });
+
+    const ctx2 = setup({
+      players: { a: player('Leo'), b: player('Patchwork') },
+      enemies: [enemy('e1')],
+      positions: { a: { row: 6, col: 1 }, b: { row: 6, col: 8 }, e1: { row: 0, col: 2 } }
+    });
+    movePlayer(ctx2, 'a', { row: 6, col: 3 });
+    expect(finishTurn(ctx2).beats[0]).toMatchObject({ direction: 'regroup', other: { id: 'b' } });
+  });
+
+  it('credits a kill by a lingering effect to the ability behind it', () => {
+    const ctx = fight(3);
+    ctx.combat.activeEffects.push({ type: 'poison', target: 'enforcer_soldier_1', ownerTurnId: 'bryson', damagePercent: 0.5, turnsRemaining: 2 });
+    const { beats } = finishTurn(ctx);
+    expect(beats.find(beat => beat.kind === 'kill')).toMatchObject({ strike: { kind: 'ability', abilityId: 'poison_apple', actor: { name: 'Shipment' } } });
+  });
+});

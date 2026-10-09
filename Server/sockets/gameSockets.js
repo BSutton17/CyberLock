@@ -337,6 +337,7 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
       connectedPlayers: combat.connectedPlayers(room).filter(player => !isBot(roomState, player)),
       partyFaction: roomState?.selectedFaction || null,
       encounterIndex: roomState?.encountersStarted || 0,
+      useMock: !!roomState?.narratorMock,
       enemies: (fight?.enemies || []).map(enemy => ({ name: enemy.name, tier: enemy.tier, isDead: !isEnemyAlive(enemy) }))
     };
   }
@@ -414,6 +415,7 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
       io.to(code).emit('updatePlayerList', roomState.players);
       io.to(code).emit('admin_changed', { admin: roomState.admin });
       emitBots(code, socket);
+      socket.emit('narrator_mode', { mock: !!roomState.narratorMock });
       emitPresence(code);
 
       if (Object.keys(roomState.characterSelections).length > 0) {
@@ -578,6 +580,20 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
       if (!roomState.readyPlayers.includes(me())) roomState.readyPlayers.push(me());
       io.to(room).emit('update_ready_status', roomState.readyPlayers);
       maybeCompleteCharacterSelect(room);
+    });
+
+    // The host can switch the room to the free offline narrator (testing without AI credits).
+    socket.on('set_narrator_mode', ({ room: payloadRoom, mock } = {}, ack) => {
+      const room = currentRoom(payloadRoom);
+      const reply = (payload) => { if (typeof ack === 'function') ack(payload); };
+      if (!room) return reply({ ok: false, message: 'You are not in a game.' });
+      const roomState = state.rooms[room];
+      if (roomState.admin !== me()) return reply({ ok: false, message: 'Only the host can change the narrator.' });
+      roomState.narratorMock = !!mock;
+      narrator?.setMockMode?.(room, roomState.narratorMock);
+      io.to(room).emit('narrator_mode', { mock: roomState.narratorMock });
+      logger.log?.(`[AI] Room ${room} narrator: ${roomState.narratorMock ? 'mock' : narrator?.providerName || 'default'}`);
+      reply({ ok: true, mock: roomState.narratorMock });
     });
 
     // The room's admin can fill empty seats with bots while characters are being picked.

@@ -1,4 +1,5 @@
 import { createProvider } from './providers/index.js';
+import { createMockProvider } from './providers/mock.js';
 import { createNarrator } from './storyEngine.js';
 
 export { createNarrator } from './storyEngine.js';
@@ -11,6 +12,7 @@ export function createNarratorFromConfig(aiConfig, { logger = console } = {}) {
     provider,
     decisionsPerInterlude: aiConfig.decisionsPerInterlude,
     combatLinesPerMinute: aiConfig.combatLinesPerMinute,
+    mockProvider: createMockProvider({ delayMs: aiConfig.mockDelayMs, combatDelayMs: aiConfig.mockCombatDelayMs }),
     logger
   });
 }

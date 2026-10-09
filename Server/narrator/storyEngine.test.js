@@ -297,6 +297,22 @@ describe('combat narration', () => {
   });
 });
 
+describe('mock mode', () => {
+  it('uses the offline narrator for a room switched to mock, and the AI otherwise', async () => {
+    const ai = scriptedProvider([beat()]);
+    const offline = scriptedProvider([beat({ narration: 'Offline words.' })]);
+    const narrator = createNarrator({ provider: ai, mockProvider: offline, logger: quietLogger });
+
+    const mocked = await narrator.handleEvent({ room: 'test', eventType: 'game_start', context: { ...context(), useMock: true } });
+    expect(mocked.response).toBe('Offline words.');
+    expect(ai.calls).toHaveLength(0);
+    expect(narrator.isMockMode('test')).toBe(true);
+
+    await narrator.handleEvent({ room: 'live', eventType: 'game_start', context: { ...context(), useMock: false } });
+    expect(ai.calls).toHaveLength(1);
+  });
+});
+
 describe('rules help', () => {
   it('answers with the rules prompt and remembers the conversation', async () => {
     const provider = scriptedProvider([{ answer: 'Click your weapon.' }, { answer: 'Yes.' }]);

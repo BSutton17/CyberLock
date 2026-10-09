@@ -12,6 +12,7 @@ import CharacterBuilder from "./CharacterBuilder/CharacterBuilder";
 import LevelUp from "./LevelUp/LevelUp.jsx"
 import ChooseAbilities from "./ChooseAbilities/ChooseAbilities.jsx"
 import SettingsMenu from "../Components/SettingsMenu";
+import MockToggle from "../Components/MockToggle";
 import { FaRotate } from "react-icons/fa6";
 
 const getIsMobilePortrait = () => {
@@ -243,6 +244,7 @@ function HomeScreen() {
     <div className="home-screen-container">
       <Events />
       {screen !== 'main' && <SettingsMenu />}
+      <MockToggle inRoom={isJoining} />
       {connectionStatus === 'reconnecting' && (
         <div className="connection-banner" role="status">Connection lost. Reconnecting...</div>
       )}

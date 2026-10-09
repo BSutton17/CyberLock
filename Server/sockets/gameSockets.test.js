@@ -621,6 +621,19 @@ describe('cooldowns between fights', () => {
   });
 });
 
+describe('mock narrator switch', () => {
+  it('lets only the host switch the room to the offline narrator, and tells everyone', async () => {
+    const { room, sockets: [a, b] } = await createRoomWith([['u1', 'A'], ['u2', 'B']]);
+    expect((await ack(b, 'set_narrator_mode', { room, mock: true })).ok).toBe(false);
+
+    const told = waitFor(b, 'narrator_mode', mode => mode.mock === true);
+    expect((await ack(a, 'set_narrator_mode', { room, mock: true })).ok).toBe(true);
+    await told;
+    expect(game.state.rooms[room].narratorMock).toBe(true);
+    expect(game.sockets.buildNarratorContext(room).useMock).toBe(true);
+  });
+});
+
 describe('personal moments', () => {
   it('moves on in silence if the chosen player never answers', async () => {
     const { room, sockets: [a] } = await createRoomWith([['u1', 'A']]);

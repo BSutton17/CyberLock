@@ -1,0 +1,40 @@
+/* Host's mock-narrator switch, tucked into the bottom-left corner on every screen. */
+.mock-toggle {
+    position: fixed;
+    left: 8px;
+    bottom: 8px;
+    z-index: 1100;
+    min-height: 32px;
+    padding: 0 12px;
+    border-radius: 6px;
+    border: 1px solid rgba(167, 139, 250, 0.6);
+    background: rgba(20, 20, 40, 0.85);
+    color: #c4b5fd;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    opacity: 0.85;
+}
+
+.mock-toggle.on {
+    background: #facc15;
+    border-color: #fde68a;
+    color: #1a1400;
+    opacity: 1;
+}
+
+.mock-toggle:disabled {
+    cursor: wait;
+}
+
+.mock-badge {
+    display: flex;
+    align-items: center;
+    cursor: default;
+    background: #facc15;
+    border-color: #fde68a;
+    color: #1a1400;
+    opacity: 0.9;
+}

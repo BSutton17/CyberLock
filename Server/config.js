@@ -29,7 +29,8 @@ export const config = {
 
   // Origins allowed to call the API and open sockets. In development every origin is allowed so
   // phones on the same Wi-Fi can join. In production list your Netlify URL (comma separated).
-  allowedOrigins: toList(env.ALLOWED_ORIGINS),
+  // A trailing slash would never match the browser's Origin header, so it's dropped.
+  allowedOrigins: toList(env.ALLOWED_ORIGINS).map(origin => origin.replace(/\/+$/, '')),
 
   auth: {
     jwtSecret: env.JWT_SECRET || (isProduction ? '' : DEV_JWT_SECRET),

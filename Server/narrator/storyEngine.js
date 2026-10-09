@@ -15,6 +15,7 @@ import { getActFor, getCombatLocation, TOTAL_ENCOUNTERS, BOSS_ENCOUNTERS } from 
 import { chooseDecisionAttribute, getDecisionOwner, normalizeAttribute } from './decisions.js';
 import { FALLBACK_NARRATION, optionsForAttribute } from './fallbacks.js';
 import { parseJsonObject } from './json.js';
+import { createMockProvider } from './providers/mock.js';
 import { createDialogue, publicDialogue, followUpNarration, TONE_EFFECT, attitudeLabel } from './dialogue.js';
 
 export const FACTION_OPTIONS = ['Fight with the Enforcers', 'Fight with the Rebels'];
@@ -182,7 +183,9 @@ export function createNarrator({
   random = Math.random,
   now = Date.now,
   // Personal moments between decisions (see dialogue.js); tests of the decision flow turn them off.
-  personalMoments = true
+  personalMoments = true,
+  // Used by rooms switched to mock mode (testing in production without spending AI credits).
+  mockProvider = createMockProvider()
 } = {}) {
   if (!provider) throw new Error('createNarrator requires a provider');
 
@@ -204,7 +207,11 @@ export function createNarrator({
   const characterNameFor = (playerName, context) =>
     context.party?.find(member => member.playerName === playerName)?.characterName || playerName || 'the party';
 
-  async function callModel({ kind, system, userContent, schema, maxTokens, hints }) {
+  // A room the host switched to "mock" uses the free offline narrator instead of the AI.
+  const providerFor = (session) => (session?.useMock ? mockProvider : provider);
+
+  async function callModel({ session, kind, system, userContent, schema, maxTokens, hints }) {
+    const provider = providerFor(session);
     const started = now();
     const raw = await provider.generate({
       kind,
@@ -243,14 +250,14 @@ export function createNarrator({
       ...hints
     };
 
-    let parsed = await callModel({ kind: 'story', system: STORY_SYSTEM_PROMPT, userContent: baseContent, schema: STORY_RESPONSE_SCHEMA, maxTokens, hints });
+    let parsed = await callModel({ session, kind: 'story', system: STORY_SYSTEM_PROMPT, userContent: baseContent, schema: STORY_RESPONSE_SCHEMA, maxTokens, hints });
     let narration = cleanNarration(parsed.narration, maxChars);
     let outsiders = findOutsiderNames(narration, context.party);
 
     if (outsiders.length > 0) {
       logger.warn?.(`[AI] Narration mentioned characters outside the party (${outsiders.join(', ')}); retrying.`);
       const correction = `${baseContent}\n\nYour previous draft mentioned ${outsiders.join(', ')}, who are NOT in this party. Rewrite it using only the party members listed above.`;
-      parsed = await callModel({ kind: 'story', system: STORY_SYSTEM_PROMPT, userContent: correction, schema: STORY_RESPONSE_SCHEMA, maxTokens, hints });
+      parsed = await callModel({ session, kind: 'story', system: STORY_SYSTEM_PROMPT, userContent: correction, schema: STORY_RESPONSE_SCHEMA, maxTokens, hints });
       narration = cleanNarration(parsed.narration, maxChars);
       outsiders = findOutsiderNames(narration, context.party);
       if (outsiders.length > 0) {
@@ -615,11 +622,11 @@ export function createNarrator({
     combatCallTimes.push(...recent);
 
     const notable = isNotableTurn(message, data, context.enemies);
-    if (!notable || combatCallTimes.length >= combatLinesPerMinute) {
+    if (!notable || (!session.useMock && combatCallTimes.length >= combatLinesPerMinute)) {
       return { response: flavored(), location: null, attribute: null, startCombat: false, options: null, fallback: false };
     }
 
-    combatCallTimes.push(now());
+    if (!session.useMock) combatCallTimes.push(now());
     const enemyNames = [...new Set((context.enemies || []).filter(e => !e.isDead).map(e => e.name))];
     // One sentence per action, two at most for a big moment.
     const maxSentences = Math.min(4, Math.max(2, lines.length + 1));
@@ -631,7 +638,7 @@ export function createNarrator({
     ].filter(Boolean).join('\n');
 
     try {
-      const parsed = await callModel({ kind: 'combat', system: STORY_SYSTEM_PROMPT, userContent: content, schema: COMBAT_RESPONSE_SCHEMA, maxTokens: 220, hints: { summary, lines, enemies: context.enemies || [] } });
+      const parsed = await callModel({ session, kind: 'combat', system: STORY_SYSTEM_PROMPT, userContent: content, schema: COMBAT_RESPONSE_SCHEMA, maxTokens: 220, hints: { summary, lines, enemies: context.enemies || [] } });
       let narration = limitSentences(scrubNumbers(cleanNarration(parsed.narration, 600)), maxSentences, maxSentences * 25);
       const outsiders = findOutsiderNames(narration, context.party);
       if (outsiders.length > 0 || !narration) narration = flavored();
@@ -653,7 +660,7 @@ export function createNarrator({
     ].filter(Boolean).join('\n\n');
 
     try {
-      const parsed = await callModel({ kind: 'rules', system: RULES_SYSTEM_PROMPT, userContent: content, schema: RULES_RESPONSE_SCHEMA, maxTokens: 450, hints: { question } });
+      const parsed = await callModel({ session, kind: 'rules', system: RULES_SYSTEM_PROMPT, userContent: content, schema: RULES_RESPONSE_SCHEMA, maxTokens: 450, hints: { question } });
       const answer = cleanNarration(parsed.answer || parsed.response || parsed.narration, 1500) || FALLBACK_NARRATION.chat_message;
       session.chatHistory.push({ role: 'user', text: question }, { role: 'assistant', text: answer });
       if (session.chatHistory.length > 12) session.chatHistory.splice(0, session.chatHistory.length - 12);
@@ -677,6 +684,15 @@ export function createNarrator({
     answerDialogue(room, answer) {
       const session = sessions.get(room);
       return session ? answerDialogue(session, answer) : null;
+    },
+
+    /** Switches a room between the AI narrator and the free offline one. */
+    setMockMode(room, enabled) {
+      getSession(room).useMock = !!enabled;
+    },
+
+    isMockMode(room) {
+      return !!sessions.get(room)?.useMock;
     },
 
     /** Time ran out on a personal moment: the character stays quiet and the story moves on. */
@@ -717,6 +733,8 @@ export function createNarrator({
         encounterIndex: Number.isFinite(context.encounterIndex) ? context.encounterIndex : 0,
         enemies: context.enemies || []
       };
+      // The room's mock switch (set by the host) decides which narrator writes this event.
+      if (typeof context.useMock === 'boolean') session.useMock = context.useMock;
       if (!session.faction && (context.partyFaction === 'enforcers' || context.partyFaction === 'rebels')) {
         session.faction = context.partyFaction;
       }

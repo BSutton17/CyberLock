@@ -147,7 +147,7 @@ describe('narrating a turn', () => {
         expect(text).toBe(
             'Shipment walks straight at the Enforcer Soldier, hammer swinging loose at his side. ' +
             'He bangs a fist on his chest and digs in, suddenly much harder to move. ' +
-            "He brings the hammer down on the soldier's helmet. The visor cracks, the radio keeps talking, and nobody answers it."
+            "He brings the hammer down on the robot's helmet. The visor cracks, the radio keeps talking, and nobody answers it."
         );
     });
 
@@ -283,14 +283,7 @@ describe('pronouns', () => {
         expect(text).toMatch(/\. Shipment bangs/);
     });
 
-    it('never opens a sentence with "They": a "they" enemy becomes "The tech", Gene Shock keeps the name', () => {
-        const drone = { id: 'enforcer_drone_1', name: 'Enforcer Drone', key: 'enforcer_drone', side: 'enemy', boss: false, alive: true, kindAlive: 1, kindTotal: 1 };
-        const own = createCombatNarrator({ random: () => 0 }).narrateTurn([
-            { kind: 'move', actor: geneShock, direction: 'advance', other: drone },
-            { kind: 'weapon', actor: geneShock, target: drone, weapon: 'Ray Gun', share: 0.2 }
-        ]);
-        expect(own).toMatch(/\. Gene Shock levels the ray gun/);
-
+    it('never opens a sentence with "They": a "they" enemy becomes "The tech"', () => {
         const tech = { id: 'rebel_field_tech_1', name: 'Rebel Field Tech', key: 'rebel_field_tech', side: 'enemy', boss: false, alive: true, kindAlive: 2, kindTotal: 2 };
         const enemyTurn = createCombatNarrator({ random: () => 0 }).narrateTurn([
             { kind: 'move', actor: tech, direction: 'advance', other: shipment },
@@ -301,18 +294,19 @@ describe('pronouns', () => {
         expect(enemyTurn).not.toMatch(/They/);
     });
 
+    it('calls Gene Shock "he"', () => {
+        const drone = { id: 'enforcer_drone_1', name: 'Enforcer Drone', key: 'enforcer_drone', side: 'enemy', boss: false, alive: true, kindAlive: 1, kindTotal: 1 };
+        const text = createCombatNarrator({ random: () => 0 }).narrateTurn([
+            { kind: 'move', actor: geneShock, direction: 'advance', other: drone },
+            { kind: 'weapon', actor: geneShock, target: drone, weapon: 'Ray Gun', share: 0.2 }
+        ]);
+        expect(text).toMatch(/^Gene Shock [^.]+\. He /);
+    });
+
     it('tells an ally ability used on yourself as looking after yourself', () => {
         const trueNorth = { id: 'tn', name: 'True North', key: 'jack_of_all_trades_support_3', side: 'ally', boss: false };
         const text = createCombatNarrator({ random: () => 0 }).narrateTurn([{ kind: 'ability', abilityId: 'the_show_must_go_on', actor: trueNorth, target: trueNorth }]);
         expect(text).toBe('True North patches herself up and gets right back to it.');
-    });
-
-    it('keeps a "they" name when a "they" enemy was just mentioned', () => {
-        const text = createCombatNarrator({ random: () => 0 }).narrateTurn([
-            { kind: 'move', actor: geneShock, direction: 'advance', other: alone },
-            { kind: 'weapon', actor: geneShock, target: alone, weapon: 'Ray Gun', share: 0.2 }
-        ]);
-        expect(text).toMatch(/\. Gene Shock levels/);
     });
 
     it('brings the name back after two pronoun sentences in a row', () => {

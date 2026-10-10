@@ -7,7 +7,7 @@
 const WEAPON_SHOTS = {
     'Hammer': ['{a} brings the hammer down on {b}', '{a} swings the hammer into {b}'],
     'Taser Shield': ['{a} slams the taser shield into {b}', '{a} drives the crackling shield into {b}'],
-    'Ray Gun': ['{a} levels the ray gun and scorches {b}', 'A beam from {a}\'s ray gun cuts across {b}'],
+    'Ray Gun': ['{a} hurls a ball of blue fire at {b}', 'Blue flame leaps from {a}\'s hand into {b}'],
     'Energy Sword': ['{a}\'s energy sword carves into {b}', '{a} slips in close and slashes {b}'],
     'Shotgun': ['{a} unloads the shotgun into {b}', '{a} racks the shotgun and fires at {b}'],
     'Drone': ['{a} sends the drone zooming at {b}', '{a}\'s drone dives at {b}'],

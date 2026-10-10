@@ -243,3 +243,33 @@ describe('parseJsonObject', () => {
     expect(parseJsonObject('nope')).toBeNull();
   });
 });
+
+describe('who gets each story decision', () => {
+  const ranks = {
+    me: ['Politician', 'Spy', 'Medic', 'Crook', 'Banker', 'Scholar', 'Detective', 'Navigator', 'Electrician', 'Intimidation'],
+    you: ['Detective', 'Banker', 'Navigator', 'Spy', 'Politician', 'Medic', 'Crook', 'Scholar', 'Electrician', 'Intimidation'],
+    them: ['Electrician', 'Crook', 'Scholar', 'Medic', 'Spy', 'Politician', 'Banker', 'Navigator', 'Detective', 'Intimidation']
+  };
+
+  function run(players, count) {
+    const history = [];
+    for (let i = 0; i < count; i++) {
+      const choice = chooseDecisionAttribute({ players, attributesByPlayer: ranks, history });
+      history.push(choice);
+    }
+    return history;
+  }
+
+  it('cycles a solo player through their top three, never the same one twice running', () => {
+    const picks = run(['me'], 6).map(choice => choice.attribute);
+    expect(picks).toEqual(['politician', 'spy', 'medic', 'politician', 'spy', 'medic']);
+  });
+
+  it('passes decisions around a team of people before anyone gets a second one', () => {
+    const owners = run(['me', 'you', 'them'], 6).map(choice => choice.owner);
+    expect(new Set(owners.slice(0, 3)).size).toBe(3);
+    expect(new Set(owners.slice(3, 6)).size).toBe(3);
+    const attributes = run(['me', 'you', 'them'], 6).map(choice => choice.attribute);
+    expect(attributes.filter(a => a === 'politician').length).toBeLessThanOrEqual(1);
+  });
+});

@@ -4,7 +4,7 @@
 export const STRIKE_FINAL_BLOWS = {
     quick_jab: {
         enforcer_soldier: [
-            `{user} snaps a jab under {victim}'s chin strap, and the soldier's legs just quit.`,
+            `{user} snaps a jab into the seam under {victim}'s visor, and the robot's legs just quit.`,
             `{user} pops {victim} in the visor twice, fast. The second one is the one that counts.`
         ],
         enforcer_drone: [
@@ -60,20 +60,20 @@ export const STRIKE_FINAL_BLOWS = {
             `{user} lands a small, perfect jab on {victim}'s chin, and a man that size drops like a cut cable.`
         ],
         enforcer_genisis: [
-            `{user} finally matches {victim}'s speed for exactly one jab. It's enough. {victim} sinks to the ground.`,
-            `{user} catches {victim} coming out of a dash with a jab to the temple. The perfect enforcer stops.`
+            `{user} slips between {victim}'s mechanical arms and jabs her once under the jaw. The arms go limp before she does.`,
+            `{user} catches {victim} reaching with three arms at once and jabs the one gap she left. She folds.`
         ],
         rebel_garret_maxwell: [
-            `{user} slips past the cannon barrel and jabs {victim} once on the chin. The demolition chief sits down in his own rubble.`,
-            `{user} pops {victim} in the solar plexus, and the big man goes down wheezing.`
+            `{user} slips past the cannon-hammer and jabs {victim} once on the chin. The old rebel sits down in the rubble.`,
+            `{user} pops {victim} in the ribs as he winds up, and he goes down wheezing.`
         ],
         rebel_levi_wicker: [
-            `{user} jabs {victim} mid-taunt, and his flickering mods pick that moment to quit. He drops.`,
-            `{user} beats {victim} to the punch, literally. He goes down looking honestly impressed.`
+            `{user} beats {victim}'s blades with a jab he never saw. The young rebel drops.`,
+            `{user} jabs {victim} mid-lunge, and he hits the ground before his blades do.`
         ],
         rebel_virgil_wesley: [
-            `{user} jabs {victim} before the whispering can start, and the mastermind drops mid-breath.`,
-            `{user} pops {victim} once. The rebellion's best speaker has nothing to say.`
+            `{user} jabs {victim} just as he goes to throw, and the dagger clatters away with him.`,
+            `{user} lands one quick shot on {victim}'s jaw. The rebellion's best fighter goes down to a jab.`
         ]
     },
     sparkshot: {
@@ -134,26 +134,26 @@ export const STRIKE_FINAL_BLOWS = {
             `{user} zaps {victim}'s chest, and the giant's core flickers, gutters and dies.`
         ],
         enforcer_genisis: [
-            `{user}'s spark catches {victim} mid-blur, and the perfect enforcer locks up and falls.`,
-            `{user} fires a bolt that {victim} can't quite dodge, and {victim} drops, implants smoking.`
+            `{user}'s spark arcs into {victim}'s mechanical arms, and the current runs through every joint. She drops.`,
+            `{user} zaps {victim} square in the chest, and her arms twitch and fold as she falls.`
         ],
         rebel_garret_maxwell: [
-            `{user}'s spark arcs into {victim}'s cannon, and the charge cell answers loudly.`,
-            `{user} zaps {victim} square in the chest, and the demolitionist goes down in the dust.`
+            `{user}'s spark arcs into {victim}'s cannon-hammer, and the charge cell answers loudly.`,
+            `{user} zaps {victim} square in the chest, and the old rebel goes down in the dust.`
         ],
         rebel_levi_wicker: [
-            `{user}'s spark finds {victim}'s failing mods, and they fail all at once.`,
-            `{user} zaps {victim} mid-leap, and he lands in a twitching heap.`
+            `{user}'s spark jumps to {victim}'s blades and down his arms, and the young rebel locks up and falls.`,
+            `{user} zaps {victim} mid-leap, and he lands in a heap.`
         ],
         rebel_virgil_wesley: [
-            `{user}'s spark hits the device on {victim}'s wrist, and the signal dies with a long electronic scream.`,
-            `{user} zaps {victim}'s neurochip, and the rebellion's mastermind goes quiet.`
+            `{user}'s spark catches a thrown dagger and rides it home into {victim}.`,
+            `{user} zaps {victim} as he closes in, and his legs give out.`
         ]
     },
     shadow_strike: {
         enforcer_soldier: [
             `{user} steps out of the dark behind {victim}, and the soldier never even turns around.`,
-            `{user} vanishes, and {victim} spins to find them. The strike comes from the other side.`
+            `{user} vanishes, and {victim}'s sensors sweep the wrong way. The strike comes from the other side.`
         ],
         enforcer_drone: [
             `{user} drops out of the shadows above {victim} and drives it into the pavement.`,
@@ -208,20 +208,20 @@ export const STRIKE_FINAL_BLOWS = {
             `{user} vanishes under the maul's swing and comes out behind {victim}. The giant topples.`
         ],
         enforcer_genisis: [
-            `{user} and {victim} both vanish. Only one of them comes back standing.`,
-            `{user} beats {victim} at its own game, appearing behind it before it can blink.`
+            `{user} steps out of the dark behind {victim}, where none of her arms are pointed. She never sees it.`,
+            `{user} vanishes while {victim}'s arms search the shadows, then strikes from directly beneath her.`
         ],
         rebel_garret_maxwell: [
-            `{user} drops out of the dark beside {victim}'s cannon and puts the big man down.`,
-            `{user} slips behind {victim}, where heavy artillery doesn't help.`
+            `{user} drops out of the dark beside {victim}'s cannon-hammer and puts the old rebel down.`,
+            `{user} slips behind {victim}, where a heavy weapon can't turn fast enough.`
         ],
         rebel_levi_wicker: [
-            `{user} steps out of the shadows behind {victim} mid-taunt. He doesn't get to finish.`,
-            `{user} vanishes, and {victim} laughs, then stops laughing.`
+            `{user} matches {victim}'s speed by not being there at all, then strikes from behind.`,
+            `{user} vanishes, and {victim} spins with both blades. The hit comes from the other side.`
         ],
         rebel_virgil_wesley: [
-            `{user} slips out of the dark behind {victim}, out of reach of any whisper.`,
-            `{user} disappears, and {victim}'s next word is never spoken.`
+            `{user} melts into the dark, and {victim}'s thrown dagger passes through empty air. The strike doesn't.`,
+            `{user} steps out of the shadows behind {victim}, and the rebellion's best fighter goes down.`
         ]
     },
     defensive_jab: {
@@ -282,20 +282,20 @@ export const STRIKE_FINAL_BLOWS = {
             `{user} drives a fist right into {victim}'s chest. For once, Macro Hull is the one who gets moved.`
         ],
         enforcer_genisis: [
-            `{user} reads {victim}'s next dash and has a fist waiting at the end of it. {victim} runs right into it and drops.`,
-            `{user} punches through {victim}'s perfect guard, and the perfect enforcer falls without a sound.`
+            `{user} jabs the joint where {victim}'s arms meet her spine, and the whole frame collapses.`,
+            `{user} takes a cut to get in close, then drives a short jab into {victim}'s sternum. She drops.`
         ],
         rebel_garret_maxwell: [
-            `{user} slips past the cannon barrel and jabs {victim} in the gut. The big man sits down in his own rubble.`,
+            `{user} slips past the cannon-hammer and jabs {victim} in the gut. The old rebel sits down.`,
             `{user} punches {victim} in the chest, and he finally stops getting back up.`
         ],
         rebel_levi_wicker: [
-            `{user} jabs {victim} mid-laugh, and his flickering mods go dark along with him.`,
-            `{user} catches {victim} with a short punch he didn't see coming. For once he has nothing to say.`
+            `{user} punches through {victim}'s crossed blades, and the young rebel goes down.`,
+            `{user} catches {victim} with a short punch he didn't see coming. He stays down.`
         ],
         rebel_virgil_wesley: [
-            `{user} jabs {victim} before the whispering can start, and he drops with a surprised little grunt.`,
-            `{user} punches straight through {victim}'s calm, and the mastermind ends up on the ground for once.`
+            `{user} jabs {victim} before he can throw, and he drops with a dagger still in each hand.`,
+            `{user} punches straight through {victim}'s guard, and the rebellion's symbol hits the ground.`
         ]
     },
     way_too_close: {
@@ -356,26 +356,26 @@ export const STRIKE_FINAL_BLOWS = {
             `{user} pushes {victim} back, and the core in his chest sputters out against the barrier.`
         ],
         enforcer_genisis: [
-            `{user} shoves {victim} back, and the barrier catches it in the middle of a dash.`,
-            `{user} pushes {victim} away, and the perfect enforcer slumps against the wall of light.`
+            `{user} shoves {victim} back into the rising barrier, and her arms tangle against it as she falls.`,
+            `{user} pushes {victim} away, and the barrier snaps up across all four of her arms at once.`
         ],
         rebel_garret_maxwell: [
-            `{user} shoves {victim} back into the barrier, and the cannon goes off against it.`,
-            `{user} pushes {victim} away, and the big man finally sits down.`
+            `{user} shoves {victim} back into the barrier, and the cannon-hammer goes off against it.`,
+            `{user} pushes {victim} away, and the old rebel finally sits down against the wall of light.`
         ],
         rebel_levi_wicker: [
-            `{user} shoves {victim} back, and he bounces off the barrier with a laugh that turns into a groan.`,
-            `{user} pushes {victim} away, and his mods give out against the barrier.`
+            `{user} shoves {victim} back, and he bounces off the barrier with both blades sparking.`,
+            `{user} pushes {victim} away mid-lunge, and the barrier stops him cold.`
         ],
         rebel_virgil_wesley: [
-            `{user} shoves {victim} back into the barrier, and the whispering stops.`,
-            `{user} pushes {victim} away, and the mastermind slumps against the wall of light, out of words.`
+            `{user} shoves {victim} back into the barrier as he lunges, and the daggers spark out against it.`,
+            `{user} pushes {victim} away, and the rebellion's best fighter slumps against the wall of light.`
         ]
     },
     charge: {
         enforcer_soldier: [
             `{user} barrels into {victim} at full speed, and the soldier ends up folded over the hood of a parked car.`,
-            `{user} charges straight through {victim}'s guard. The baton goes one way, the helmet goes another, and the soldier stays where they land.`
+            `{user} charges straight through {victim}'s guard. The baton goes one way, the helmet goes another, and the robot stays where it lands.`
         ],
         enforcer_drone: [
             `{user} charges {victim} just as it dips low and drives it straight into the pavement. It doesn't take off again.`,
@@ -430,20 +430,20 @@ export const STRIKE_FINAL_BLOWS = {
             `{user} slams into {victim}'s chest, and the core in it sputters on impact and goes dark.`
         ],
         enforcer_genisis: [
-            `{user} charges {victim} right as it lands from a dash. There's no time to dodge, and it gets knocked flat.`,
-            `{user} doesn't aim, just runs, and the sheer size of the charge leaves {victim} nowhere to go.`
+            `{user} charges straight through {victim}'s mechanical arms, snapping two of them, and flattens the surgeon behind them.`,
+            `{user} barrels into {victim} before her arms can close, and she goes down in a tangle of metal.`
         ],
         rebel_garret_maxwell: [
-            `{user} charges {victim}, and the demolition chief goes down in a pile of his own rubble.`,
-            `{user} slams into {victim}, and the cannon goes spinning off into a wall.`
+            `{user} charges {victim}, and the old rebel goes down in a pile of his own rubble.`,
+            `{user} slams into {victim}, and the cannon-hammer goes spinning off into a wall.`
         ],
         rebel_levi_wicker: [
-            `{user} charges {victim} mid-taunt, and he goes flying with the rest of the joke stuck in his throat.`,
-            `{user} slams into {victim}, and his failing mods give out completely on impact.`
+            `{user} charges {victim} before he can get his blades up, and he goes flying.`,
+            `{user} slams into {victim}, and the young rebel hits the pavement hard.`
         ],
         rebel_virgil_wesley: [
-            `{user} charges {victim} before he can say a word, and the mastermind gets knocked flat on his back.`,
-            `{user} slams into {victim}, and the whispering in everyone's head cuts off mid-sentence.`
+            `{user} charges through both thrown daggers and knocks {victim} flat on his back.`,
+            `{user} slams into {victim}, and the rebellion's symbol goes down in the dust.`
         ]
     },
     flood_of_frost: {
@@ -504,20 +504,20 @@ export const STRIKE_FINAL_BLOWS = {
             `{user} blasts {victim} with frost until the furnace in his chest goes cold, and he goes down with it.`
         ],
         enforcer_genisis: [
-            `{user} freezes {victim} mid-dash, and the perfect enforcer stops perfectly still.`,
-            `{user} buries {victim} in ice, and it falls over without a sound.`
+            `{user} freezes {victim}'s mechanical arms solid mid-strike, and she topples under their weight.`,
+            `{user} buries {victim} in ice, and the frost spreads up her arms and over her white coat.`
         ],
         rebel_garret_maxwell: [
-            `{user} freezes {victim}'s cannon solid, and the next shot backfires right in his face.`,
-            `{user} blasts {victim} with frost until the big man drops into the rubble, shivering.`
+            `{user} freezes {victim}'s cannon-hammer solid, and the next shot backfires in his face.`,
+            `{user} blasts {victim} with frost until the old rebel drops into the rubble, shivering.`
         ],
         rebel_levi_wicker: [
-            `{user} freezes {victim} mid-laugh, and his mods sputter out in the cold.`,
-            `{user} buries {victim} in ice, and the grin on his face freezes along with the rest of him.`
+            `{user} freezes {victim} mid-lunge, both blades raised, and he tips over like a statue.`,
+            `{user} buries {victim} in ice, and his blades hiss and go dark.`
         ],
         rebel_virgil_wesley: [
-            `{user} freezes {victim} mid-sentence, and the rest of his argument is just a cloud of breath.`,
-            `{user} buries {victim} in ice, and the whispering in everyone's head goes still.`
+            `{user} freezes a thrown dagger in mid-air and then its owner. {victim} stops moving.`,
+            `{user} buries {victim} in ice, and his red scarf freezes stiff in the wind.`
         ]
     },
     battery_drain: {
@@ -578,20 +578,20 @@ export const STRIKE_FINAL_BLOWS = {
             `{user} pulls the power out of {victim}'s chest and hands it to someone who needs it more.`
         ],
         enforcer_genisis: [
-            `{user} drains {victim}'s implants, and the perfect enforcer stops mid-motion.`,
-            `{user} pulls the energy out of {victim}, and it drops like a puppet with cut strings.`
+            `{user} drains the fusion cell running {victim}'s arms, and they sag one by one until she does too.`,
+            `{user} pulls the power out of {victim}'s machinery, and Crown Gene's chief surgeon goes dark.`
         ],
         rebel_garret_maxwell: [
-            `{user} drains {victim}'s cannon, then {victim}. The demolition chief slumps against a wall.`,
-            `{user} pulls the power out of {victim}, and the big man finally lies down.`
+            `{user} drains {victim}'s cannon-hammer, then {victim}. The old rebel slumps against a wall.`,
+            `{user} pulls the power out of {victim}, and he finally lies down.`
         ],
         rebel_levi_wicker: [
-            `{user} drains {victim}'s failing mods, and he drops before they can fail on their own.`,
-            `{user} pulls the energy out of {victim}, and he runs out of jokes and strength at the same time.`
+            `{user} drains the light out of {victim}'s blades, then the strength out of the young rebel.`,
+            `{user} pulls the energy out of {victim}, and he drops before he can swing again.`
         ],
         rebel_virgil_wesley: [
-            `{user} drains {victim}'s device, and the whispering stops all at once.`,
-            `{user} pulls the power out of {victim}, and the mastermind goes dark mid-thought.`
+            `{user} drains both of {victim}'s daggers dark, then {victim}. He goes down.`,
+            `{user} pulls the power out of {victim}, and the rebellion's symbol sags to the ground.`
         ]
     }
 };

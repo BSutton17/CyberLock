@@ -115,7 +115,7 @@ export default {
     },
     {
       "id": "healing_support_1",
-      "behavior": "intelligent",
+      "behavior": "defensive",
       "name": "Patchwork",
       "role": "Support",
       "level": 1,
@@ -159,7 +159,7 @@ export default {
     },
     {
       "id": "jack_of_all_trades_support_3",
-      "behavior": "intelligent",
+      "behavior": "defensive",
       "name": "True North",
       "role": "Support",
       "level": 1,

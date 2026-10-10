@@ -57,7 +57,7 @@ const PLACES = {
 const CITY_DETAILS = [
     'A Singularity ad flickers over a boarded-up noodle stall, promising a robot that will do your job for you. Somebody has sprayed THEN WHAT DO WE DO across half of it.',
     'A Division drone drifts low over the crowd, scanning faces a little too slowly, and the vendor at the next stall stops talking until it passes.',
-    'The streetlights are Alpha Genesis cores, humming at a pitch you stop hearing after a week. Tonight two of them are dark, and nobody has come to fix them.',
+    'The streetlights are Particle Genesis cores, humming at a pitch you stop hearing after a week. Tonight two of them are dark, and nobody has come to fix them.',
     'Half the people in line have the same Crown Gene implant behind the ear, the cheap model that comes with an ad every morning.',
     'An Enforcer in polished armor is buying dumplings and paying full price, which tells you how nervous everyone is today.',
     'Someone has scratched a rebel slogan into the checkpoint railing. Someone else has scratched a smiley face next to it. Neither has been cleaned off.',
@@ -174,7 +174,7 @@ const SITUATIONS = {
     ],
     electrician: [
         { text: 'A junction box hums behind a chain-link fence. Everything on this block, cameras included, runs through it.', options: ['Cut the district power', 'Hijack the security grid'] },
-        { text: 'The tunnels are lined with old Alpha Genesis conduit, still live, and {enemySide} are using it to power their gear.', options: ['Overload their power line', 'Tap the line and listen'], location: 'sewer' },
+        { text: 'The tunnels are lined with old Particle Genesis conduit, still live, and {enemySide} are using it to power their gear.', options: ['Overload their power line', 'Tap the line and listen'], location: 'sewer' },
         { text: 'A fusion cell in the depot is leaking just enough to make the lights flicker. Someone should deal with that before it deals with everyone.', options: ['Stabilize the fusion cell', 'Rig it as a distraction'], location: 'warehouse' }
     ],
     navigator: [
@@ -265,10 +265,10 @@ const AFTERMATH = [
 const BOSS_DEFEATED = {
     enforcer_the_architect: ['The Architect\'s prism cracks down the middle, and every drone in the tower drops out of the air at once.', '"You have no idea what you just turned off," The Architect says, very calmly, before the lights go out.'],
     enforcer_macro_hull: ['Macro Hull hits the floor hard enough to shake the catwalks, his core sputtering like a dying engine.', '"Lights out," Macro Hull rumbles, almost fondly, and then his do.'],
-    enforcer_genisis: ['Genisis goes still, blades lowered, and for one second looks like someone trying very hard to remember a name.', '"Thank you," Genisis says, politely, and doesn\'t get up.'],
-    rebel_garret_maxwell: ['Garret Maxwell drops the detonator, and it skids across the floor, unpressed.', '"Tell my crew I tried," Garret Maxwell says, and finally sits down.'],
-    rebel_levi_wicker: ['Levi Wicker laughs, coughs, and slides down the wall, his mods sparking out one by one.', '"Took you long enough," Levi Wicker grins, and then the grin goes slack.'],
-    rebel_virgil_wesley: ['The broadcast core goes dark, and Virgil Wesley stops mid-sentence for the first time in his life.', '"You can stop the signal," Virgil Wesley says. "You can\'t stop people hearing it."']
+    enforcer_genisis: ['Genisis sinks to her knees, her mechanical arms folding in around her one by one. "Sloppy," she murmurs. "I was so close."', '"You have no idea what you just ended," Genisis says, and for once her hands are shaking.'],
+    rebel_garret_maxwell: ['Garret Maxwell lowers the cannon, breathing hard. "They built a power plant on my parents\' street," he says. "Remember that."', '"Tell the cells to keep going," Garret Maxwell says, and finally sits down.'],
+    rebel_levi_wicker: ['Levi Wicker slides down the wall, both blades still lit. "My parents started this," he says quietly. "Somebody has to finish it."', '"You don\'t get to end this," Levi Wicker says through gritted teeth, and then he stops getting up.'],
+    rebel_virgil_wesley: ['Virgil Wesley drops to one knee, daggers dimming. "My brother used to win these," he says. "I never did."', '"You can beat me," Virgil Wesley says. "You can\'t beat what I stand for."']
 };
 
 const NEXT_ACT = [
@@ -288,13 +288,60 @@ const TRANSITIONS = [
     'The comm crackles with a warning that arrives about five seconds too late.'
 ];
 
+// The act's villain casting a shadow over the scenes before the fight (see foreshadowing in
+// storyEngine.js for the AI's version).
+const BOSS_FORESHADOWING = {
+    enforcer_the_architect: [
+        'Every screen on the block switches to the same Singularity ad for a second: a calm man with a halo of light, smiling. "Ingram Robles," someone mutters. "The Architect."',
+        'A delivery robot stops, scans the party, and rolls on. Everyone here knows who taught the machines to do that.',
+        'An old programmer at a noodle stand says The Architect broke computing wide open with quantum bits, then patented it before anyone else could catch up.',
+        'The drones overhead fly a tighter pattern than usual, the way they do when somebody important is watching.',
+        'Graffiti on a wall shows a halo over a skull. Underneath: THE ARCHITECT SEES YOU.'
+    ],
+    enforcer_macro_hull: [
+        'The streetlights flicker in time, a slow heartbeat from a fusion plant somewhere. People say Marco Hall can feel every one of them.',
+        'A news feed replays old footage: a young navy engineer on a submarine deck, then the same man, older and enormous, cutting the ribbon on a reactor.',
+        'A worker in a Particle Genesis jumpsuit says the boss walks the plant floor himself these days, in a suit that hums like a reactor.',
+        'The air near the substation tastes like metal. Somewhere in the city, Macro Hull\'s plants are running hotter than they should.',
+        'Everyone knows the joke: Particle Genesis keeps the lights on, and Marco Hall decides who pays for it.'
+    ],
+    enforcer_genisis: [
+        'A Crown Gene billboard promises "Better than the original." In the corner, in small print, a signature: R. Walker.',
+        'A man with a brand-new mechanical arm flexes it nervously at a bus stop. "Dr. Walker did it herself," he says. He doesn\'t sound happy about it.',
+        'A nurse on a smoke break mutters about patients who go down to Crown Gene\'s sublevels and come back different, if they come back.',
+        'Someone has painted spider legs around a Crown Gene logo. Everyone seems to know what it means.',
+        'The clinic\'s waiting-room screens show a woman in a white coat with white hair, very calm: "The future of the body is already here."'
+    ],
+    rebel_garret_maxwell: [
+        'An old woman lights a candle at the memorial wall for the district the fusion explosion took. One name has fresh flowers: Maxwell.',
+        'Rebel graffiti here is signed with a hammer. The Enforcers paint over it every morning, and it\'s back every night.',
+        'A rebel kid talks about Garret Maxwell like he\'s weather: "He was there before there was a rebellion. He\'ll be there after."',
+        'A Particle Genesis plant looms over the rooftops, built on a street that used to have homes on it. Someone has written GARRET REMEMBERS on the fence.',
+        'The Division briefing lists Garret Maxwell\'s last known location three times, and each one is a different power plant.'
+    ],
+    rebel_levi_wicker: [
+        'A rebel recruit wears a patch with two crossed blades. "Levi\'s," she says, proud. "His parents started all this."',
+        'Two older rebels argue about whether a twenty-six-year-old should be giving them orders. Neither of them actually disobeys.',
+        'An Enforcer wanted poster for Levi Wicker has been torn down and taped back up so many times the tape looks like scar tissue.',
+        'Someone tells the story of the raid that killed Levi Wicker\'s parents, and everyone nearby goes quiet.',
+        'Chalk on the pavement: a pair of blades and the words FINISH WHAT THEY STARTED.'
+    ],
+    rebel_virgil_wesley: [
+        'A rebel fighter practices with two training knives, copying moves everyone says came from Virgil Wesley.',
+        'A mural of a man with a red scarf and two glowing daggers covers half a building. Nobody has painted over it.',
+        'A rebel says Virgil Wesley didn\'t even believe in the cause until an Enforcer raid killed his brother. Now he\'s the cause\'s favorite face.',
+        'Division posters call Virgil Wesley the most dangerous fighter in the city. The rebels have started hanging them up themselves.',
+        'Someone hums a song about a man who lost his brother and found a war. The chorus is just a name: Wesley.'
+    ]
+};
+
 const BOSS_ENTRANCES = {
     enforcer_the_architect: ['The Architect steps out from behind a wall of glass, hands folded. "You are confused," he says, gently. "Let me correct that."'],
     enforcer_macro_hull: ['Macro Hull fills the doorway, his core glowing through his chest plate. "You want the lights off?" he booms. "Come and turn them off."'],
-    enforcer_genisis: ['Genisis lands without a sound. "Please don\'t make this difficult," it says, and the blades slide out.'],
-    rebel_garret_maxwell: ['Garret Maxwell rests his cannon on his shoulder. "Nothing personal," he says. "It\'s the building I don\'t like."'],
-    rebel_levi_wicker: ['Levi Wicker drops from the ceiling, grinning through a split lip. "Oh good, company. I was getting bored."'],
-    rebel_virgil_wesley: ['Every screen in the room shows Virgil Wesley\'s face. "Let\'s talk," he says, from everywhere at once. "Then let\'s fight."']
+    enforcer_genisis: ['Genisis steps out of the operating theater, white coat spotless, mechanical arms unfolding behind her like a spider waking up. "Hold still," she says. "This is delicate work."'],
+    rebel_garret_maxwell: ['Garret Maxwell rests the cannon-hammer on his shoulder. "Nothing personal," he says. "I just don\'t let them build on graves anymore."'],
+    rebel_levi_wicker: ['Levi Wicker steps out of the dark with both blades lit. "My parents gave their lives for this," he says. "You\'re not taking it."'],
+    rebel_virgil_wesley: ['Virgil Wesley spins a glowing dagger in each hand. "My brother died in a raid like this one," he says. "Let\'s see how you do."']
 };
 
 const FIGHT_STARTS = [
@@ -497,6 +544,9 @@ export function mockStoryBeat(hints = {}, random = Math.random, recent = []) {
             } else if (hints.needsOptions) {
                 const callback = momentCallback(hints, tools, recent);
                 if (callback) lines.push(callback);
+                // The villain casts a shadow: always right before their fight, often before that.
+                const shadow = BOSS_FORESHADOWING[hints.villainId];
+                if (shadow && (hints.bossNext || tools.chance(0.5))) lines.push(tools.pick(shadow));
                 const situation = tools.pick(SITUATIONS[hints.attribute] || SITUATIONS.navigator);
                 lines.push(fill(situation.text, v));
                 // With a personal moment coming first, whose call it is gets said after it.

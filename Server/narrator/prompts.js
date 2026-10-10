@@ -1,4 +1,4 @@
-import { WORLD, CHARACTERS, BOSSES, NPCS, LOCATIONS, DECISION_ATTRIBUTES } from './lore.js';
+import { WORLD, CHARACTERS, BOSSES, NPCS, LOCATIONS, DECISION_ATTRIBUTES, ENEMY_FORCES } from './lore.js';
 import { getPath } from './campaign.js';
 import { attitudeLabel } from './dialogue.js';
 
@@ -96,7 +96,7 @@ const formatCharacterReference = () =>
 
 const formatBosses = () =>
   Object.values(BOSSES)
-    .map(b => `- ${b.name} (${b.side === 'enforcers' ? 'corporate side' : 'rebel side'}): ${b.bio.replace(/^DRAFT:\s*/, '')}`)
+    .map(b => `- ${b.name} (${b.side === 'enforcers' ? 'corporate side' : 'rebel side'}${b.pronouns ? `, ${b.pronouns}` : ''}): ${b.bio.replace(/^DRAFT:\s*/, '')}`)
     .join('\n');
 
 const formatNpcs = () => NPCS.map(n => `- ${n.name} (${n.allegiance}): ${n.bio}`).join('\n');
@@ -145,6 +145,9 @@ short action phrase (under 9 words). The two options must lead in genuinely diff
 
 WORLD
 ${WORLD}
+
+WHO THEY FIGHT
+${ENEMY_FORCES}
 
 PLAYABLE CHARACTERS (reference only - ONLY the ones listed as the party in CURRENT STATE exist in this story)
 ${formatCharacterReference()}

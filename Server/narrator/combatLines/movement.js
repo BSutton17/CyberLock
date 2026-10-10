@@ -41,20 +41,20 @@ export const MOVEMENT = {
     },
     spellcaster_dps_1: { // Gene Shock
         advance: [
-            `{user} edges toward {other}, the fusion cores under their skin glowing brighter with every step.`,
-            `{user} walks up on {other} with the ray gun warm in their grip and a very focused look.`,
-            `{user} moves in on {other}, sparks crawling up both forearms.`,
-            `{user} heads for {other}, already working out where the next shot should land.`
+            `{user} edges toward {other}, the fusion cores under his skin glowing brighter with every step.`,
+            `{user} walks up on {other} with blue fire already curling around his fingers.`,
+            `{user} moves in on {other}, a small flame flickering in his open palm.`,
+            `{user} heads for {other}, already working out where the next throw should land.`
         ],
         retreat: [
             `{user} slips back from {other}, keeping a careful distance.`,
-            `{user} retreats from {other}, muttering a correction to some calculation only they can see.`,
-            `{user} puts space between themself and {other}, cores dimming down to a low simmer.`
+            `{user} retreats from {other}, muttering a correction to some calculation only he can see.`,
+            `{user} puts space between himself and {other}, the fire in his hand dimming to a low simmer.`
         ],
         regroup: [
             `{user} ducks in beside {other}, still giving off a faint smell of ozone.`,
             `{user} slides over to {other}, close enough to share cover and keep both hands free.`,
-            `{user} falls in near {other} and checks the charge on the ray gun.`
+            `{user} falls in near {other} and shakes the heat out of his fingers.`
         ]
     },
     aggressive_dps_2: { // Leo
@@ -331,20 +331,20 @@ export const MOVEMENT = {
     },
     enforcer_genisis: {
         advance: [
-            `{user} is suddenly closer to {other}, with no visible footsteps in between.`,
-            `{user} glides toward {other}, both blades held loose and almost polite.`,
-            `{user} advances on {other} with an apologetic tilt of the head that's somehow worse than a threat.`,
-            `{user} drifts toward {other}, perfectly silent and perfectly balanced.`
+            `{user} walks toward {other}, white coat spotless, mechanical arms unfolding behind her one joint at a time.`,
+            `{user} closes on {other}, her spider arms clicking against the pavement like a second set of legs.`,
+            `{user} advances on {other} with the calm of a surgeon walking into the theater.`,
+            `{user} drifts toward {other}, studying them the way she would study a scan.`
         ],
         retreat: [
-            `{user} steps back from {other} in a single smooth motion.`,
-            `{user} withdraws from {other}, blades folding back as if bowing out.`,
-            `{user} gives ground to {other} with eerie, practiced grace.`
+            `{user} steps back from {other}, her mechanical arms folding up neatly behind her.`,
+            `{user} withdraws from {other}, already planning a cleaner approach.`,
+            `{user} gives {other} some room, as if letting a patient settle before the next cut.`
         ],
         regroup: [
-            `{user} appears at {other}'s side as if it had always been standing there.`,
-            `{user} glides over to {other} and takes up a guard position without a sound.`,
-            `{user} falls in next to {other}, blades low and patient.`
+            `{user} moves to {other}'s side and adjusts something in their armor without asking.`,
+            `{user} falls in beside {other}, two of her arms raised over them like a canopy.`,
+            `{user} joins {other} and looks them over with clinical interest.`
         ]
     },
 
@@ -441,56 +441,56 @@ export const MOVEMENT = {
     },
     rebel_garret_maxwell: {
         advance: [
-            `{user} lumbers toward {other} with the cannon braced on his hip, steady as a dockside crane.`,
-            `{user} pushes up on {other}, cannon humming and a slow smile on his face.`,
-            `{user} advances on {other}, calling out to his crew as if this were just another job.`,
-            `{user} walks at {other} with the cannon leveled and nothing left to prove.`
+            `{user} walks at {other} with the cannon-hammer braced on his shoulder and nothing left to prove.`,
+            `{user} pushes up on {other}, coat dragging, the weapon humming as it charges.`,
+            `{user} advances on {other} with the slow, heavy patience of a man who has buried too many people to hurry.`,
+            `{user} closes on {other}, calling out to the cell behind him without looking back.`
         ],
         retreat: [
-            `{user} backs away from {other}, eyeing the nearest support pillar with professional interest.`,
-            `{user} retreats from {other} and checks the cannon's charge with total calm.`,
-            `{user} gives {other} some room, plainly thinking about taking down the building instead.`
+            `{user} backs away from {other}, the cannon-hammer still leveled.`,
+            `{user} retreats from {other} and checks the weapon's charge with steady hands.`,
+            `{user} gives {other} some ground, the way a man does when he's done this long enough to know when.`
         ],
         regroup: [
             `{user} moves to {other} and claps a heavy hand on their shoulder.`,
-            `{user} falls in beside {other}, rumbling something reassuring about the plan.`,
-            `{user} plants himself next to {other}, the cannon resting between them.`
+            `{user} falls in beside {other}, rumbling something steady about holding on.`,
+            `{user} plants himself next to {other}, the cannon-hammer resting between them.`
         ]
     },
     rebel_levi_wicker: {
         advance: [
-            `{user} bounces toward {other}, twirling his weapon with a grin on his face.`,
-            `{user} saunters toward {other}, cracking a joke nobody laughs at.`,
-            `{user} lunges toward {other}, his failing mods flaring bright for a second.`,
-            `{user} sprints at {other} like he's got somewhere better to be after this.`
+            `{user} comes at {other} fast and low, both blades lit.`,
+            `{user} cuts across the street toward {other}, eyes fixed and jaw set.`,
+            `{user} closes on {other} with a speed that explains how a twenty-six-year-old ended up leading the rebellion.`,
+            `{user} slips between two pieces of cover and comes out much closer to {other}, blades already moving.`
         ],
         retreat: [
-            `{user} skips back from {other} with a mocking little bow.`,
-            `{user} retreats from {other}, wincing as one of his mods misfires.`,
-            `{user} backs away from {other}, laughing like it was all part of the plan.`
+            `{user} backs away from {other}, blades crossed in front of him.`,
+            `{user} falls back from {other}, calling the rebels around him to pull back with him.`,
+            `{user} gives {other} a little room and resets his stance without taking his eyes off them.`
         ],
         regroup: [
-            `{user} drifts over to {other} and throws an arm around them.`,
-            `{user} falls in with {other}, spinning his weapon out of pure boredom.`,
-            `{user} saunters over to {other}, whistling a tune that doesn't fit the moment at all.`
+            `{user} moves to {other}'s side and says something low that steadies them.`,
+            `{user} falls in beside {other}, one blade raised to cover them both.`,
+            `{user} drops in next to {other} and points his blade at the next target.`
         ]
     },
     rebel_virgil_wesley: {
         advance: [
-            `{user} walks toward {other}, and every neurochip in reach starts whispering at once.`,
-            `{user} advances on {other} with a patient smile, as if this were a debate he's already won.`,
-            `{user} moves closer to {other}, talking so softly that everyone leans in to listen.`,
-            `{user} closes in on {other}, a hiss of static following him that sounds almost like words.`
+            `{user} walks toward {other}, spinning a glowing dagger in each hand.`,
+            `{user} closes on {other} with the loose, easy steps of the best fighter in the rebellion.`,
+            `{user} advances on {other}, red scarf trailing, daggers held low.`,
+            `{user} comes at {other} like this is personal, because to him every fight against the Enforcers is.`
         ],
         retreat: [
-            `{user} steps back from {other}, unbothered, as if retreating were just another argument.`,
-            `{user} withdraws from {other}, the device on his wrist humming a low warning.`,
-            `{user} gives {other} some space, still smiling like he knows how this ends.`
+            `{user} steps back from {other}, flipping a dagger and catching it without looking.`,
+            `{user} withdraws from {other}, measuring the distance for a throw.`,
+            `{user} gives {other} some space, daggers still lit, waiting for them to make a mistake.`
         ],
         regroup: [
-            `{user} moves to {other}'s side and murmurs something that steadies them.`,
-            `{user} falls in with {other}, a quiet general among foot soldiers.`,
-            `{user} regroups with {other}, fingers dancing over a wrist display.`
+            `{user} moves to {other}'s side, and the rebels nearby stand a little straighter.`,
+            `{user} falls in with {other}, one dagger raised over their shoulder.`,
+            `{user} regroups with {other} and nods at a gap in the enemy line.`
         ]
-    }
+    },
 };

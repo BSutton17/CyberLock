@@ -75,24 +75,24 @@ export const WEAPON_KILLS = {
             `{user} out-muscles {victim}, which nobody thought was possible, least of all {victim}.`
         ],
         enforcer_genisis: [
-            `{user} doesn't try to keep up with {victim}'s speed. He just waits for one mistake, and swings.`,
-            `{user} lands one clean hit on {victim}, and one turns out to be enough. {victim} folds without a sound.`,
-            `{user} takes three cuts to land one swing, but it's the swing that counts. {victim} drops.`
+            `{user} takes two cuts from {victim}'s arms to get close, then brings the hammer down. The surgeon folds up inside her own machinery.`,
+            `{user} grabs one of {victim}'s spider arms and swings the hammer into the rest of her. She doesn't get up.`,
+            `{user} smashes through {victim}'s arms one at a time, and on the last one she finally falls.`
         ],
         rebel_garret_maxwell: [
-            `{user} knocks the cannon aside and puts {victim} down. Two dockworkers, and only one still standing.`,
-            `{user} hammers {victim} into the rubble {victim} made. There's some justice in that.`,
-            `{user} catches {victim} reloading and ends the demolition early.`
+            `{user} knocks the cannon-hammer aside with his own and puts {victim} down. Two big men with hammers, and only one standing.`,
+            `{user} catches {victim} mid-swing, and the old rebel sits down hard in the rubble.`,
+            `{user} brings the hammer down on {victim}'s weapon, then on {victim}. The fight goes out of him.`
         ],
         rebel_levi_wicker: [
-            `{user} catches {victim} mid-joke with the hammer. The punchline never lands.`,
-            `{user} waits for {victim}'s mods to flicker, then swings. {victim} goes down laughing, which is somehow worse.`,
-            `{user} hits {victim} hard enough to end the showboating for good.`
+            `{user} lets {victim} cut him twice, then lands the one swing that matters. The young rebel goes down.`,
+            `{user} times the swing to {victim}'s next lunge, and the hammer meets him halfway.`,
+            `{user} hits {victim} hard enough to knock both blades out of his hands. He doesn't reach for them again.`
         ],
         rebel_virgil_wesley: [
-            `{user} shrugs off the whispers in his head and swings. {victim} didn't plan for someone too stubborn to listen.`,
-            `{user} brings the hammer down on {victim}'s device, and the static in everybody's skull goes quiet.`,
-            `{user} interrupts {victim}'s speech with the hammer. It's the most persuasive argument on the street.`
+            `{user} swats a thrown dagger out of the air and closes the distance before {victim} can call it back. One swing ends it.`,
+            `{user} walks through {victim}'s cuts like they're rain and brings the hammer down.`,
+            `{user} catches {victim} mid-leap with the hammer's head, and the rebellion's best fighter hits the ground.`
         ]
     },
     'Taser Shield': { // E.N.C.A.G.E
@@ -167,121 +167,121 @@ export const WEAPON_KILLS = {
             `{user} drives the shield into {victim}'s chest, and the core gutters and dies down to a sullen glow.`
         ],
         enforcer_genisis: [
-            `{user} reads {victim}'s pattern and holds the shield exactly where the next cut lands. The shock does the rest.`,
-            `{user} recognizes something of itself in {victim}, a little, and ends it quickly out of respect.`,
-            `{user} blocks a flurry of cuts, then shoves once. {victim} collapses, still polite.`
+            `{user} catches {victim}'s blades on its shield, and the current runs up every one of her mechanical arms at once. She seizes and falls.`,
+            `{user} recognizes Crown Gene's work in {victim}'s arms. It pins her under the shield and holds the trigger down.`,
+            `{user} blocks a flurry of cuts, then shoves once. {victim}'s arms lock up, and she goes down with them.`
         ],
         rebel_garret_maxwell: [
-            `{user} walks straight into {victim}'s cannon fire, shield up, and shocks {victim} out cold.`,
-            `{user} pins the cannon's barrel under its shield and zaps {victim} until they let go.`,
-            `{user} slams {victim} back into the rubble, and the cannon finally goes silent.`
+            `{user} walks straight into {victim}'s blast, shield up, and shocks him out cold.`,
+            `{user} pins the cannon-hammer under its shield and zaps {victim} until he lets go.`,
+            `{user} slams {victim} back into the rubble, and the old rebel stays there.`
         ],
         rebel_levi_wicker: [
-            `{user} catches {victim}'s strike on the shield, and the current fries what's left of his mods. {victim} goes down hard.`,
-            `{user} shocks {victim} mid-taunt, and {victim} stops talking.`,
-            `{user} pins {victim} against the shield, and the joking finally stops.`
+            `{user} catches both of {victim}'s blades on the shield, and the current runs up into the young rebel. He drops.`,
+            `{user} reads {victim}'s pattern and puts the shield exactly where the next cut lands. The shock does the rest.`,
+            `{user} pins {victim} against a wall with the shield until his blades go dark.`
         ],
         rebel_virgil_wesley: [
-            `{user} has no neurochip for {victim} to whisper into. It walks through the static and shocks {victim} flat.`,
-            `{user} slams the shield into {victim}'s device, and the signal dies with a long electronic scream.`,
-            `{user} pins {victim} beneath the shield. "No," it says, as {victim} starts to argue, and pulls the trigger.`
+            `{user} blocks both thrown daggers and charges before {victim} can call them back. The shield finishes it.`,
+            `{user} takes every cut {victim} has on the shield, then shocks him flat.`,
+            `{user} pins {victim} beneath the shield. \"No,\" it says, as he starts to get up, and pulls the trigger.`
         ]
     },
-    'Ray Gun': { // Gene Shock
+    'Ray Gun': { // Gene Shock: blue fusion fire from his bare hand
         enforcer_soldier: [
-            `{user} burns a hole straight through {victim}'s visor, and the soldier drops without a sound.`,
-            `{user} catches {victim} mid-charge with a beam that melts the baton's grip. The rest of {victim} follows.`,
-            `{user} fires once, and {victim} crumples with smoke curling off the armor.`
+            `{user} hurls a ball of blue fire into {victim}'s visor, and the robot's lights go out one by one.`,
+            `{user} catches {victim} mid-charge with a palm full of flame. The baton melts first, then the rest of the soldier folds.`,
+            `{user} throws once, and {victim} topples over with smoke pouring out of its joints.`
         ],
         enforcer_drone: [
-            `{user} shoots {victim} out of the air, and it spirals down trailing smoke.`,
-            `{user} melts {victim}'s rotors in one burst, and the drone drops like a stone.`,
-            `{user} burns through {victim}'s targeting eye, and it crashes into a parked car.`
+            `{user} flings a flare of blue fire that hits {victim} dead center, and it spirals down trailing smoke.`,
+            `{user} melts {victim}'s rotors with one throw, and it drops like a stone.`,
+            `{user} snaps his wrist, and the flame he lets go knocks {victim} into a parked car.`
         ],
         rebel_initiate: [
-            `{user} fires a quick shot that knocks {victim} flat. The scrap blade skitters across the street.`,
-            `{user} takes a deep breath and burns {victim} down, wincing a little at how young they look.`,
-            `{user} catches {victim} in the shoulder, and the kid spins once and hits the ground.`
+            `{user} throws a small, controlled burst that knocks {victim} flat. The scrap blade skitters away.`,
+            `{user} takes a breath and puts {victim} down with a lick of blue fire, wincing at how young the kid looks.`,
+            `{user}'s flame catches {victim} in the shoulder, and the kid spins once and stays down.`
         ],
         rebel_field_tech: [
-            `{user} shoots {victim}'s arc launcher, and it goes off in their hands.`,
-            `{user} burns {victim} down with a precise shot, then glances at the launcher, curious about the wiring.`,
-            `{user} fires, and {victim} collapses in a heap of sparks and salvage.`
+            `{user} throws fire straight into {victim}'s launcher, and it goes off in their hands.`,
+            `{user} puts {victim} down with one precise throw, then eyes the launcher, curious about the wiring.`,
+            `{user}'s blue fire catches {victim}'s battery pack, and the field tech drops in a burst of sparks.`
         ],
         division_command: [
-            `{user} burns through {victim}'s uplink and keeps going. The orders stop for good.`,
-            `{user} catches {victim} mid-transmission with a beam that ends the call.`,
-            `{user} fires once, and {victim} goes down with the wrist display still asking for backup.`
+            `{user} burns the uplink right off {victim}'s wrist, and the flame keeps going. The orders stop for good.`,
+            `{user} catches {victim} mid-transmission with a ball of blue fire that ends the call.`,
+            `{user} throws once, and {victim} goes down with the wrist display still asking for backup.`
         ],
         division_strategist: [
-            `{user} shoots through {victim}'s holomap and hits the strategist behind it.`,
+            `{user} hurls fire through {victim}'s holomap, and the strategist behind it goes down with it.`,
             `{user} beats {victim} to the shot by half a second, and half a second is plenty.`,
             `{user} melts the railcaster's barrel, then its owner. {victim} drops in a hiss of steam.`
         ],
         vanguard_captain: [
-            `{user} overcharges the ray gun and burns right through {victim}'s armor plating. The gauntlets go still.`,
-            `{user} finds a gap in {victim}'s armor and holds the beam on it until {victim} topples.`,
-            `{user} hits {victim} so hard with the beam that the captain staggers back and doesn't come forward again.`
+            `{user} pulls everything through his arm and throws it. The blue fire burns right through {victim}'s plating, and the gauntlets go still.`,
+            `{user} finds a gap in {victim}'s armor and keeps feeding fire into it until the captain topples.`,
+            `{user} hits {victim} so hard with one throw that the captain staggers back and doesn't come forward again.`
         ],
         field_captain: [
-            `{user} shoots the sabre out of {victim}'s hand, then shoots {victim}.`,
-            `{user} burns {victim} down mid-shout, and the line forgets the rest of the order.`,
-            `{user} fires, and {victim} falls with the sabre still raised.`
+            `{user} burns the sabre out of {victim}'s hand, then throws a second flame at {victim}.`,
+            `{user} puts {victim} down mid-shout, and the rebels behind them forget the rest of the order.`,
+            `{user} throws fire, and {victim} falls with the sabre still raised.`
         ],
         rebel_coordinator: [
             `{user} burns through {victim}'s faceplate, and the coordinator falls with the hammer still in hand.`,
-            `{user} fires twice, and {victim} goes down hard, taking the cell's plan with them.`,
-            `{user} catches {victim} mid-swing, and the breaker hammer clatters to the street.`
+            `{user} throws twice, and {victim} goes down hard, taking the cell's plan with them.`,
+            `{user} catches {victim} mid-swing with a fistful of fire, and the breaker hammer clatters to the street.`
         ],
         operations_handler: [
-            `{user} fries {victim}'s headset with the beam, and {victim} collapses clutching their ears.`,
-            `{user} beats {victim}'s lock-on with a shot of their own, and the rifle beeps once and goes quiet.`,
-            `{user} burns {victim} down, and the stolen comms crackle on, unheard.`
+            `{user} fries {victim}'s headset with a thin blue flame, and the handler collapses clutching their ears.`,
+            `{user} beats {victim}'s lock-on with a throw of his own, and the rifle beeps once and goes quiet.`,
+            `{user} puts {victim} down with a burst of fire, and the stolen comms crackle on, unheard.`
         ],
         division_chief: [
-            `{user} cranks the ray gun to a color it's never made before and burns {victim} down. The verdict is overturned.`,
-            `{user} dodges the compliance blade and shoots {victim} point blank.`,
-            `{user} fires steadily until {victim} finally takes a knee and stays there.`
+            `{user} lets the fire in his hand burn white and throws it. {victim} finally goes down.`,
+            `{user} dodges the compliance blade and slams a burning palm into {victim}'s chest.`,
+            `{user} keeps throwing until {victim} takes a knee and stays there.`
         ],
         rebellion_chief: [
-            `{user} shoots the banner and then the chief beneath it. {victim} drops, and the cause loses its loudest voice.`,
-            `{user} burns {victim} down mid-charge, and the halberd skids across the street.`,
-            `{user} fires once, carefully, and {victim} sinks to the pavement.`
+            `{user} burns the banner and then the chief beneath it. {victim} drops, and the cause loses its loudest voice.`,
+            `{user} catches {victim} mid-charge with a wall of blue fire, and the halberd skids across the street.`,
+            `{user} throws once, carefully, and {victim} sinks to the pavement.`
         ],
         enforcer_the_architect: [
-            `{user} meets {victim}'s light with their own. The prism cracks first, then {victim} goes down.`,
-            `{user} out-burns the prism, and {victim} finally looks surprised. Then {victim} stops looking at all.`,
-            `{user} fires a beam so bright the prism can't bend it, and {victim} falls.`
+            `{user} meets {victim}'s light with his own fire. The prism cracks first, then {victim} goes down.`,
+            `{user} out-burns the prism, and {victim} finally looks surprised. Then he stops looking at anything.`,
+            `{user} throws fire so bright the prism can't bend it, and {victim} falls.`
         ],
         enforcer_macro_hull: [
-            `{user} shoots straight into {victim}'s fusion core, and it flickers and fades. The giant goes down slowly.`,
-            `{user} pours every bit of their own cores into one shot, and {victim}'s chest goes dark.`,
+            `{user} hurls blue fire straight into {victim}'s fusion core. It flickers and fades, and the giant goes down slowly.`,
+            `{user} pours everything his own cores have into one throw, and {victim}'s chest goes dark.`,
             `{user} dodges the maul and burns {victim}'s core out, and the ground stops shaking.`
         ],
         enforcer_genisis: [
-            `{user} can't track {victim}, so they fire where {victim} is going to be. {victim} walks right into it.`,
-            `{user} burns {victim} down mid-dash, and the blades clatter silent.`,
-            `{user} fires wide on purpose, then catches {victim} on the dodge. {victim} folds.`
+            `{user} burns through {victim}'s spider arms one by one, and the surgeon goes down with the last of them.`,
+            `{user} recognizes Crown Gene's work in {victim}'s arms, his own former employer, and burns it out of her. She drops.`,
+            `{user} throws a sheet of blue fire that {victim}'s arms can't cut through, and she collapses inside it.`
         ],
         rebel_garret_maxwell: [
-            `{user} shoots the cannon's charge chamber, and the blast drops {victim} hard.`,
-            `{user} trades fire with {victim} and wins, and the demolition chief goes down in the rubble.`,
-            `{user} burns {victim} down in a single, precise shot.`
+            `{user} burns into the charge chamber of {victim}'s cannon-hammer, and the blast drops him hard.`,
+            `{user} trades fire with {victim} and wins, and the old rebel goes down in his own dust.`,
+            `{user} catches {victim} with a ball of blue flame square in the chest, and he finally falls.`
         ],
         rebel_levi_wicker: [
-            `{user} fires right as {victim}'s mods fail, and the timing couldn't be worse for him.`,
-            `{user} burns {victim} mid-laugh, and the laughing stops.`,
-            `{user} catches {victim} mid-leap, and he drops out of the air.`
+            `{user} throws fire right where {victim}'s blades are about to be, and the young rebel runs straight into it.`,
+            `{user} catches {victim} mid-leap with a burst of blue fire, and he drops out of the air.`,
+            `{user} burns through both of {victim}'s glowing blades, and he goes down still reaching for them.`
         ],
         rebel_virgil_wesley: [
-            `{user} shoots the device on {victim}'s wrist, and the whispering in every skull nearby goes silent. {victim} goes down with it.`,
-            `{user} fires through the static in their own head and hits {victim} square.`,
-            `{user} ends {victim}'s argument the only way they know, with a beam to the chest.`
+            `{user} meets {victim}'s thrown daggers with a burst of fire that melts them mid-air, then sends a second burst after their owner.`,
+            `{user} throws blue fire through the gap in {victim}'s guard, and the rebellion's best fighter goes down.`,
+            `{user} catches {victim} with a sheet of flame that the daggers can't cut, and he drops.`
         ]
     },
     'Energy Sword': { // Leo
         enforcer_soldier: [
-            `{user} slips past {victim}'s baton and opens them up in one smooth stroke.`,
+            `{user} slips past {victim}'s baton and opens the robot up in one smooth stroke.`,
             `{user} cuts through {victim}'s armor, the helmet and the radio chatter all at once.`,
             `{user} sidesteps {victim}, and the sword hums once. That's the whole fight.`
         ],
@@ -351,24 +351,24 @@ export const WEAPON_KILLS = {
             `{user} carves a line across {victim}'s chest, and the core sputters and dies.`
         ],
         enforcer_genisis: [
-            `{user} matches {victim} cut for cut, blade for blade, and then he's a hair faster. {victim} falls.`,
-            `{user} and {victim} pass each other in a blur. A moment later, {victim} drops.`,
-            `{user} finds the one gap in {victim}'s perfect form. "Good fight," he says, and means it.`
+            `{user} cuts through {victim}'s mechanical arms one by one until there is nothing left between him and the surgeon.`,
+            `{user} matches {victim}'s blades cut for cut, then he's a hair faster. She falls.`,
+            `{user} slips under her arms and opens {victim}'s guard. \"Good work,\" he says, about the arms, as she goes down.`
         ],
         rebel_garret_maxwell: [
-            `{user} slips under the cannon's barrel and cuts {victim} down before it can fire.`,
-            `{user} slices the cannon's charge cell, and {victim} goes down in the flash.`,
-            `{user} gets in close, where heavy artillery doesn't help, and finishes {victim}.`
+            `{user} slips under the cannon-hammer and cuts {victim} down before it can fire.`,
+            `{user} slices the weapon's charge cell, and {victim} goes down in the flash.`,
+            `{user} gets in close, where heavy weapons don't help, and finishes {victim}.`
         ],
         rebel_levi_wicker: [
-            `{user} and {victim} trade grins and cuts until {victim}'s mods give out mid-swing. {user} doesn't miss the chance.`,
-            `{user} out-fights {victim} at his own game and cuts him down with a wry nod.`,
-            `{user} catches {victim} mid-taunt with a cut that ends the conversation.`
+            `{user} and {victim} trade cuts, blade for blade, until Leo finds the half-second gap. The young rebel goes down.`,
+            `{user} sees a lot of himself in {victim}. He still doesn't miss the opening.`,
+            `{user} parries both of {victim}'s blades with one sword and cuts with the other.`
         ],
         rebel_virgil_wesley: [
-            `{user} slices the device off {victim}'s wrist, and the whispering stops. {victim} follows it to the ground.`,
-            `{user} ignores every word {victim} says and cuts him down. He's heard better pitches.`,
-            `{user} cuts {victim} down mid-sentence. The rest of the argument goes unspoken.`
+            `{user} cuts a thrown dagger out of the air, then meets {victim} as he comes in after it.`,
+            `{user} and {victim} pass each other in a blur of light. A moment later, {victim} drops.`,
+            `{user} out-fights the rebellion's best fighter with one clean stroke, and {victim} goes down.`
         ]
     },
     Shotgun: { // Last Legion
@@ -443,24 +443,24 @@ export const WEAPON_KILLS = {
             `{user} fires, racks, fires, racks, until {victim} finally goes down.`
         ],
         enforcer_genisis: [
-            `{user} fires a spread wide enough that even {victim} can't dodge all of it. Some of it is plenty.`,
-            `{user} waits for {victim} to come to him, then fires point blank.`,
-            `{user} catches {victim} on the dodge, and the shell finds them anyway.`
+            `{user} fires a spread wide enough that {victim}'s arms can't cut all of it. Some of it is plenty.`,
+            `{user} waits for {victim} to step in close, then fires point blank.`,
+            `{user} blasts two of her arms off, racks, and finishes {victim}.`
         ],
         rebel_garret_maxwell: [
-            `{user} out-shoots {victim}'s cannon at close range, and the demolition chief drops.`,
-            `{user} fires at {victim} until the cannon goes quiet.`,
-            `{user} blasts {victim} back into the rubble they made.`
+            `{user} outguns {victim}'s cannon-hammer at close range, and the old rebel drops.`,
+            `{user} fires until {victim} stops getting back up. He takes no pleasure in it.`,
+            `{user} puts a shell through {victim}'s guard, and the weapon goes quiet.`
         ],
         rebel_levi_wicker: [
-            `{user} fires as {victim} lunges, and the leap ends early.`,
-            `{user} catches {victim} with the spread mid-joke. He doesn't finish it.`,
-            `{user} shoots {victim} down, and his flickering mods finally go dark.`
+            `{user} fires as {victim} lunges, and the young rebel goes down mid-step.`,
+            `{user} catches {victim} with the spread from close enough to feel it.`,
+            `{user} shakes his head as {victim} falls. \"Same age my last partner was,\" he mutters.`
         ],
         rebel_virgil_wesley: [
-            `{user} blasts the static out of his head by firing at the source. {victim} goes down.`,
-            `{user} shoots {victim} mid-speech, and the crowd's attention snaps away from him.`,
-            `{user} fires once into the device on {victim}'s wrist, then once into {victim}.`
+            `{user} fires through both thrown daggers, and the spread keeps going into {victim}.`,
+            `{user} waits for {victim} to close in, and he does. One shell.`,
+            `{user} blasts {victim} off his feet mid-leap, and the rebellion's symbol hits the pavement.`
         ]
     },
     Drone: { // Patchwork
@@ -535,24 +535,24 @@ export const WEAPON_KILLS = {
             `{user}'s drone keeps zapping {victim}'s core until the glow in his chest fades to nothing.`
         ],
         enforcer_genisis: [
-            `{user}'s drone can't keep up with {victim}, so it just hovers and waits. When {victim} finally stops moving, it fires.`,
-            `{user}'s drone catches {victim} right as {victim} lands from a dash. Perfect timing, maybe by accident.`,
-            `{user}'s drone stings {victim} once too often, and the perfect enforcer finally falls.`
+            `{user}'s drone ducks under {victim}'s arms and fires into the joint where they meet her back. She drops.`,
+            `{user}'s drone stings {victim} one time too many, and Crown Gene's chief surgeon finally falls.`,
+            `{user} stares at {victim}'s arms in honest admiration, then has the drone shoot out every one of them.`
         ],
         rebel_garret_maxwell: [
-            `{user}'s drone flies right into the cannon's barrel and fires. The backfire knocks {victim} off his feet.`,
-            `{user}'s drone keeps zapping {victim} until the big demolitionist finally sits down in his own rubble.`,
+            `{user}'s drone flies right into the cannon-hammer's barrel and fires. The backfire knocks {victim} off his feet.`,
+            `{user}'s drone keeps zapping {victim} until the old rebel finally sits down in the rubble.`,
             `{user}'s drone darts around {victim} until he can't track it, then finishes him from behind.`
         ],
         rebel_levi_wicker: [
-            `{user}'s drone fries what's left of {victim}'s mods, and he finally drops.`,
-            `{user}'s drone zaps {victim} mid-joke, and he doesn't get to the punchline.`,
-            `{user}'s drone fires a burst at {victim}'s knees, and he goes down laughing at the indignity of it.`
+            `{user}'s drone darts between {victim}'s blades and stings him until he drops.`,
+            `{user}'s drone fires a burst at {victim}'s knees, and the young rebel goes down.`,
+            `{user}'s drone is too small and too fast for {victim}'s blades, and he runs out of strength before it runs out of battery.`
         ],
         rebel_virgil_wesley: [
-            `{user}'s drone jams {victim}'s signal, and the whispering stops. Then the drone fires.`,
-            `{user}'s drone doesn't have a neurochip to listen with. It flies right past {victim}'s words and fires into his chest.`,
-            `{user}'s drone fries the device on {victim}'s wrist, and {victim} goes down with it.`
+            `{user}'s drone takes one of {victim}'s thrown daggers in the casing, shrugs it off, and fires back. He drops.`,
+            `{user}'s drone circles {victim} faster than he can throw, and he finally goes down.`,
+            `{user}'s drone fires into {victim}'s back while he's busy with everyone else.`
         ]
     },
     'Electric Guitar': { // Livewire
@@ -627,29 +627,29 @@ export const WEAPON_KILLS = {
             `{user} hits a chord that makes {victim}'s core scream, and the giant collapses.`
         ],
         enforcer_genisis: [
-            `{user} plays a wall of sound too wide to dodge, and {victim} finally stops moving.`,
-            `{user} hits {victim} with feedback so loud the perfect enforcer covers both ears, then falls.`,
-            `{user} finds the hum of {victim}'s implants and plays it back at them, louder. {victim} drops.`
+            `{user} finds the frequency of the motors in {victim}'s arms, and they seize all at once. She falls with them.`,
+            `{user} plays a chord that shakes every joint in {victim}'s machinery loose.`,
+            `{user} plays loud enough to drown out the clicking of her arms, and keeps playing until {victim} drops.`
         ],
         rebel_garret_maxwell: [
-            `{user} hits a chord that sets off {victim}'s cannon early, and the blast knocks him flat.`,
+            `{user} hits a chord that sets off {victim}'s cannon-hammer early, and the blast knocks him flat.`,
             `{user} plays something slow and heavy, and {victim} finally sits down in the rubble and stays there.`,
-            `{user} rips a riff at {victim} that shakes dust off every wall on the street, and the demolition man goes down under it.`
+            `{user} and {victim} lost their neighborhoods to the same company. {user} plays him down anyway.`
         ],
         rebel_levi_wicker: [
-            `{user} finds the frequency of {victim}'s failing mods, and they all fail at once.`,
-            `{user} plays a riff, and {victim} drops mid-laugh, still grinning.`,
-            `{user} and {victim} share a look, two people who like being loud. Then {user} plays louder, and {victim} goes down.`
+            `{user} plays a wall of sound too wide for {victim} to slip, and the young rebel goes down.`,
+            `{user} hits a chord as {victim} lunges, and his blades go dark mid-swing.`,
+            `{user} plays the last note of the song, and {victim} drops before it fades.`
         ],
         rebel_virgil_wesley: [
-            `{user} drowns out {victim}'s whispering with a riff, and keeps playing until {victim} drops.`,
-            `{user} plays over the signal until there's nothing left of it, and {victim} folds with it.`,
-            `{user} hits a chord that fries the device on {victim}'s wrist. The rebel mastermind goes down in a cloud of smoke.`
+            `{user} plays a riff that knocks {victim}'s daggers out of the air mid-throw, then plays him down.`,
+            `{user} drowns out {victim}'s war cry with a chord, and the rebellion's symbol hits the ground.`,
+            `{user} finds the hum of {victim}'s daggers and plays it back louder, until they shatter.`
         ]
     },
     'Magic Energy': { // True North
         enforcer_soldier: [
-            `{user} hits {victim} with a bolt that knocks the soldier flat. She lets out a long breath. Her father wore that uniform once.`,
+            `{user} hits {victim} with a bolt that knocks the robot flat. She lets out a long breath. Her father wore the badge these machines replaced.`,
             `{user} blasts {victim} back into a wall, and the soldier slides down it and stays there.`,
             `{user} holds a steady beam on {victim} until the baton drops, then the soldier.`
         ],
@@ -719,24 +719,24 @@ export const WEAPON_KILLS = {
             `{user} blasts {victim} back one step, then another, and on the third he topples.`
         ],
         enforcer_genisis: [
-            `{user} fires where {victim} is going to be, and {victim} walks right into it.`,
-            `{user} catches {victim} with a blast too wide to slip.`,
-            `{user} hits {victim} with a bolt, and the perfect enforcer stops. "Rest," she says quietly.`
+            `{user} drives her spear through the joint where {victim}'s arms meet her back, and the surgeon falls.`,
+            `{user} parries a blade with the spear and answers with a burst of light that drops {victim}.`,
+            `{user} looks at what {victim} has done to people and doesn't hesitate. One thrust.`
         ],
         rebel_garret_maxwell: [
-            `{user} blasts {victim}'s cannon, and the explosion takes him down.`,
-            `{user} hits {victim} with a bolt, and the big man finally drops into his own rubble.`,
-            `{user} keeps firing until {victim} stops getting up.`
+            `{user} blasts {victim}'s cannon-hammer out of his hands, and the explosion takes him down.`,
+            `{user} hits {victim} with a bolt, and the old rebel finally drops into the rubble.`,
+            `{user} keeps firing until {victim} stops getting up. She takes no joy in it.`
         ],
         rebel_levi_wicker: [
-            `{user} catches {victim} mid-leap with a bolt, and he drops out of the air.`,
-            `{user} hits {victim} just as his mods fail, and he goes down.`,
-            `{user} blasts {victim}, and the jokes finally stop.`
+            `{user} catches {victim} mid-leap with a bolt from her spear, and he drops out of the air.`,
+            `{user} meets both of {victim}'s blades with the spear's haft and drops him with the butt end.`,
+            `{user} blasts {victim}, and the young rebel goes down. \"Rest,\" she says quietly.`
         ],
         rebel_virgil_wesley: [
-            `{user} shuts out the whispering in her head and fires. {victim} goes down.`,
-            `{user} blasts the device on {victim}'s wrist, and the signal dies with him.`,
-            `{user} hits {victim} with a beam in the middle of his speech. Nobody claps.`
+            `{user} knocks a thrown dagger aside with the spear, then the other, then puts {victim} down.`,
+            `{user} fires a bolt through the gap in {victim}'s guard, and the rebellion's best fighter falls.`,
+            `{user} meets {victim}'s charge with the spear's point and doesn't give an inch.`
         ]
     },
     Laptop: { // Ghost Shell
@@ -811,24 +811,24 @@ export const WEAPON_KILLS = {
             `{user} sends a shutdown command straight into {victim}'s chest, and the giant topples.`
         ],
         enforcer_genisis: [
-            `{user} hacks the code that rebuilt {victim} and shuts it all down. The perfect enforcer stops.`,
-            `{user} overloads {victim}'s implants, and they drop mid-step.`,
-            `{user} finds a forgotten line of code in {victim}'s head, from before Crown Gene, and runs it. {victim} lies down.`
+            `{user} hacks the motors in {victim}'s arms and folds them up around her like a cage.`,
+            `{user} finds Crown Gene's backdoor in {victim}'s own machinery and walks right through it.`,
+            `{user} shuts down {victim}'s arms one at a time, and she goes down with the last of them.`
         ],
         rebel_garret_maxwell: [
-            `{user} hacks {victim}'s cannon and overloads it. The blast takes {victim} down.`,
-            `{user} fries the targeting on {victim}'s cannon, and the next shot lands right at his own feet.`,
-            `{user} locks {victim}'s cannon in place and shocks him through the grip.`
+            `{user} hacks {victim}'s cannon-hammer and overloads it. The blast takes him down.`,
+            `{user} fries the targeting on {victim}'s weapon, and the next shot lands at his own feet.`,
+            `{user} locks {victim}'s weapon in place and shocks him through the grip.`
         ],
         rebel_levi_wicker: [
-            `{user} hacks {victim}'s failing mods and turns them off for good.`,
-            `{user} overloads {victim}'s implants, and he drops mid-laugh.`,
-            `{user} hijacks {victim}'s legs mid-sprint, and he goes down face first.`
+            `{user} kills the power to {victim}'s blades mid-swing, and the young rebel stumbles into nothing.`,
+            `{user} overloads the power cells in {victim}'s blades, and they go off in his hands.`,
+            `{user} hacks every camera on the street to track {victim}'s pattern, then fries him at the end of it.`
         ],
         rebel_virgil_wesley: [
-            `{user} out-hacks {victim} at his own game. The signal dies.`,
-            `{user} hijacks {victim}'s device and turns the whispering on him. {victim} drops, hands over his ears.`,
-            `{user} fries {victim}'s neurochip, and the rebellion's mastermind goes down.`
+            `{user} hacks the recall link on {victim}'s daggers, and the next one flies back into him instead.`,
+            `{user} overloads {victim}'s daggers mid-throw, and they burst like flares. He drops.`,
+            `{user} kills the light in both of {victim}'s daggers, and the rebellion's symbol goes down swinging empty hilts.`
         ]
     }
 };

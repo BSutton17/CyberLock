@@ -10,3 +10,16 @@
     text-transform: uppercase;
     letter-spacing: 0.05em;
 }
+
+/* The last 30 seconds to answer a personal moment. */
+.dialogue-choices .dialogue-countdown {
+    align-self: center;
+    padding: 0.15rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid rgba(248, 113, 113, 0.7);
+    background: rgba(127, 29, 29, 0.35);
+    color: #fecaca;
+    font-weight: 700;
+    font-size: 0.85em;
+    letter-spacing: 0.04em;
+}

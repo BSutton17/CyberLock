@@ -141,3 +141,13 @@ read; the next turn waits for it. Bot party members walk a tile every 320 ms
 1.6 s before each step (`BOT_STEP_MS`). Ultimates' cooldowns carry over between fights and are
 never lengthened by Butterfly Effect.
 
+## Nobody falls before their first turn
+
+Until a party member has had their first turn in a fight, no hit can take them below 1 HP: a fast
+boss acting first can hurt them badly but can't knock them out before they get to play.
+
+## Bot behavior
+
+Shipment and Leo are aggressive; Gene Shock, Patchwork and True North are defensive; E.N.C.A.G.E,
+Last Legion, Livewire and Ghost Shell are intelligent.
+

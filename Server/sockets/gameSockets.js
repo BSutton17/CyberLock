@@ -35,6 +35,7 @@ export function createGameState() {
     narrationTimers: {},    // room -> pending combat narration timers
     combatLineMemory: {},   // room -> combat lines used lately, so they don't repeat
     dialogueTimers: {},     // room -> timer that closes an unanswered personal moment
+    dialogueDeadlines: {},  // room -> when that moment closes (clients count down the last 30 s)
     storyQueues: {},        // room -> Promise chain, so story events run one at a time
     seenAiRequests: new Map()
   };
@@ -108,7 +109,9 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
     return {
       combatFlowIndex: roomState.encountersStarted || 0,
       selectedFaction: roomState.selectedFaction,
-      lastStoryMessage: roomState.lastStoryMessage || null,
+      lastStoryMessage: roomState.lastStoryMessage
+        ? { ...roomState.lastStoryMessage, dialogue: withTimeLeft(room, roomState.lastStoryMessage.dialogue) }
+        : null,
       gameOver: !!roomState.gameOver
     };
   };
@@ -117,6 +120,7 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
     combat.stopRoom(room);
     clearTimeout(state.dialogueTimers[room]);
     delete state.dialogueTimers[room];
+    delete state.dialogueDeadlines?.[room];
     for (const timeoutId of Object.values(state.pendingDisconnects[room] || {})) clearTimeout(timeoutId);
     delete state.pendingDisconnects[room];
     delete state.rooms[room];
@@ -136,12 +140,20 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
 
   // ---- Personal moments (see narrator/dialogue.js) ----
 
+  // The moment as clients get it, with how long is left to answer (they show a countdown).
+  function withTimeLeft(room, dialogue) {
+    if (!dialogue) return null;
+    const deadline = state.dialogueDeadlines?.[room];
+    return deadline ? { ...dialogue, timeLeftMs: Math.max(0, deadline - Date.now()) } : dialogue;
+  }
+
   // The answer (or silence, if time ran out) is told as the next narration, which also brings
   // back the group's decision.
   function resolveDialogue(room, result) {
     if (!result) return false;
     clearTimeout(state.dialogueTimers[room]);
     delete state.dialogueTimers[room];
+    delete state.dialogueDeadlines?.[room];
     const roomState = state.rooms[room];
     if (!roomState) return false;
     const message = {
@@ -160,10 +172,12 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
   // A moment nobody answers can't hold up the group forever.
   function startDialogueTimer(room, dialogue) {
     clearTimeout(state.dialogueTimers[room]);
+    const timeoutMs = timing.dialogueTimeoutMs ?? 180000;
+    (state.dialogueDeadlines ||= {})[room] = Date.now() + timeoutMs;
     const timer = setTimeout(() => {
       delete state.dialogueTimers[room];
       resolveDialogue(room, narrator?.expireDialogue?.(room, dialogue.id));
-    }, timing.dialogueTimeoutMs ?? 60000);
+    }, timeoutMs);
     timer.unref?.();
     state.dialogueTimers[room] = timer;
   }
@@ -839,7 +853,7 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
         attribute: result.attribute || null,
         startCombat: !!result.startCombat,
         options: result.options || null,
-        dialogue: result.dialogue || null,
+        dialogue: withTimeLeft(room, result.dialogue || null),
         from,
         ...(result.fallback ? { fallback: true } : {})
       };

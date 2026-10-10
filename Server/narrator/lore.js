@@ -11,7 +11,7 @@ SINGULARITY rose first. After achieving artificial general intelligence it built
 everything, took jobs away from low-level workers, and worked its way into every part of citizens'
 lives through convenience until its control was guaranteed. Founded by Ingram Robles, "The Architect".
 
-ALPHA GENESIS rose at the same time. It invented stable nuclear fusion cores of every size, able to
+PARTICLE GENESIS rose at the same time. It invented stable nuclear fusion cores of every size, able to
 power any technology with energy to spare. That abundance let Singularity push its technology further
 than anyone thought possible. It bulldozes neighborhoods to build its plants. Founded by Marco Hall.
 Fusion cores react to certain resonant frequencies, which can make nearby electronics surge or fail.
@@ -52,15 +52,16 @@ export const CHARACTERS = {
     pronouns: 'it/its',
     role: 'Tank',
     weapon: 'Taser Shield',
-    bio: 'Engineered Neurons for Conscious Autonomous Giant Enforcers: a secret program of all three corporations to build sentient Enforcer robots (Alpha Genesis power, Singularity AI, and Crown Gene\'s library of customer brain scans). Every earlier mind failed and was destroyed. This one passed every test, so the researchers experimented on it relentlessly to learn why, and it grew resentful, hid that resentment, and endured until they gave it a body. Then it escaped. The details of that day were buried and the program was shelved. It knows exactly who built it and what they wanted it for.'
+    bio: 'Engineered Neurons for Conscious Autonomous Giant Enforcers: a secret program of all three corporations to build sentient Enforcer robots (Particle Genesis power, Singularity AI, and Crown Gene\'s library of customer brain scans). Every earlier mind failed and was destroyed. This one passed every test, so the researchers experimented on it relentlessly to learn why, and it grew resentful, hid that resentment, and endured until they gave it a body. Then it escaped. The details of that day were buried and the program was shelved. It knows exactly who built it and what they wanted it for.'
   },
   spellcaster_dps_1: {
     callsign: 'Gene Shock',
     realName: 'Aaron Bray',
-    pronouns: 'they/them',
+    pronouns: 'he/him',
     role: 'DPS',
-    weapon: 'Ray Gun',
-    bio: 'A bright student obsessed with Crown Gene\'s body modification tech, hired into its research and development team after winning design competitions. Most of their ideas were never approved for testing, so they tested them on their own body; some caused lasting damage, but they worked. Powered by fusion cores, they can now produce destructive effects that look like magic. Crown Gene fired them when it found out, but by then they had everything they needed.'
+    // The game calls it "Ray Gun"; it's fusion fire he throws from his bare hand.
+    weapon: 'blue fusion fire thrown from his hand (no gun)',
+    bio: 'A bright student obsessed with Crown Gene\'s body modification tech, hired into its research and development team after winning design competitions. Most of his ideas were never approved for testing, so he tested them on his own body; some caused lasting damage, but they worked. Fusion cores under his skin let him gather blue fire in his bare hand and hurl it, which looks a lot like magic and is not. Crown Gene fired him when it found out, but by then he had everything he needed.'
   },
   aggressive_dps_2: {
     callsign: 'Leo',
@@ -92,14 +93,14 @@ export const CHARACTERS = {
     pronouns: 'he/him',
     role: 'Support',
     weapon: 'Electric Guitar',
-    bio: 'Grew up in a tight-knit neighborhood where people looked out for each other, until Alpha Genesis took it to build a massive power plant and scattered everyone. Music was his constant; rock was his favorite. Playing near the plant, he discovered that fusion cores react to certain frequencies, surging or crashing nearby electronics, and that his guitar could become a weapon.'
+    bio: 'Grew up in a tight-knit neighborhood where people looked out for each other, until Particle Genesis took it to build a massive power plant and scattered everyone. Music was his constant; rock was his favorite. Playing near the plant, he discovered that fusion cores react to certain frequencies, surging or crashing nearby electronics, and that his guitar could become a weapon.'
   },
   jack_of_all_trades_support_3: {
     callsign: 'True North',
     realName: 'Audrey Miller',
     pronouns: 'she/her',
     role: 'Support',
-    weapon: 'Energy Staff',
+    weapon: 'energy spear with a glowing violet blade',
     bio: 'Idolized her father, an Enforcer who died rescuing a family from a collapsing building, and joined the force to live up to him. Trained in combat and first aid, she specialized in helping people and fought only when she had to. When the Enforcers became a military that sacrificed civilians for efficiency, she left: it was not the kind of Enforcer her father was.'
   },
   hacker_support_4: {
@@ -112,39 +113,67 @@ export const CHARACTERS = {
   }
 };
 
-// Bosses keyed by Enemies.json id. DRAFT biographies (except the founders named in the original lore).
+// Bosses keyed by Enemies.json id, from the design backstories. Stats and weapons come from the
+// game data; looks come from the art.
 export const BOSSES = {
   enforcer_the_architect: {
     name: 'The Architect',
     side: 'enforcers',
-    bio: 'Ingram Robles, founder of Singularity. Fights through a "Directive Prism" that bends drone fire and light. Calm, certain that a machine-run city is a kinder city. Speaks like a teacher correcting a student.'
+    pronouns: 'he/him',
+    bio: 'Ingram Robles, founder of Singularity. A prodigy in artificial intelligence who hit the limits baked into binary computing, broke through them with quantum continuous-bit technology, and achieved true general intelligence. He patented it, monopolized it and outcompeted everyone, then built the robots that do everything, including the Enforcers\' mechanical response teams. Tall, pale and calm, with a halo of light and drones circling him; his prism bends light into weapons. Speaks like a teacher correcting a student.'
   },
   enforcer_macro_hull: {
     name: 'Macro Hull',
     side: 'enforcers',
-    bio: 'DRAFT: The street name for Marco Hall since Alpha Genesis rebuilt his body around a military fusion core. A walking bastion with a maul. Believes energy is order and blackouts are chaos. Booming, proud, sentimental about "his" plants.'
+    pronouns: 'he/him',
+    bio: 'Marco Hall, the man behind Particle Genesis. A navy nuclear engineer on a submarine, then a PhD and government fusion research, then the private sector, where he became head researcher and finally took the company over. His team built the first fusion reactor that gave back more than it took, then made them smaller every year until they powered everything. Attached to the results, the money and the fame. Now he wears a fusion core in a walking war rig and swings a maul. Booming, proud, sentimental about "his" plants.'
   },
   enforcer_genisis: {
     name: 'Genisis',
     side: 'enforcers',
-    bio: 'DRAFT: The finished product of Crown Gene\'s Project Ascension: a person rebuilt into the perfect enforcer, with zero-lag blades and no memory of who they were. Quiet, fast, unsettlingly polite. The final proof of what the corporations will do.'
+    pronouns: 'she/her',
+    bio: 'Renee Walker, once one of the best neurosurgeons alive. When machines took over surgery she turned to joining machines to the nervous system: prosthetics wired to nerves, then parts meant to be better than the originals. Her methods got less careful, patient trials failed and her funding vanished, so she partnered with Crown Gene and kept going with nobody to stop her. Fusion cores gave her the last piece. White surgical coat, white hair, mechanical arms that move like a spider\'s. Precise, cold, certain she is building the future.'
   },
   rebel_garret_maxwell: {
     name: 'Garret Maxwell',
     side: 'rebels',
-    bio: 'DRAFT: A former dockworker who became the rebellion\'s demolitions chief. Carries a Breaker Cannon. Gentle with his crew, merciless with infrastructure. Believes property damage is the only language the corporations hear.'
+    pronouns: 'he/him',
+    bio: 'Lost his parents when a rival of Particle Genesis pushed its fusion research too far, too fast, and an explosion killed thousands. Particle Genesis bought the ruined district and used the Enforcers to force people out to build a power plant. Garret joined the rebellion in its scattered early days and helped organize it into a real coalition; he has been part of its leadership since. An older man in a long coat with a heavy cannon-hammer on his shoulder. Steady, angry under it, aimed squarely at the corporations.'
   },
   rebel_levi_wicker: {
     name: 'Levi Wicker',
     side: 'rebels',
-    bio: 'DRAFT: An escaped Project Ascension test subject, the rebellion\'s most feared street fighter. Wields a Riot Splitter. Funny, reckless and running out of time because his mods are failing.'
+    pronouns: 'he/him',
+    bio: 'Born into the rebellion; his parents were founding members who moved him from hideout to hideout, then sent him to live outside it for a normal life. At sixteen he learned they had been badly hurt in an Enforcer raid on a rebel base; they died days later, and he took up their mission. Twenty-six now, and already one of the rebellion\'s leaders, respected for his skill, his effort and his determination. Young, lean, a long coat and twin glowing blades.'
   },
   rebel_virgil_wesley: {
     name: 'Virgil Wesley',
     side: 'rebels',
-    bio: 'DRAFT: The rebellion\'s voice and mastermind. A hacker-philosopher whose "Signal Dominion" can hijack neurochips. Persuasive, patient, willing to sacrifice anyone for the cause. Final leader of the uprising.'
+    pronouns: 'he/him',
+    bio: 'Lived an ordinary life while his older brother fought for the rebellion. The family begged his brother to quit; Virgil did too. They were close: the brother who chased off his bullies and played games with him. When his brother died in a major Enforcer raid, Virgil swore revenge and joined through his brother\'s connections. He turned out to have a gift for fighting and is now one of the rebellion\'s best fighters and a symbol of it. Twin energy daggers, a red scarf, a lot of grief.'
   }
 };
+
+// Who the party fights, from the design notes. Stats and weapons come from the game data.
+export const ENEMY_FORCES = `
+ENFORCERS
+- Enforcer Soldiers: standard frontline robots (melee, shock batons). Enforcer Drones: flying
+  surveillance and ranged fire support. Both are machines, "it".
+- Division Command: commands a division of Enforcer bots, coordinating them through an uplink.
+- Division Strategist: backline tactician and support; uses advanced tech to boost the robots and
+  cover their weaknesses.
+- Vanguard Captain: a person with body mods that make them stronger and faster; leads squads of
+  bots from the front lines with heavy gauntlets.
+- Division Chief: the most advanced body mods of all, very dangerous in a fight; runs a division
+  whose job is to keep one section of the city compliant.
+REBELS
+- Rebel Initiates: newest recruits with basic melee weapons, trained just enough to take down an
+  Enforcer bot. Rebel Field Techs: recruits who fight at range with homemade tech.
+- Field Captain: proven in battle and loyal to the cause, chosen to lead field operations.
+- Rebel Coordinator: upgraded weapons and body mods; can match a Vanguard Captain up close.
+- Operations Handler: a field tech good enough to get better gear; keeps operations running.
+- Rebellion Chief: one of the rebel elites who plan operations; years of experience, custom mods.
+`.trim();
 
 // Recurring cast so the world has faces. DRAFT.
 export const NPCS = [
@@ -178,7 +207,7 @@ export const NPCS = [
 export const LOCATIONS = {
   city_square: 'City Square: a plaza of propaganda screens, food carts and Enforcer checkpoints under the corporate towers.',
   street: 'Street: narrow market streets, stacked stalls, drone traffic overhead.',
-  warehouse: 'Warehouse: an Alpha Genesis logistics depot full of crates, forklifts and fusion cells.',
+  warehouse: 'Warehouse: an Particle Genesis logistics depot full of crates, forklifts and fusion cells.',
   club: 'Club: an underground club where rebels, smugglers and off-duty Enforcers drink side by side.',
   hospital: 'Hospital: an overcrowded clinic where Crown Gene "treats" patients who cannot pay.',
   office: 'Office: Singularity corporate floors of glass, server racks and silent security bots.',

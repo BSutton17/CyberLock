@@ -140,6 +140,24 @@ completeness. In mock mode, or if the model's moment doesn't fit, one of the 18 
 moments in `dialogue.js` is used instead (add more there; tests check every answer has its own
 reaction and thread).
 
+## Decisions, bosses and the cast
+
+- **Who decides.** Decisions rotate to whoever decided least recently, using whichever of their
+  top three attributes was used least recently: a full team passes calls around, and a solo
+  player cycles their top three instead of hearing "Politician" every time (`decisions.js`).
+- **Moments never repeat the decision.** A personal moment is checked against the group decision
+  that follows it; the AI is told to keep them about different things, and one that overlaps is
+  swapped for a different moment.
+- **Bosses are built up.** Every scene in an act lets the act's villain cast a shadow (an NPC
+  mentions them, their face on a screen, their work in the street), strongly right before their
+  fight. The offline narrator has five foreshadowing lines per boss in `mockStory.js`.
+- **New names every game.** The recurring NPCs (the witness, the fixer, the rebel commander, the
+  Division captain, the corporate director) are cast from name pools per game (`cast.js`). The
+  narrator uses the original names internally and in prompts; everything players see gets the
+  game's names.
+- **Personal moments wait three minutes** (`DIALOGUE_TIMEOUT_MS`, default 180000), with a
+  countdown on screen for the last 30 seconds.
+
 ## The story so far (Summarize button)
 
 The in-game top bar has a **Summarize** button. It opens a recap of the whole story up to now: how

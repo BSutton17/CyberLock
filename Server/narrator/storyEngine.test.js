@@ -308,7 +308,7 @@ describe('the story so far (Summarize button)', () => {
     expect(request.kind).toBe('summary');
     expect(request.messages[0].content).toMatch(/WHOLE story so far/);
     expect(summary).toMatchObject({ fightsDone: 1, points: ['The party sided with the Rebels after the market bombing.', 'Shipment chose to hit the depot at night.'] });
-    expect(narrator.getSummary('r1')).toBe(summary);
+    expect(narrator.getSummary('r1')).toEqual(summary);
   });
 
   it('falls back to a recap built from the game\'s own records', async () => {
@@ -326,5 +326,47 @@ describe('the story so far (Summarize button)', () => {
     await narrator.handleEvent({ room: 'r1', eventType: 'choice_made', data: { faction: 'rebels' }, context: context() });
     const { points } = await narrator.summarize('r1', context(), { fightsDone: 1 });
     expect(points).toEqual(['Shipment kept the door.', 'Ghost Shell found the files.']);
+  });
+});
+
+describe('building up to the bosses', () => {
+  it("asks the model to let the act's villain cast a shadow, more strongly right before the fight", async () => {
+    const provider = scriptedProvider([beat()]);
+    const narrator = createNarrator({ provider, logger: quietLogger, personalMoments: false });
+    await narrator.handleEvent({ room: 'r1', eventType: 'choice_made', data: { faction: 'rebels' }, context: context() });
+    await narrator.handleEvent({ room: 'r1', eventType: 'encounter_end', context: context({ encounterIndex: 1 }) });
+    expect(provider.calls.at(-1).messages[0].content).toMatch(/let The Architect \(this act's villain\) cast a shadow/);
+    await narrator.handleEvent({ room: 'r1', eventType: 'encounter_end', context: context({ encounterIndex: 2 }) });
+    expect(provider.calls.at(-1).messages[0].content).toMatch(/The next fight is against The Architect\. Build up to it/);
+  });
+
+  it('has the offline narrator foreshadow the boss in the scene before the boss fight', async () => {
+    const narrator = createNarrator({ provider: createMockProvider(), logger: quietLogger, personalMoments: false, random: () => 0.6 });
+    await narrator.handleEvent({ room: 'r1', eventType: 'choice_made', data: { faction: 'enforcers' }, context: context() });
+    const result = await narrator.handleEvent({ room: 'r1', eventType: 'encounter_end', context: context({ encounterIndex: 2 }) });
+    expect(result.response).toMatch(/Garret|Maxwell|hammer/);
+  });
+});
+
+describe("each game's NPC names", () => {
+  it('gives the recurring NPCs new names per game, everywhere players see them', async () => {
+    const { castify, chooseCast } = await import('./cast.js');
+    const cast = chooseCast(() => 0.99);
+    expect(cast.witness.full).not.toBe('Ines Calder');
+    const text = castify('Ines Calder waves. "Ines!" Dex "Static" Moreno grins at Commander Rhea Vance and Director Hale.', cast);
+    expect(text).not.toMatch(/Ines|Calder|Dex|Static|Moreno|Rhea|Vance|Hale/);
+    expect(text).toContain(cast.witness.full);
+    expect(text).toContain(cast.fixer.full);
+    expect(text).toContain(`Commander ${cast.rebelCommander.full}`);
+    expect(text).toContain(cast.director.full);
+    // Ordinary words are left alone.
+    expect(castify('Static fills the comms. The party moves on.', cast)).toBe('Static fills the comms. The party moves on.');
+  });
+
+  it("puts this game's names in the narration and personal moments", async () => {
+    const narrator = createNarrator({ provider: scriptedProvider([beat({ narration: 'Ines Calder is waiting by the stall.' })]), logger: quietLogger, random: () => 0.99, personalMoments: false });
+    const result = await narrator.handleEvent({ room: 'r1', eventType: 'game_start', context: context() });
+    expect(result.response).not.toContain('Ines');
+    expect(result.response).toMatch(/is waiting by the stall/);
   });
 });

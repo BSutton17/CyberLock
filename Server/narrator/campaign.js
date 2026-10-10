@@ -18,13 +18,13 @@ const REBEL_PATH = {
     {
       title: 'Act II - Blackout',
       encounters: [3, 4, 5, 6],
-      goal: 'Cut Alpha Genesis\'s grip on the city\'s power. Find the plant where Macro Hull is building a fusion weapon and stop him.',
+      goal: 'Cut Particle Genesis\'s grip on the city\'s power. Find the plant where Macro Hull is building a fusion weapon and stop him.',
       boss: 'enforcer_macro_hull'
     },
     {
       title: 'Act III - Ascension',
       encounters: [7, 8, 9],
-      goal: 'Expose Crown Gene\'s Project Ascension, free its test subjects, and face its finished product, Genisis.',
+      goal: 'Expose Project Ascension, the experiments Crown Gene\'s chief surgeon Renee Walker runs in its sublevels, free the people she is working on, and face her: Genisis.',
       boss: 'enforcer_genisis'
     }
   ],
@@ -33,12 +33,12 @@ const REBEL_PATH = {
     1: { location: 'street', setup: 'Division strike team raids the safehouse street where the party is regrouping.' },
     2: { location: 'office', setup: 'Assault on the Singularity tower floor where The Architect runs the surveillance grid.' },
     3: { location: 'sewer', setup: 'Enforcer bots sweep the maintenance tunnels after the tower falls.' },
-    4: { location: 'warehouse', setup: 'An Alpha Genesis depot shipping weaponized fusion cells.' },
+    4: { location: 'warehouse', setup: 'A Particle Genesis depot shipping weaponized fusion cells.' },
     5: { location: 'hospital', setup: 'Division holds a clinic hostage to flush the rebels out.' },
     6: { location: 'warehouse', setup: 'The fusion plant: Macro Hull defends his weapon in person.' },
     7: { location: 'club', setup: 'Kessler\'s last ambush in the club where the rebellion meets.' },
     8: { location: 'hospital', setup: 'Crown Gene sublevels: a Division Chief guards the Project Ascension labs.' },
-    9: { location: 'boss', setup: 'Final stand against Genisis in the heart of Crown Gene.' }
+    9: { location: 'boss', setup: 'Final stand against Genisis in her operating theater in the heart of Crown Gene.' }
   },
   // Starting points only: the actual ending must grow out of the party's choices.
   ending: 'Possible directions: the founders fall and the city goes dark for the first time in a generation; the rebellion wins but becomes what it fought; a fragile truce brokered by the party; or a pyrrhic victory where the party pays the price. Pick whatever the party\'s choices earned.'
@@ -48,38 +48,38 @@ const ENFORCER_PATH = {
   premise: 'The party sided with the Enforcers. Captain Mara Kessler of Division sends them after the rebellion\'s leaders, but evidence keeps surfacing that Division is not innocent either. Commander Rhea Vance\'s cell is hunting them.',
   acts: [
     {
-      title: 'Act I - Demolition',
+      title: 'Act I - Fallout',
       encounters: [0, 1, 2],
-      goal: 'Find who really bombed the Twilight Market and stop the rebellion\'s demolitions chief, Garret Maxwell, before he levels a residential tower.',
+      goal: 'Find who really bombed the Twilight Market and stop Garret Maxwell, the rebel leader whose parents died in a fusion disaster, before his cell destroys a Particle Genesis plant with a whole district around it.',
       boss: 'rebel_garret_maxwell'
     },
     {
-      title: 'Act II - The Escaped',
+      title: 'Act II - Inheritance',
       encounters: [3, 4, 5, 6],
-      goal: 'Hunt Levi Wicker, an escaped Project Ascension subject, and learn what Crown Gene did to him.',
+      goal: 'Hunt Levi Wicker, the young rebel leader carrying on the fight his parents died for, and learn why the rebellion follows a twenty-six-year-old.',
       boss: 'rebel_levi_wicker'
     },
     {
-      title: 'Act III - Signal',
+      title: 'Act III - The Symbol',
       encounters: [7, 8, 9],
-      goal: 'Stop Virgil Wesley before his Signal Dominion hijacks every neurochip in the city, and decide what to do with what the party now knows about Division.',
+      goal: 'Stop Virgil Wesley, the rebellion\'s best fighter and its symbol, who joined after an Enforcer raid killed his brother, and decide what to do with what the party now knows about Division.',
       boss: 'rebel_virgil_wesley'
     }
   ],
   encounters: {
     0: { location: 'city_square', setup: 'The opening battle: rebels fight their way out of the square after the blast.' },
     1: { location: 'street', setup: 'A rebel cell ambushes the party\'s patrol in the market streets.' },
-    2: { location: 'warehouse', setup: 'Garret Maxwell rigs a depot to bring down the tower above it.' },
+    2: { location: 'warehouse', setup: 'Garret Maxwell leads a raid on a Particle Genesis depot, sister to the plant built on the street where his parents died.' },
     3: { location: 'club', setup: 'Raid on the club where rebels trade intel on Levi.' },
     4: { location: 'sewer', setup: 'Following Levi\'s trail through the maintenance tunnels.' },
     5: { location: 'street', setup: 'Rebels stage a protest to cover Levi\'s escape.' },
-    6: { location: 'hospital', setup: 'Levi Wicker makes his stand at the clinic where he was first modified.' },
-    7: { location: 'sewer', setup: 'Wesley\'s hackers turn the tunnel systems against the party.' },
-    8: { location: 'club', setup: 'A Rebellion Chief guards the relay feeding Wesley\'s signal.' },
-    9: { location: 'boss', setup: 'Final confrontation with Virgil Wesley at the broadcast core.' }
+    6: { location: 'hospital', setup: 'Levi Wicker makes his stand at the safehouse where his parents ran the first rebel cell.' },
+    7: { location: 'sewer', setup: 'Wesley\'s fighters use the tunnels they trained in to ambush the party.' },
+    8: { location: 'club', setup: 'A Rebellion Chief guards the meeting where Wesley rallies the cells.' },
+    9: { location: 'boss', setup: 'Final confrontation with Virgil Wesley at the site of the raid that killed his brother.' }
   },
   // Starting points only: the actual ending must grow out of the party's choices.
-  ending: 'Possible directions: order is restored and the party becomes the corporations\' favorite weapon; the party exposes Division and Project Ascension from the inside; they turn on their employers at the last moment; or they walk away from both sides. Pick whatever the party\'s choices earned.'
+  ending: 'Possible directions: order is restored and the party becomes the corporations\' favorite weapon; the party exposes Division from the inside; they turn on their employers at the last moment; or they walk away from both sides. Pick whatever the party\'s choices earned.'
 };
 
 export const CAMPAIGN = {

@@ -42,4 +42,14 @@ describe('DialogueChoices', () => {
     render(<DialogueChoices dialogue={{ ...dialogue, kind: 'ask', npc: 'Ines Calder' }} playerName="A" onChoose={() => {}} />);
     expect(screen.getByText(/Livewire can ask Ines Calder something/)).toBeTruthy();
   });
+
+  it('shows no timer while there is plenty of time, then counts down the last 30 seconds', () => {
+    const { rerender } = render(<DialogueChoices dialogue={{ ...dialogue, timeLeftMs: 180000 }} playerName="B" onChoose={() => {}} />);
+    expect(screen.queryByRole('timer')).toBeNull();
+    rerender(<DialogueChoices dialogue={{ ...dialogue, id: 'd2', timeLeftMs: 29500 }} playerName="B" onChoose={() => {}} />);
+    expect(screen.getByRole('timer').textContent).toBe('30s left to answer');
+    cleanup();
+    render(<DialogueChoices dialogue={{ ...dialogue, timeLeftMs: 12000 }} playerName="A" onChoose={() => {}} />);
+    expect(screen.getByRole('timer').textContent).toBe('12s left for Livewire to answer');
+  });
 });

@@ -87,7 +87,7 @@ export const config = {
     // ...and the beat between arriving and striking.
     botActionDelayMs: toInt(env.BOT_ACTION_DELAY_MS, 700),
     // How long a player has to answer a personal moment before their character stays silent.
-    dialogueTimeoutMs: toInt(env.DIALOGUE_TIMEOUT_MS, 60000),
+    dialogueTimeoutMs: toInt(env.DIALOGUE_TIMEOUT_MS, 180000),
     // How long a disconnected player keeps their seat before being removed.
     disconnectGraceMs: toInt(env.DISCONNECT_GRACE_MS, 60000),
     // Combat narration (hand-written lines, never the AI) arrives this long after the turn it tells.

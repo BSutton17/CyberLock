@@ -28,9 +28,9 @@ export function getDecisionOwner(attribute, players = [], attributesByPlayer = {
 }
 
 /**
- * Picks the attribute for the next story decision so the spotlight rotates:
- * the eligible player who decided least recently gets it, using their primary attribute
- * (or secondary, if the primary was used in the last two decisions).
+ * Picks the attribute for the next story decision so the spotlight rotates: the eligible player
+ * who decided least recently gets it, with whichever of their top three attributes was used least
+ * recently (a solo player cycles Politician -> Spy -> Medic rather than the same one each time).
  * `history` is the list of past decisions: [{ owner, attribute }], oldest first.
  */
 export function chooseDecisionAttribute({ players = [], attributesByPlayer = {}, connectedPlayers = null, history = [] } = {}) {
@@ -39,7 +39,7 @@ export function chooseDecisionAttribute({ players = [], attributesByPlayer = {},
 
   const candidates = [];
   for (const player of pool) {
-    const ranked = normalizedList(attributesByPlayer[player]).slice(0, 2).filter(Boolean);
+    const ranked = normalizedList(attributesByPlayer[player]).slice(0, 3).filter(Boolean);
     for (const attribute of ranked) {
       if (getDecisionOwner(attribute, players, attributesByPlayer) === player) {
         candidates.push({ player, attribute, rank: ranked.indexOf(attribute) });
@@ -49,20 +49,20 @@ export function chooseDecisionAttribute({ players = [], attributesByPlayer = {},
 
   if (candidates.length === 0) return null;
 
-  const lastDecidedAt = (player) => {
+  const lastIndex = (matches) => {
     for (let i = history.length - 1; i >= 0; i--) {
-      if (history[i]?.owner === player) return i;
+      if (matches(history[i])) return i;
     }
     return -1;
   };
-  const recentAttributes = history.slice(-2).map(entry => entry?.attribute);
+  const lastDecidedAt = (player) => lastIndex(entry => entry?.owner === player);
+  const lastUsedAt = (attribute) => lastIndex(entry => entry?.attribute === attribute);
 
   candidates.sort((a, b) => {
     const byRecency = lastDecidedAt(a.player) - lastDecidedAt(b.player);
     if (byRecency !== 0) return byRecency;
-    const aRecent = recentAttributes.includes(a.attribute) ? 1 : 0;
-    const bRecent = recentAttributes.includes(b.attribute) ? 1 : 0;
-    if (aRecent !== bRecent) return aRecent - bRecent;
+    const byUse = lastUsedAt(a.attribute) - lastUsedAt(b.attribute);
+    if (byUse !== 0) return byUse;
     if (a.rank !== b.rank) return a.rank - b.rank;
     return pool.indexOf(a.player) - pool.indexOf(b.player);
   });

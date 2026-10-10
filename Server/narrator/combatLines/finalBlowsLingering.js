@@ -61,20 +61,20 @@ export const LINGERING_FINAL_BLOWS = {
             `{victim}'s core keeps roaring while the rest of him gives out. {user}'s poison doesn't need the core.`
         ],
         enforcer_genisis: [
-            `{user}'s poison catches up with {victim} at last. The perfect enforcer slows, stumbles, and stops.`,
-            `{victim} says "excuse me" to no one in particular, then folds. {user}'s poison was faster after all.`
+            `{user}'s poison works through {victim}, and she diagnoses it perfectly right before it drops her.`,
+            `{victim} reaches for a syringe with one of her arms. {user}'s poison is faster.`
         ],
         rebel_garret_maxwell: [
-            `{user}'s poison works through {victim}, and the demolition chief lowers himself carefully onto the rubble.`,
-            `{victim} sets the cannon down, wipes his mouth, and keels over. {user}'s poison finishes the job.`
+            `{user}'s poison works through {victim}, and the old rebel lowers himself carefully onto the rubble.`,
+            `{victim} sets the cannon-hammer down, wipes his mouth, and keels over. {user}'s poison finishes it.`
         ],
         rebel_levi_wicker: [
-            `{user}'s poison finds {victim} already falling apart and helps. He goes down with a weak little joke nobody hears.`,
-            `{victim} laughs, coughs, and stops doing both. {user}'s poison wins.`
+            `{user}'s poison catches up with {victim} mid-fight, and the young rebel's blades slow, then stop.`,
+            `{victim} keeps fighting long after he should have stopped. {user}'s poison waits him out.`
         ],
         rebel_virgil_wesley: [
-            `{user}'s poison reaches {victim} mid-speech, and the words turn into a wheeze.`,
-            `{victim} tries to talk his way out of {user}'s poison. It doesn't listen.`
+            `{user}'s poison reaches {victim} mid-throw, and the dagger drops from his hand. He follows it.`,
+            `{victim} fights on through {user}'s poison, out of pure stubbornness, until he can't.`
         ]
     },
     toxic_mist: {
@@ -135,20 +135,20 @@ export const LINGERING_FINAL_BLOWS = {
             `{victim} breathes in {user}'s mist like a bellows, and goes down just as loudly.`
         ],
         enforcer_genisis: [
-            `{victim} is fast, but {user}'s mist is everywhere. The perfect enforcer finally stops to breathe, and doesn't start again.`,
-            `{user}'s mist catches {victim} standing still for once, and that's all it needs.`
+            `{user}'s mist gets into {victim}'s lungs while her arms are busy, and the surgeon goes down coughing.`,
+            `{victim} pulls a mask from her coat pocket a moment too late. {user}'s mist drops her.`
         ],
         rebel_garret_maxwell: [
-            `{user}'s mist creeps up on {victim} while he's busy with the cannon. The demolition chief keels over coughing.`,
-            `{victim} has breathed worse on the docks, he says. {user}'s mist proves him wrong.`
+            `{user}'s mist creeps up on {victim} while he's busy with the cannon-hammer. The old rebel keels over coughing.`,
+            `{victim} has breathed worse near the fusion plants, he says. {user}'s mist proves him wrong.`
         ],
         rebel_levi_wicker: [
-            `{user}'s mist gets into {victim}'s already failing systems, and he drops in the middle of a dramatic cough.`,
-            `{victim} jokes about the smell of {user}'s mist, then stops joking and starts falling.`
+            `{user}'s mist catches {victim} standing still for once, and that's all it needs.`,
+            `{victim} fights his way through {user}'s mist and comes out the other side on his knees.`
         ],
         rebel_virgil_wesley: [
-            `{user}'s mist muffles {victim}'s voice, then the rest of him. The mastermind sinks into the cloud.`,
-            `{victim} can't talk his way out of {user}'s mist. Nobody can.`
+            `{user}'s mist swallows {victim} mid-charge, and the rebellion's symbol stumbles out of it and falls.`,
+            `{victim} throws blind into {user}'s cloud, and the cloud wins.`
         ]
     },
     vine_whip: {
@@ -209,20 +209,20 @@ export const LINGERING_FINAL_BLOWS = {
             `{user} cracks the whip right across {victim}'s core housing, and the glow in his chest sputters out.`
         ],
         enforcer_genisis: [
-            `{user}'s whip catches {victim} mid-dash, wrapping an ankle. The perfect enforcer finally trips.`,
-            `{user} cracks the whip in a wide arc, too wide even for {victim} to slip. It goes down.`
+            `{user}'s whip snarls around two of {victim}'s mechanical arms and yanks her off balance. She falls into the rest.`,
+            `{user} cracks the whip across {victim}'s arm joints, and the whole frame crumples.`
         ],
         rebel_garret_maxwell: [
-            `{user}'s whip yanks the cannon's barrel sideways, and the next shot drops {victim} instead.`,
-            `{user} lashes {victim} across the knees, and the big man sits down in his own rubble.`
+            `{user}'s whip yanks the cannon-hammer's barrel sideways, and the next shot drops {victim} instead.`,
+            `{user} lashes {victim} across the knees, and the old rebel sits down in his own rubble.`
         ],
         rebel_levi_wicker: [
-            `{user}'s whip catches {victim} mid-leap and slams him back into the pavement.`,
-            `{user} cracks the whip, and {victim} tries to dodge with mods that don't answer anymore.`
+            `{user}'s whip wraps one of {victim}'s blades and rips it away, and the backlash takes his feet.`,
+            `{user} cracks the whip as {victim} lunges, and the young rebel goes down mid-stride.`
         ],
         rebel_virgil_wesley: [
-            `{user}'s whip snaps the device off {victim}'s wrist, and the whispering dies. So does his footing.`,
-            `{user} lashes {victim} mid-sentence, and the sentence ends on the ground.`
+            `{user}'s whip snaps a thrown dagger out of the air, then catches {victim}'s ankle as he dives for it.`,
+            `{user} lashes {victim} across the chest, and the rebellion's best fighter drops.`
         ]
     },
     white_phospherus: {
@@ -283,20 +283,20 @@ export const LINGERING_FINAL_BLOWS = {
             `{victim} roars through {user}'s white fire for a long time. Then the roar stops, and so does he.`
         ],
         enforcer_genisis: [
-            `{user}'s phosphorus clings to {victim} no matter how fast it moves. The perfect enforcer finally burns out.`,
-            `{victim} outruns everything except {user}'s fire. It goes down mid-dash.`
+            `{user}'s phosphorus clings to {victim}'s white coat and her machinery, and the surgeon finally burns out.`,
+            `{victim} cuts away the burning cloth with her own arms. {user}'s white fire keeps going, and so does she, until she can't.`
         ],
         rebel_garret_maxwell: [
-            `{user}'s phosphorus reaches {victim}'s spare charges, and the demolition chief goes up in his own fireworks.`,
-            `{victim} has worked around fire his whole life, but never fire like {user}'s. He goes down in the rubble.`
+            `{user}'s phosphorus reaches {victim}'s spare charges, and the old rebel goes up in his own fireworks.`,
+            `{victim} has seen fusion fire before, the kind that took his parents. {user}'s white fire brings him down all the same.`
         ],
         rebel_levi_wicker: [
-            `{user}'s phosphorus burns through {victim}'s failing mods, and he drops, laughing weakly at the irony.`,
-            `{victim} jokes that he's always burning out. {user}'s white fire makes it true.`
+            `{user}'s phosphorus clings to {victim} however fast he moves, and the young rebel finally goes down.`,
+            `{victim} keeps fighting through {user}'s white fire until his blades and his legs give out together.`
         ],
         rebel_virgil_wesley: [
-            `{user}'s phosphorus burns the device off {victim}'s wrist, and the whispering dies in the smoke.`,
-            `{victim} tries to talk the fire down. {user}'s phosphorus isn't listening.`
+            `{user}'s phosphorus catches {victim}'s scarf and won't let go, and the rebellion's symbol goes down burning.`,
+            `{victim} tries to fight through {user}'s white fire. It isn't something you can fight.`
         ]
     }
 };

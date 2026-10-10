@@ -208,4 +208,15 @@ describe('personal moments written by the AI', () => {
     expect(result.dialogue.npc).not.toBe('A dock foreman');
     expect(result.dialogue.options.length).toBeGreaterThanOrEqual(3);
   });
+
+  it('never asks the same thing the group is about to decide', async () => {
+    // The scene's decision is "Go in loud" / "Wait for dark"; this moment asks the same.
+    const echo = moment({ options: moment().options.map((option, i) => (i === 0 ? { ...option, text: 'Go in loud, right now.' } : option)) });
+    const provider = scripted([beat, beat, echo]);
+    const { result } = await fightEnds(provider);
+    expect(provider.calls.at(-1).messages[0].content).toMatch(/about something else entirely/);
+    expect(result.dialogue.npc).not.toBe('A dock foreman');
+    expect(result.dialogue.options.map(option => option.text)).not.toContain('Go in loud, right now.');
+  });
 });
+

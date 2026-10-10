@@ -6,7 +6,7 @@ export const AREA_FINAL_BLOWS = {
     counter: {
         enforcer_soldier: [
             `{victim} swings the shock baton at {user}, and the whole charge comes straight back up the baton. The soldier drops, twitching.`,
-            `{victim} hits {user} as hard as they can. Every bit of it bounces back, and the soldier ends up flat on the pavement wondering what happened.`
+            `{victim} hits {user} as hard as its servos allow. Every bit of it bounces back, and the robot ends up flat on the pavement, lights blinking in confusion.`
         ],
         enforcer_drone: [
             `{victim} opens fire on {user}, and its own shots ricochet back into its rotors. It spins down into the gutter.`,
@@ -61,20 +61,20 @@ export const AREA_FINAL_BLOWS = {
             `{victim} hits {user} like a power plant. The power plant gets hit right back, and it finally goes dark.`
         ],
         enforcer_genisis: [
-            `{victim} lands a flurry of cuts on {user}, and every single one comes back. The perfect enforcer drops, finally outdone by its own speed.`,
-            `{victim} strikes {user} faster than anyone could follow, and the reflection is just as fast.`
+            `{victim} strikes {user} with every arm at once, and every blade comes back. The surgeon goes down to her own precision.`,
+            `{victim} cuts at {user}, and the cut turns around. Her arms fold, and so does she.`
         ],
         rebel_garret_maxwell: [
-            `{victim} fires the breaker cannon at {user}, and the shell comes right back at him. He disappears in his own blast.`,
-            `{victim} shells {user}, and the explosion turns around and takes the demolition chief down instead.`
+            `{victim} fires point blank at {user}, and the blast comes right back at him. He disappears in his own dust.`,
+            `{victim} swings the cannon-hammer at {user}, and the impact rebounds into the old rebel. He goes down.`
         ],
         rebel_levi_wicker: [
-            `{victim} lands a flashy strike on {user}, and it comes back flashier. He goes down laughing at himself.`,
-            `{victim} swings at {user}, and his own blow knocks the last spark out of his mods.`
+            `{victim} hits {user} with both blades, and both cuts come back. The young rebel staggers and falls.`,
+            `{victim} lunges at {user}, and his own momentum knocks him flat.`
         ],
         rebel_virgil_wesley: [
-            `{victim} pushes his signal into {user}'s head, and it comes right back into his own. The mastermind goes down screaming.`,
-            `{victim} sends a jolt at {user}, and gets his own message back.`
+            `{victim} throws both daggers at {user}, and they fly straight back at him.`,
+            `{victim} cuts at {user} with everything, and gets everything back.`
         ]
     },
     emp: {
@@ -135,20 +135,20 @@ export const AREA_FINAL_BLOWS = {
             `{user} sets off the burst, and the furnace in {victim}'s chest flickers out.`
         ],
         enforcer_genisis: [
-            `{user}'s pulse shuts down every implant that rebuilt {victim}, and the perfect enforcer stops.`,
-            `{user} triggers the burst, and {victim} drops mid-dash, all those systems dead at once.`
+            `{user}'s pulse kills the motors in {victim}'s arms, and they drop around her like a dead spider's legs. She goes down with them.`,
+            `{user} triggers the burst, and every machine Crown Gene put into {victim} goes dark at once.`
         ],
         rebel_garret_maxwell: [
-            `{user}'s pulse kills the cannon's charge cell, and the backlash knocks {victim} flat.`,
-            `{user} sets off the burst, and {victim}'s gear fries along with him.`
+            `{user}'s pulse kills the cannon-hammer's charge cell, and the backlash knocks {victim} flat.`,
+            `{user} sets off the burst, and {victim}'s weapon dies in his hands. He goes down with it.`
         ],
         rebel_levi_wicker: [
-            `{user}'s pulse fries what's left of {victim}'s failing mods, and he drops mid-laugh.`,
-            `{user} triggers the burst, and {victim}'s implants give out for good.`
+            `{user}'s pulse kills the light in {victim}'s blades mid-swing, and he stumbles into nothing.`,
+            `{user} triggers the burst, and {victim}'s blades die in his hands. He doesn't get another swing.`
         ],
         rebel_virgil_wesley: [
-            `{user}'s pulse kills {victim}'s device, and the whispering in every skull stops at once.`,
-            `{user} sets off the burst, and {victim}'s neurochip fries. He drops.`
+            `{user}'s pulse kills both of {victim}'s daggers mid-throw, and they clatter to the ground. So does he.`,
+            `{user} sets off the burst, and {victim} is left holding two dead hilts.`
         ]
     },
     executioners_judgment: {
@@ -209,20 +209,20 @@ export const AREA_FINAL_BLOWS = {
             `{user} passes sentence, and {victim}'s core flickers under the pressure until the big man topples.`
         ],
         enforcer_genisis: [
-            `{user}'s judgment catches {victim} mid-dash and flattens the perfect enforcer mid-stride.`,
-            `{user} passes sentence, and {victim} kneels, bows its head politely, and stays there.`
+            `{user}'s judgment falls on {victim}, and her arms buckle under a weight they were never built for.`,
+            `{user} passes sentence, and {victim} kneels among her own machinery.`
         ],
         rebel_garret_maxwell: [
             `{user}'s judgment falls, and {victim} sinks down into his own rubble.`,
-            `{user} passes sentence, and {victim} finally sets the cannon down and lies down next to it.`
+            `{user} passes sentence, and {victim} finally sets the cannon-hammer down and lies down beside it.`
         ],
         rebel_levi_wicker: [
-            `{user}'s judgment falls, and {victim} goes down mid-laugh. "Harsh," he wheezes from the ground.`,
-            `{user} passes sentence, and {victim}'s failing mods choose that moment to fail completely.`
+            `{user}'s judgment falls, and {victim} goes down with his blades still lit. \"Not yet,\" he mutters.`,
+            `{user} passes sentence, and {victim}'s legs give out under it.`
         ],
         rebel_virgil_wesley: [
-            `{user}'s judgment falls, and {victim}'s best argument dies with his footing.`,
-            `{user} passes sentence, and {victim} sits down, out of words for once.`
+            `{user}'s judgment falls, and {victim} drops to one knee, then both.`,
+            `{user} passes sentence, and {victim}, the rebellion's symbol, finally goes down.`
         ]
     },
     fireball: {
@@ -283,20 +283,20 @@ export const AREA_FINAL_BLOWS = {
             `{user}'s fireball lands on {victim}, and for once something is hotter than he is.`
         ],
         enforcer_genisis: [
-            `{user}'s fire catches {victim} mid-dash. The perfect enforcer stumbles for the first time today, and falls.`,
-            `{user}'s fireball engulfs the whole space where {victim} was going to be. It doesn't come out the other side.`
+            `{user}'s fire catches {victim}'s white coat, and she goes down trying to smother it with four arms.`,
+            `{user}'s fireball engulfs {victim}, and her arms seize up in the heat.`
         ],
         rebel_garret_maxwell: [
-            `{user}'s fire sets off {victim}'s spare cannon charges, and the demolition chief goes down in his own fireworks.`,
-            `{user}'s fireball engulfs {victim}, and the big man finally sits down in the flames.`
+            `{user}'s fire sets off {victim}'s spare charges, and the old rebel goes down in his own fireworks.`,
+            `{user}'s fireball engulfs {victim}, and he finally sits down in the flames.`
         ],
         rebel_levi_wicker: [
             `{user}'s fire catches {victim} mid-leap, and he lands rolling and doesn't get up.`,
-            `{user}'s fireball engulfs {victim}, and the last of his mods fizzle out in the heat.`
+            `{user}'s fireball engulfs {victim}, and his long coat goes up with him.`
         ],
         rebel_virgil_wesley: [
-            `{user}'s fire takes the device on {victim}'s wrist first, then takes {victim}.`,
-            `{user}'s fireball engulfs {victim}, and the whispering in every skull goes silent in the smoke.`
+            `{user}'s fire catches {victim}'s scarf first, then {victim}.`,
+            `{user}'s fireball engulfs {victim}, and the rebellion's best fighter goes down in the smoke.`
         ]
     }
 };

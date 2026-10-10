@@ -626,6 +626,7 @@ describe('casualties', () => {
       order: ['e1', 'p1', 'p2']
     });
     ctx.combat.activeEffects.push({ type: 'stat_buff', stat: 'speed', target: 'p2', value: 10, turnsRemaining: 2, ownerTurnId: 'p1' });
+    ctx.combat.hadTurn.p1 = true; // already played (before their first turn they can't fall)
     const plan = planEnemy(ctx, 'e1');
     runEnemyAbilityAndMove(ctx, 'e1', plan);
     const { events } = runEnemyAttack(ctx, 'e1', plan);
@@ -888,5 +889,30 @@ describe('ultimate cooldowns', () => {
     expect(attack(ctx, 'p1', 'e1').ok).toBe(true);
     expect(attack(ctx, 'p1', 'e1').ok).toBe(true);
     expect(attack(ctx, 'p1', 'e1').ok).toBe(false);
+  });
+});
+
+describe('nobody goes down before their first turn', () => {
+  const bossFirst = () => setup({
+    players: { slow: player('Patchwork', { health: 20, maxHealth: 80, resistance: 0, speed: 1 }) },
+    enemies: [{ ...enemy('boss', { strength: 200 }), tier: 'boss' }],
+    positions: { slow: { row: 4, col: 2 }, boss: { row: 3, col: 2 } },
+    order: ['boss', 'slow']
+  });
+
+  it('leaves them on 1 HP from a hit that would have finished them', () => {
+    const ctx = bossFirst();
+    runEnemyAttack(ctx, 'boss', { useWeapon: true, target: 'slow' });
+    expect(hp(ctx, 'slow')).toBe(1);
+    expect(ctx.combat.downed.slow).toBeUndefined();
+  });
+
+  it('stops protecting them once they have had a turn', () => {
+    const ctx = bossFirst();
+    nextTurn(ctx); // the boss's turn ends; now it's Patchwork's
+    expect(ctx.combat.turn.id).toBe('slow');
+    nextTurn(ctx); // Patchwork's first turn is done
+    runEnemyAttack(ctx, 'boss', { useWeapon: true, target: 'slow' });
+    expect(hp(ctx, 'slow')).toBe(0);
   });
 });

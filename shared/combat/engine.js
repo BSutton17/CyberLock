@@ -53,6 +53,8 @@ export function createCombatState({ encounterIndex = 0, sceneKey = null, enemies
         turn: null,
         turnNumber: 0,
         downed: {},
+        // Party members who have had a turn this fight (until then, nothing can drop them below 1 HP).
+        hadTurn: {},
         endedResult: null
     };
 }
@@ -250,6 +252,9 @@ export function applyDamage(ctx, out, { sourceId = null, targetId, amount, refle
         const absorbed = absorbWithBonusHealth(damage, effects, targetId);
         ctx.combat.activeEffects = absorbed.effects;
         remaining = absorbed.remainingDamage;
+        // Nobody goes down before they've had a single turn (a fast boss going first, say):
+        // a hit that would finish them leaves them on 1 HP instead.
+        if (!ctx.combat.hadTurn?.[targetId]) remaining = Math.min(remaining, Math.max(0, (target.stats.health || 0) - 1));
         ctx.characters[targetId] = withHealth(target, (target.stats.health || 0) - remaining);
     } else {
         const index = ctx.combat.enemies.findIndex(enemy => enemy.id === targetId);
@@ -424,6 +429,7 @@ export function beginTurn(ctx) {
     const entry = currentTurnEntry(ctx);
     ctx.combat.turnNumber += 1;
     pruneBoard(ctx);
+    if (entry?.type === 'ally') (ctx.combat.hadTurn ||= {})[entry.id] = true;
     ctx.combat.turn = entry
         ? {
             type: entry.type,

@@ -64,10 +64,11 @@ const PRONOUNS = {
     it: { they: 'it', them: 'it', their: 'its', self: 'itself' },
     they: { they: 'they', them: 'them', their: 'their', self: 'themself' }
 };
-// Enemies that aren't "they": machines and the named bosses.
+// Enemies that aren't "they": the Enforcer robots and the named bosses.
 const ENEMY_PRONOUNS = {
+    enforcer_soldier: 'it', // Enforcer bots are robots
     enforcer_drone: 'it',
-    enforcer_genisis: 'it',
+    enforcer_genisis: 'she', // Renee Walker
     enforcer_the_architect: 'he',
     enforcer_macro_hull: 'he',
     rebel_garret_maxwell: 'he',
@@ -77,7 +78,7 @@ const ENEMY_PRONOUNS = {
 
 // What a rank-and-file enemy is called once it has been pointed out ("the drone").
 const SHORT_NAMES = {
-    enforcer_soldier: 'soldier',
+    enforcer_soldier: 'robot',
     // Not just "drone": Patchwork has one of his own.
     enforcer_drone: 'enemy drone',
     rebel_initiate: 'initiate',

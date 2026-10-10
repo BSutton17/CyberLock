@@ -55,30 +55,30 @@ export const WEAPON_HITS = {
             `{user} pins {target} to the nearest wall with the shield and holds the trigger down.`
         ]
     },
-    'Ray Gun': { // Gene Shock
+    'Ray Gun': { // Gene Shock: blue fusion fire gathered in his bare hand and thrown (no gun)
         low: [
-            `{user}'s ray gun singes {target}, leaving a scorch mark and not much else.`,
-            `{user} snaps off a quick shot that grazes {target}'s arm.`,
-            `{user}'s beam skims {target}, more sunburn than wound.`,
-            `{user} fires from the hip, and the ray only scorches the edge of {target}'s armor.`,
-            `{user} clips {target} with a thin, sputtering beam.`,
-            `{user}'s shot catches {target}'s shoulder, a hot little sting.`
+            `{user} flicks a spark of blue fire at {target} that only scorches the paint.`,
+            `{user} snaps his fingers and a small blue flame licks across {target}, more sting than burn.`,
+            `{user}'s throw goes a little wide, and the blue fire only singes the edge of {target}.`,
+            `{user} tosses a quick flare at {target}, who shakes it off in a puff of smoke.`,
+            `{user} lets a thin lick of flame off his palm, and it barely warms {target}.`,
+            `{user} hurls a fistful of blue fire that splashes harmlessly off {target}.`
         ],
         medium: [
-            `{user} levels the ray gun and scorches a line across {target}'s chest.`,
-            `{user} squeezes off a steady beam that burns straight into {target}'s side.`,
-            `{user}'s ray gun hisses, and {target} staggers back with smoke coming off {target.their} armor.`,
-            `{user} fires a bright, clean shot into {target}, who doubles over around it.`,
-            `{user} holds the trigger down a little longer than usual. {target} feels every extra second.`,
-            `{user} catches {target} mid-step with a beam that melts a hole in {target.their} guard.`
+            `{user} cups blue fire in his palm and hurls it into {target}'s chest.`,
+            `{user} winds up and throws a ball of fusion fire that bursts against {target}.`,
+            `{user}'s hand flares blue, and the flame he throws knocks {target} back a step.`,
+            `{user} sweeps his arm and a ribbon of blue fire wraps around {target}.`,
+            `{user} lets the cores under his skin build a little longer than usual. {target} feels every extra second.`,
+            `{user} catches {target} mid-step with a burst of blue flame that leaves {target.their} guard smoking.`
         ],
         high: [
-            `{user} cranks the ray gun to a color it probably shouldn't make, and the beam punches right through {target}.`,
-            `{user} fires, and the ray hits {target} so hard {target.their} armor glows afterward.`,
-            `{user}'s cores flare as they pour everything into one shot. {target} takes all of it.`,
-            `{user} lets off a blast that throws {target} back in a cloud of smoke and sparks.`,
-            `{user} overcharges the ray gun and lights {target} up from the inside out.`,
-            `{user} fires a beam so bright everyone looks away, and {target} has nowhere to go.`
+            `{user} pulls so much power through his arm that the fire turns white before he throws it. {target} takes all of it.`,
+            `{user} slams a blazing palm straight into {target}, and the blue fire goes off at point blank.`,
+            `{user}'s cores flare under his skin as he pours everything into one throw, and {target} vanishes in blue light.`,
+            `{user} hurls a sphere of fusion fire that hits {target} so hard the street glows afterward.`,
+            `{user} lets the flame in his hand grow until it hurts to look at, then gives all of it to {target}.`,
+            `{user} throws a torrent of blue fire that knocks {target} flat and leaves the pavement smoking.`
         ]
     },
     'Energy Sword': { // Leo
@@ -519,84 +519,84 @@ export const WEAPON_HITS = {
             `{user} crushes {target} under the maul, laughing the whole time.`
         ]
     },
-    'Zero-Lag Blades': { // Genisis
+    'Zero-Lag Blades': { // Genisis: blades on the ends of her mechanical arms
         low: [
-            `{user} cuts so fast that {target} only notices the thin line afterward.`,
-            `{user}'s blades flicker past {target}, leaving a shallow scratch.`,
-            `{user} grazes {target}, then apologizes for the inconvenience.`,
-            `{user} tests {target}'s guard with a cut too quick to see.`
+            `{user} flicks one mechanical arm, and its blade leaves a thin, precise line on {target}.`,
+            `{user}'s blades graze {target}, as careful as a first incision.`,
+            `{user} tests {target} with a single scalpel-thin cut, and makes a note of how they flinch.`,
+            `{user} reaches past {target}'s guard with one spider arm and nicks them on the way back.`
         ],
         medium: [
-            `{user}'s blades open three cuts on {target} in the time it takes to blink.`,
-            `{user} slips past {target}'s guard and slices {target.them} twice on the way.`,
-            `{user} cuts {target} with mechanical precision, exactly where it hurts most.`,
-            `{user} is behind {target}, then in front, and both blades have found their mark.`
+            `{user}'s arms strike from three directions at once, and two of the blades find {target}.`,
+            `{user} pins {target}'s arm with one limb and cuts with another.`,
+            `{user} slices {target} exactly where it will hurt most, with a surgeon's aim.`,
+            `{user} sweeps her arms in a tight circle, and {target} staggers out of it bleeding.`
         ],
         high: [
-            `{user} becomes a blur of steel around {target}, and {target} staggers out of it bleeding.`,
-            `{user} cuts {target} so many times that the sound of it is one long note.`,
-            `{user} parts {target}'s guard and {target.their} armor in one perfect, polite motion.`,
-            `{user} blinks across the gap, and {target} drops to a knee before the cuts even register.`
+            `{user} wraps three arms around {target} and cuts with the fourth, and {target} goes down to one knee.`,
+            `{user}'s arms move faster than anyone can follow, and {target} comes out of it covered in thin red lines.`,
+            `{user} opens {target}'s guard and {target.their} armor in one precise, unhurried motion.`,
+            `{user} drives every blade she has into {target} at once. "Hold still," she says, a little late.`
         ]
     },
-    'Breaker Cannon': { // Garret Maxwell
+    'Breaker Cannon': { // Garret Maxwell: a heavy cannon-hammer
         low: [
-            `{user}'s cannon round bursts near {target} and peppers {target.them} with debris.`,
+            `{user}'s cannon-hammer clips {target} on the backswing.`,
             `{user} fires a little short, and the blast only rocks {target}.`,
-            `{user}'s shell clips a pillar first and only half the blast reaches {target}.`,
-            `{user} fires, and the shockwave just shoves {target} back.`
+            `{user}'s shot hits a pillar first, and only half the blast reaches {target}.`,
+            `{user} shoves {target} back with the weapon's heavy head.`
         ],
         medium: [
-            `{user} fires the breaker cannon, and the blast slams {target} into the ground.`,
-            `{user} lands a shell right next to {target}, and the explosion sends {target.them} tumbling.`,
-            `{user} braces and fires, and {target} gets caught in a cloud of smoke and rubble.`,
-            `{user}'s round hits {target} square, and the noise echoes for blocks.`
+            `{user} swings the cannon-hammer into {target}, and the charge goes off on impact.`,
+            `{user} fires point blank, and the blast slams {target} into the ground.`,
+            `{user} brings the weapon down on {target}'s guard and fires through it.`,
+            `{user}'s blast catches {target} square, and the noise echoes for blocks.`
         ],
         high: [
-            `{user} fires the breaker cannon point blank, and {target} vanishes in the blast.`,
-            `{user} drops a round on {target} that takes a chunk out of the street with it.`,
+            `{user} swings and fires at the same moment, and {target} gets thrown across the street.`,
+            `{user} brings the cannon-hammer down on {target} with everything a lifetime of anger can put behind it.`,
             `{user} fires, and the shockwave hurls {target} into the nearest wall.`,
-            `{user} shells {target} with the patience of a man taking down a building one wall at a time.`
+            `{user} hits {target} so hard the weapon's barrel glows afterward.`
         ]
     },
-    'Riot Splitter': { // Levi Wicker
+    'Riot Splitter': { // Levi Wicker: twin glowing blades
         low: [
-            `{user} swipes at {target} and grins when the blade only grazes {target.them}.`,
-            `{user}'s weapon catches {target}'s sleeve as he spins past.`,
-            `{user} taps {target} with the flat of the blade. "Tag."`,
-            `{user} slashes lazily and nicks {target}.`
+            `{user} flicks a blade across {target}'s guard, testing it.`,
+            `{user}'s blade catches {target}'s sleeve as he spins past.`,
+            `{user} slashes fast, and {target} gets {target.their} arm up just in time.`,
+            `{user} cuts once, light and quick, and is already moving before {target} can answer.`
         ],
         medium: [
-            `{user} spins his weapon and opens a cut across {target}'s chest.`,
-            `{user} lunges with a laugh and the blade bites into {target}'s shoulder.`,
-            `{user} splits {target}'s guard down the middle and slips a cut through.`,
-            `{user} hits {target} twice, fast and sloppy and very effective.`
+            `{user} crosses both blades and opens a cut across {target}'s chest.`,
+            `{user} lunges low, and the second blade bites into {target}'s shoulder.`,
+            `{user} splits {target}'s guard with one blade and slips a cut through with the other.`,
+            `{user} hits {target} twice, so fast the two strikes sound like one.`
         ],
         high: [
-            `{user} brings the weapon down so hard it splits {target}'s armor open.`,
-            `{user} goes wild, a flurry of cuts that leave {target} reeling.`,
-            `{user}'s mods surge, and the next strike sends {target} sprawling.`,
-            `{user} laughs, swings, and {target} stops being able to laugh along.`
+            `{user} brings both blades down at once, and {target} buckles under them.`,
+            `{user} goes at {target} in a flurry, every cut landing, and {target} reels away from it.`,
+            `{user} slips inside {target}'s reach and doesn't waste a single movement.`,
+            `{user} drives forward with both blades, and {target} hits the pavement hard.`
         ]
     },
-    'Signal Dominion': { // Virgil Wesley
+    'Signal Dominion': { // Virgil Wesley: twin energy daggers he throws and calls back
         low: [
-            `{user} whispers into {target}'s neurochip, and {target} flinches at a sudden headache.`,
-            `{user}'s signal brushes {target}'s mind, an itch behind the eyes.`,
-            `{user} sends a burst of static into {target}'s implant, and it buzzes for a moment.`,
-            `{user} murmurs a few words, and {target} loses {target.their} balance for a second.`
+            `{user} flicks a glowing dagger at {target}, and it only grazes {target.their} arm before snapping back to his hand.`,
+            `{user}'s thrown dagger skims {target} and buries itself in the wall behind.`,
+            `{user} slashes past {target}, testing {target.their} guard more than cutting.`,
+            `{user} throws low, and the dagger nicks {target}'s leg on its way back to him.`
         ],
         medium: [
-            `{user} pushes a signal through {target}'s neurochip that makes {target.them} scream.`,
-            `{user} hijacks {target}'s nerves for a moment and makes {target.them} stumble.`,
-            `{user} floods {target}'s implant with noise until {target} clutches {target.their} head.`,
-            `{user} smiles and sends a jolt straight into {target}'s brain.`
+            `{user} throws both daggers at once, and one of them finds {target}.`,
+            `{user} closes in, cuts {target} across the ribs, and is gone again.`,
+            `{user}'s dagger hits {target} in the shoulder and snaps back to his hand, glowing.`,
+            `{user} feints a throw, then cuts {target} for real when {target} flinches.`
         ],
         high: [
-            `{user} takes over {target}'s implant completely, and {target} drops to {target.their} knees, shaking.`,
-            `{user} fills {target}'s head with so much static {target.they} can't stand up straight.`,
-            `{user} whispers a single word, and {target}'s whole body seizes.`,
-            `{user} overloads {target}'s neurochip until it burns, and {target} hits the ground.`
+            `{user} throws, catches, and throws again, and {target} takes both daggers.`,
+            `{user} goes through {target}'s guard in a blur of light, every cut landing.`,
+            `{user} hits {target} with a thrown dagger, then the other, then is suddenly right in front of {target.them}.`,
+            `{user} fights like someone paying back a debt, and {target} drops to {target.their} knees.`
         ]
-    }
+    },
 };

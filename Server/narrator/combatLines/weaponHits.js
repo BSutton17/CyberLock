@@ -55,7 +55,7 @@ export const WEAPON_HITS = {
             `{user} pins {target} to the nearest wall with the shield and holds the trigger down.`
         ]
     },
-    'Ray Gun': { // Gene Shock: blue fusion fire gathered in his bare hand and thrown (no gun)
+    'Fusion Flame': { // Gene Shock: blue fusion fire gathered in his bare hand and thrown
         low: [
             `{user} flicks a spark of blue fire at {target} that only scorches the paint.`,
             `{user} snaps his fingers and a small blue flame licks across {target}, more sting than burn.`,

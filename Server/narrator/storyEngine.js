@@ -5,13 +5,14 @@ import {
   STORY_SYSTEM_PROMPT,
   RULES_SYSTEM_PROMPT,
   buildStateBlock,
+  describeParty,
   STORY_RESPONSE_SCHEMA,
   RULES_RESPONSE_SCHEMA,
   SUMMARY_RESPONSE_SCHEMA,
   DIALOGUE_RESPONSE_SCHEMA
 } from './prompts.js';
 import { CHARACTERS, BOSSES, OPENING_SCENES, VALID_LOCATIONS, LOCATIONS, DECISION_ATTRIBUTES } from './lore.js';
-import { getActFor, getCombatLocation, TOTAL_ENCOUNTERS, BOSS_ENCOUNTERS } from './campaign.js';
+import { getActFor, getPath, getCombatLocation, TOTAL_ENCOUNTERS, BOSS_ENCOUNTERS } from './campaign.js';
 import { chooseDecisionAttribute, getDecisionOwner, normalizeAttribute } from './decisions.js';
 import { FALLBACK_NARRATION, optionsForAttribute } from './fallbacks.js';
 import { parseJsonObject } from './json.js';
@@ -47,7 +48,12 @@ export function createStorySession() {
     timesAddressed: {},
     npcAttitudes: {},
     personalMoments: [],
-    // The "story so far" recap (Summarize button), rewritten after every fight.
+    // The Summarize button: what happened in each act, the fights won, and the paragraphs already
+    // written (an act is only rewritten when it has news). Written only when someone asks.
+    encounterIndex: 0,
+    actLogs: {},
+    fightsWon: [],
+    actSummaries: {},
     summary: null
   };
 }
@@ -176,11 +182,18 @@ export function createNarrator({
   // What players see carries this game's NPC names.
   const forPlayers = (room, value) => castify(value, sessions.get(room)?.cast);
 
+  // Which act the story is in: the act of the fight it is heading toward (Act I before a side is chosen).
+  const actNumberOf = (session) => (session.faction ? getActFor(session.faction, session.encounterIndex)?.actNumber : null) || 1;
+
   const remember = (session, entry) => {
     const text = String(entry || '').replace(/\s+/g, ' ').trim().slice(0, MAX_LOG_ENTRY_CHARS);
     if (!text) return;
     session.storyLog.push(text);
     if (session.storyLog.length > 30) session.storyLog.splice(0, session.storyLog.length - 30);
+    // The Summarize button keeps each act's own record.
+    const actLog = (session.actLogs[actNumberOf(session)] ||= []);
+    actLog.push(text);
+    if (actLog.length > 60) actLog.splice(0, actLog.length - 60);
   };
 
   const characterNameFor = (playerName, context) =>
@@ -426,7 +439,7 @@ export function createNarrator({
     session.pendingDialogue = null;
     session.npcAttitudes[dialogue.npc] = (session.npcAttitudes[dialogue.npc] || 0) + (TONE_EFFECT[option.tone] || 0);
     if (option.tone !== 'silent') {
-      session.personalMoments.push({ npc: dialogue.npc, by: dialogue.characterName, reply: option.text, tone: option.tone, lead: option.lead || null });
+      session.personalMoments.push({ npc: dialogue.npc, by: dialogue.characterName, reply: option.text, tone: option.tone, lead: option.lead || null, act: actNumberOf(session) });
       if (session.personalMoments.length > 20) session.personalMoments.shift();
       remember(session, dialogue.kind === 'ask' ? option.told : `${dialogue.characterName} told ${dialogue.npc}: "${option.text}"`);
       if (option.lead) remember(session, option.lead);
@@ -448,18 +461,54 @@ export function createNarrator({
     };
   }
 
+  // Who decides next. Bots get decisions too, so they're part of the story; a person presses the
+  // button for them (`decidedBy`), whichever person has decided least recently.
   function nextDecision(session, context) {
-    const choice = chooseDecisionAttribute({
-      players: context.players,
+    const bots = context.bots || [];
+    const deciders = [...context.players, ...bots];
+    const connected = context.connectedPlayers ? [...context.connectedPlayers, ...bots] : null;
+    let choice = chooseDecisionAttribute({
+      players: deciders,
       attributesByPlayer: context.attributesByPlayer,
-      connectedPlayers: context.connectedPlayers,
+      connectedPlayers: connected,
       history: session.decisions
     });
-    if (choice) return choice;
-    // No attribute data yet: fall back to a rotating default.
-    const fallbackAttributes = ['politician', 'detective', 'spy', 'electrician', 'medic', 'crook', 'scholar', 'intimidation'];
-    const attribute = fallbackAttributes[session.decisions.length % fallbackAttributes.length];
-    return { attribute, owner: getDecisionOwner(attribute, context.players, context.attributesByPlayer) };
+    if (!choice) {
+      // No attribute data yet: fall back to a rotating default.
+      const fallbackAttributes = ['politician', 'detective', 'spy', 'electrician', 'medic', 'crook', 'scholar', 'intimidation'];
+      const attribute = fallbackAttributes[session.decisions.length % fallbackAttributes.length];
+      choice = { attribute, owner: getDecisionOwner(attribute, deciders, context.attributesByPlayer) };
+    }
+    return { ...choice, decidedBy: bots.includes(choice.owner) ? personToDecideFor(session, context) : choice.owner };
+  }
+
+  // The person who presses the button for a bot's decision: whoever has decided least recently.
+  function personToDecideFor(session, context) {
+    const people = (context.connectedPlayers?.length ? context.connectedPlayers : context.players).filter(player => context.players.includes(player));
+    if (people.length === 0) return context.players[0] || null;
+    const lastAt = (player) => {
+      for (let i = session.decisions.length - 1; i >= 0; i--) {
+        const entry = session.decisions[i];
+        if (entry?.decidedBy === player || entry?.owner === player) return i;
+      }
+      return -1;
+    };
+    return [...people].sort((x, y) => lastAt(x) - lastAt(y))[0];
+  }
+
+  // Who the open decision belongs to, for clients: the character whose call it is, and the person
+  // who presses the button (the same person, unless it's a bot's call).
+  function decisionOwnerFor(session, context) {
+    const pending = session.pendingDecision;
+    if (!pending?.owner && !pending?.decidedBy) return null;
+    const decidedBy = pending.decidedBy || pending.owner;
+    return {
+      player: pending.owner || decidedBy,
+      characterName: pending.ownerName || characterNameFor(pending.owner, context),
+      decidedBy,
+      decidedByName: characterNameFor(decidedBy, context),
+      attribute: pending.attribute || null
+    };
   }
 
   function recordChoice(session, context, choice) {
@@ -467,9 +516,11 @@ export function createNarrator({
     const owner = pending?.owner || null;
     session.decisions.push({
       owner,
+      decidedBy: pending?.decidedBy || owner,
       by: pending?.ownerName || (owner ? characterNameFor(owner, context) : 'The party'),
       attribute: pending?.attribute || null,
-      choice: String(choice || '').slice(0, 80)
+      choice: String(choice || '').slice(0, 80),
+      act: actNumberOf(session)
     });
     if (session.decisions.length > 40) session.decisions.splice(0, session.decisions.length - 40);
     session.pendingDecision = null;
@@ -590,7 +641,7 @@ export function createNarrator({
     }
 
     const options = beat.options?.length === 2 ? beat.options : optionsForAttribute(decision.attribute);
-    session.pendingDecision = { attribute: decision.attribute, owner: decision.owner, ownerName, options };
+    session.pendingDecision = { attribute: decision.attribute, owner: decision.owner, decidedBy: decision.decidedBy, ownerName, options };
     remember(session, beat.memory);
     const location = pickStoryLocation(session, beat.location);
 
@@ -739,58 +790,116 @@ export function createNarrator({
     street_encounter: 'It started on a busy street, when a bomb went off under anti-corporate graffiti and the party ended up standing between Enforcers and rebels with guns drawn.'
   };
 
-  // A recap built from what the game itself recorded: used by the offline narrator and whenever
-  // the model can't write one. Oldest first, plain sentences.
-  function localRecap(session, context, fightsDone) {
-    const points = [];
-    const names = partyNames(context);
-    const opening = OPENING_RECAP[session.openingScene];
-    if (opening) points.push(opening);
-    else if (names.length) points.push(`${names.join(', ')} got caught in the middle of a fight that wasn't theirs.`);
-    if (session.faction) {
-      const other = session.faction === 'rebels' ? 'Enforcers' : 'Rebels';
-      points.push(`They chose to fight with the ${session.faction === 'rebels' ? 'Rebels' : 'Enforcers'}, which made the ${other} their enemy.`);
-    }
-    // Picking a side is already told above.
-    for (const decision of session.decisions.filter(d => d.choice && !resolveFaction(d.choice)).slice(-4)) {
-      if (decision.choice) points.push(`${decision.by} made the call to ${decision.choice.charAt(0).toLowerCase()}${decision.choice.slice(1).replace(/[.!]+$/, '')}.`);
-    }
-    for (const moment of session.personalMoments.slice(-2)) {
-      points.push(moment.lead || `${moment.by} told ${moment.npc}: "${moment.reply}"`);
-    }
-    const actInfo = session.faction ? getActFor(session.faction, Math.min(TOTAL_ENCOUNTERS - 1, fightsDone)) : null;
-    if (fightsDone > 0) points.push(`They have come through ${fightsDone === 1 ? 'one fight' : `${fightsDone} fights`} so far.`);
-    if (actInfo?.act?.goal) points.push(`What they're after now: ${actInfo.act.goal}`);
-    return points.slice(0, 8);
+  const ACT_NAMES = ['Act I', 'Act II', 'Act III'];
+
+  // "Act I - Eyes in the Sky", or just "Act I" before a side is chosen.
+  const actTitle = (session, act) => getPath(session.faction)?.acts?.[act - 1]?.title || ACT_NAMES[act - 1] || `Act ${act}`;
+
+  /** Notes a fight the party won, under the act it belongs to (no AI involved). */
+  function recordFight(session, { encounterIndex, result } = {}) {
+    if (result !== 'enemies_defeated' || !Number.isFinite(encounterIndex)) return;
+    if (session.fightsWon.some(fight => fight.encounterIndex === encounterIndex)) return;
+    const actInfo = session.faction ? getActFor(session.faction, encounterIndex) : null;
+    session.fightsWon.push({
+      encounterIndex,
+      act: actInfo?.actNumber || 1,
+      boss: actInfo?.isBossEncounter ? BOSSES[actInfo.act.boss]?.name || null : null,
+      setup: actInfo?.encounter?.setup || null
+    });
   }
 
-  /** Rewrites the room's "story so far" recap. `fightsDone` counts fights finished, this one included. */
-  async function summarize(session, context, { fightsDone = 0 } = {}) {
-    const fallback = localRecap(session, context, fightsDone);
-    let points = fallback;
-    try {
-      const actInfo = session.faction ? getActFor(session.faction, Math.min(TOTAL_ENCOUNTERS - 1, fightsDone)) : null;
-      const state = buildStateBlock(session, { party: context.party, partyFaction: session.faction, encounterIndex: fightsDone, actInfo });
-      const log = session.storyLog.length ? `What has happened, oldest first:\n${session.storyLog.map(entry => `- ${entry}`).join('\n')}` : '';
-      const last = session.lastNarration ? `Most recent narration:\n${session.lastNarration.slice(0, 900)}` : '';
-      const content = [
-        state,
-        log,
-        last,
-        'TASK',
-        'Some players have lost track of the story. Recap the WHOLE story so far, from how it began up to right now, in four to seven short points, oldest first: how the party got involved and which side they joined and why, the main things that happened and the choices they made (say who made them), what any personal moments set in motion, and what they are trying to do next.',
-        'This is a recap of the story, not of the last fight: mention fights only for what they changed. Plain words, past tense for what happened, one or two sentences per point. Use character callsigns. No numbers, no game mechanics. Return JSON {"points": [...]}.'
-      ].filter(Boolean).join('\n\n');
-      const parsed = await callModel({ session, kind: 'summary', system: STORY_SYSTEM_PROMPT, userContent: content, schema: SUMMARY_RESPONSE_SCHEMA, maxTokens: 600, hints: { recap: fallback } });
-      const written = (Array.isArray(parsed.points) ? parsed.points : [])
-        .map(point => cleanNarration(String(point || ''), 400))
-        .filter(Boolean)
-        .filter(point => findOutsiderNames(point, context.party).length === 0);
-      if (written.length >= 2) points = written.slice(0, 8);
-    } catch (error) {
-      logger.warn?.(`[AI] story recap fell back: ${error.message}`);
+  // One act in plain sentences, from what the game recorded: the offline narrator's version, and
+  // the fallback whenever the model can't write one.
+  function localActParagraph(session, context, act, { finished }) {
+    const sentences = [];
+    if (act === 1) {
+      const opening = OPENING_RECAP[session.openingScene];
+      const names = partyNames(context);
+      if (opening) sentences.push(opening);
+      else if (names.length) sentences.push(`${names.join(', ')} got caught in the middle of a fight that wasn't theirs.`);
+      if (session.faction) {
+        const other = session.faction === 'rebels' ? 'Enforcers' : 'Rebels';
+        sentences.push(`The party chose to fight with the ${session.faction === 'rebels' ? 'Rebels' : 'Enforcers'}, which made the ${other} their enemy.`);
+      }
     }
-    session.summary = { points, fightsDone, updatedAt: now() };
+    // Picking a side is already told above.
+    for (const decision of session.decisions.filter(d => (d.act || 1) === act && d.choice && !resolveFaction(d.choice)).slice(-4)) {
+      sentences.push(`${decision.by} made the call to ${decision.choice.charAt(0).toLowerCase()}${decision.choice.slice(1).replace(/[.!]+$/, '')}.`);
+    }
+    for (const moment of session.personalMoments.filter(m => (m.act || 1) === act).slice(-2)) {
+      sentences.push(moment.lead || `${moment.by} told ${moment.npc}: "${moment.reply}"`);
+    }
+    const fights = session.fightsWon.filter(fight => fight.act === act);
+    const boss = fights.find(fight => fight.boss);
+    const others = fights.length - (boss ? 1 : 0);
+    if (others > 0) sentences.push(`They fought their way through ${others === 1 ? 'one fight' : `${others} fights`}.`);
+    if (boss) sentences.push(`The act ended with ${boss.boss} defeated.`);
+    else if (!finished) {
+      const goal = getPath(session.faction)?.acts?.[act - 1]?.goal;
+      if (goal) sentences.push(`What they're after now: ${goal}`);
+    }
+    return sentences.join(' ') || `${actTitle(session, act)} has only just begun.`;
+  }
+
+  // One AI call for one act: a single plain paragraph.
+  async function writeActParagraph(session, context, act, { finished, current }) {
+    const fallback = localActParagraph(session, context, act, { finished });
+    if (usesMock(session)) return fallback;
+    const title = actTitle(session, act);
+    const entries = session.actLogs[act] || [];
+    const fights = session.fightsWon.filter(fight => fight.act === act);
+    const goal = getPath(session.faction)?.acts?.[act - 1]?.goal;
+    const content = [
+      `Party (these are the ONLY player characters in the story):\n${describeParty(context.party)}`,
+      session.faction ? `Side chosen: the ${session.faction}` : 'Side chosen: not yet',
+      goal ? `What ${title} is about: ${goal}` : '',
+      act === 1 && OPENING_RECAP[session.openingScene] ? `How it began: ${OPENING_RECAP[session.openingScene]}` : '',
+      entries.length ? `What happened in ${title}, oldest first:\n${entries.map(entry => `- ${entry}`).join('\n')}` : '',
+      fights.length ? `Fights won in ${title}: ${fights.map(fight => (fight.boss ? `the boss fight against ${fight.boss}` : fight.setup || 'a fight')).join('; ')}` : '',
+      current && session.lastNarration ? `Most recent narration:\n${session.lastNarration.slice(0, 900)}` : '',
+      'TASK',
+      `Some players have lost track of the story. Write ONE plain paragraph, three to six sentences, that sums up everything that happened in ${title}${finished ? ' (this act is over)' : ' so far, up to right now'}: the main events, the choices the party made and who made them, what personal moments set in motion${finished ? ', and how the act ended' : ', and what they are trying to do next'}.`,
+      `Only ${title}: nothing from other acts. Mention fights only for what they changed. Past tense for what happened. Use character callsigns and the pronouns listed with each party member. No numbers, no game mechanics, no lists. Return JSON {"paragraph": "..."}.`
+    ].filter(Boolean).join('\n\n');
+    try {
+      const parsed = await callModel({ session, kind: 'summary', system: STORY_SYSTEM_PROMPT, userContent: content, schema: SUMMARY_RESPONSE_SCHEMA, maxTokens: 500, hints: { recap: fallback } });
+      const paragraph = cleanNarration(String(parsed.paragraph || ''), 1200);
+      if (paragraph && findOutsiderNames(paragraph, context.party).length === 0) return paragraph;
+    } catch (error) {
+      logger.warn?.(`[AI] act recap fell back: ${error.message}`);
+    }
+    return fallback;
+  }
+
+  // What changed in an act since its paragraph was written; an unchanged act is not rewritten.
+  const actVersion = (session, act, finished) => [
+    (session.actLogs[act] || []).length,
+    session.fightsWon.filter(fight => fight.act === act).length,
+    session.decisions.filter(d => (d.act || 1) === act).length,
+    finished ? 'done' : 'open',
+    session.faction || '-'
+  ].join(':');
+
+  /**
+   * The Summarize button: one paragraph per act, up to right now. Only runs when someone asks.
+   * Acts that haven't changed since their last paragraph are reused, so a finished act costs one
+   * AI call ever, and the current act one per press with news since the last.
+   */
+  async function summarize(session, context) {
+    const current = actNumberOf(session);
+    const acts = [];
+    for (let act = 1; act <= current; act++) {
+      const finished = act < current;
+      const version = actVersion(session, act, finished);
+      const cached = session.actSummaries[act];
+      let text = cached?.version === version ? cached.text : null;
+      if (!text) {
+        text = await writeActParagraph(session, context, act, { finished, current: act === current });
+        session.actSummaries[act] = { version, text };
+      }
+      acts.push({ act, title: actTitle(session, act), text, finished });
+    }
+    session.summary = { acts, updatedAt: now() };
     return session.summary;
   }
 
@@ -826,14 +935,31 @@ export function createNarrator({
     },
 
     /** The chosen party member answers a personal moment (see answerDialogue). */
-    answerDialogue(room, answer) {
+    answerDialogue(room, answer, context = {}) {
       const session = sessions.get(room);
-      return session ? forPlayers(room, answerDialogue(session, answer)) : null;
+      const result = session ? answerDialogue(session, answer) : null;
+      if (result?.options) result.decisionOwner = decisionOwnerFor(session, context);
+      return session ? forPlayers(room, result) : null;
     },
 
-    /** Rewrites and returns the room's "story so far" recap (after each fight). */
-    async summarize(room, context = {}, info = {}) {
-      return forPlayers(room, await summarize(getSession(room), { party: context.party || [], players: context.players || [] }, info));
+    /**
+     * Writes and returns the room's story so far, one paragraph per act (the Summarize button).
+     * Two presses at once share one write.
+     */
+    async summarize(room, context = {}) {
+      const session = getSession(room);
+      if (Number.isFinite(context.encounterIndex)) session.encounterIndex = context.encounterIndex;
+      if (typeof context.useMock === 'boolean') session.useMock = context.useMock;
+      if (!session.summaryInFlight) {
+        session.summaryInFlight = summarize(session, { party: context.party || [], players: context.players || [] })
+          .finally(() => { session.summaryInFlight = null; });
+      }
+      return forPlayers(room, await session.summaryInFlight);
+    },
+
+    /** Notes a finished fight for the Summarize button (no AI). */
+    recordFight(room, fight = {}) {
+      recordFight(getSession(room), fight);
     },
 
     /** The room's current recap, or null before the first one. */
@@ -851,9 +977,11 @@ export function createNarrator({
     },
 
     /** Time ran out on a personal moment: the character stays quiet and the story moves on. */
-    expireDialogue(room, dialogueId) {
+    expireDialogue(room, dialogueId, context = {}) {
       const session = sessions.get(room);
-      return session ? forPlayers(room, answerDialogue(session, { dialogueId, silent: true })) : null;
+      const result = session ? answerDialogue(session, { dialogueId, silent: true }) : null;
+      if (result?.options) result.decisionOwner = decisionOwnerFor(session, context);
+      return session ? forPlayers(room, result) : null;
     },
 
     // Public snapshot used to restore a reconnecting client.
@@ -879,7 +1007,10 @@ export function createNarrator({
      *   partyFaction, encounterIndex (fights started so far), enemies
      */
     async handleEvent(request = {}) {
-      return forPlayers(request.room, await this.handleEventInCanonicalNames(request));
+      const result = await this.handleEventInCanonicalNames(request);
+      const session = sessions.get(request.room);
+      if (result?.options && session) result.decisionOwner = decisionOwnerFor(session, request.context || {});
+      return forPlayers(request.room, result);
     },
 
     // handleEvent before this game's NPC names are put in (the narrator's own names throughout).
@@ -890,9 +1021,11 @@ export function createNarrator({
         players: context.players || [],
         attributesByPlayer: context.attributesByPlayer || {},
         connectedPlayers: context.connectedPlayers || null,
+        bots: context.bots || [],
         encounterIndex: Number.isFinite(context.encounterIndex) ? context.encounterIndex : 0,
         enemies: context.enemies || []
       };
+      if (Number.isFinite(context.encounterIndex)) session.encounterIndex = context.encounterIndex;
       // The room's mock switch (set by the host) decides which narrator writes this event.
       if (typeof context.useMock === 'boolean') session.useMock = context.useMock;
       if (!session.faction && (context.partyFaction === 'enforcers' || context.partyFaction === 'rebels')) {

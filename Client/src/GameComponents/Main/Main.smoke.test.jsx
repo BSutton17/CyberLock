@@ -165,6 +165,48 @@ describe('Main (story flow)', () => {
     expect(socket.emitted.some(({ event }) => event === 'faction_selected')).toBe(false);
   });
 
+  it("gives a bot its own decision, with a person pressing the button for it", async () => {
+    const socket = createFakeSocket();
+    render(<Harness socket={socket} playerName="sean" />);
+
+    act(() => {
+      socket.serverSends('ai_message', {
+        requestId: 'x',
+        eventType: 'encounter_end',
+        response: 'A guard blocks the gate.',
+        options: ['Cut the power', 'Talk our way in'],
+        attribute: 'electrician',
+        startCombat: false,
+        decisionOwner: { player: 'bot_ghost', characterName: 'Ghost Shell', decidedBy: 'sean', decidedByName: 'Gene Shock', attribute: 'electrician' }
+      });
+    });
+
+    const buttons = await screen.findAllByText('Cut the power', {}, { timeout: 3000 });
+    expect(screen.getAllByText("Ghost Shell's call (Electrician) - you choose for them").length).toBeGreaterThan(0);
+    expect(buttons.some(button => !button.disabled)).toBe(true);
+  });
+
+  it("tells everyone else who presses the button for a bot", async () => {
+    const socket = createFakeSocket();
+    render(<Harness socket={socket} playerName="bryson" />);
+
+    act(() => {
+      socket.serverSends('ai_message', {
+        requestId: 'x',
+        eventType: 'encounter_end',
+        response: 'A guard blocks the gate.',
+        options: ['Cut the power', 'Talk our way in'],
+        attribute: 'electrician',
+        startCombat: false,
+        decisionOwner: { player: 'bot_ghost', characterName: 'Ghost Shell', decidedBy: 'sean', decidedByName: 'Gene Shock', attribute: 'electrician' }
+      });
+    });
+
+    const buttons = await screen.findAllByText('Cut the power', {}, { timeout: 3000 });
+    expect(screen.getAllByText("Ghost Shell's call (Electrician) - Gene Shock chooses for them").length).toBeGreaterThan(0);
+    expect(buttons.every(button => button.disabled)).toBe(true);
+  });
+
   it('restores a pending decision from the server after a reconnect', async () => {
     const socket = createFakeSocket();
     render(
@@ -227,9 +269,10 @@ describe('Main (story flow)', () => {
         dialogue: null
       });
     });
-    expect((await screen.findAllByText('Tail the courier quietly', {}, { timeout: 8000 })).length).toBeGreaterThan(0);
+    // Story narration gives each sentence time to be read before the choices come up.
+    expect((await screen.findAllByText('Tail the courier quietly', {}, { timeout: 25000 })).length).toBeGreaterThan(0);
     expect(screen.queryByText("It's none of your business.")).toBeNull();
-  }, 30000); // the narration types out before choices appear
+  }, 60000);
 
   it('cleans up every socket listener on unmount', async () => {
     const socket = createFakeSocket();

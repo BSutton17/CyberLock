@@ -34,28 +34,41 @@
     color: #c4b5fd;
 }
 
-.story-summary-points {
-    margin: 0;
-    padding-left: 22px;
+.story-summary-acts {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    font-size: 15px;
-    line-height: 1.45;
+    gap: 14px;
+    transition: opacity 0.2s;
 }
 
-.story-summary-empty {
+/* Last version stays readable while the newest act is being written. */
+.story-summary-acts.is-updating {
+    opacity: 0.6;
+}
+
+.story-summary-act h3 {
+    margin: 0 0 4px;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #a78bfa;
+}
+
+.story-summary-act p {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.5;
+}
+
+.story-summary-empty,
+.story-summary-status {
     margin: 0;
     font-size: 15px;
     color: #9ca3af;
 }
 
-.story-summary-updated {
-    margin: 14px 0 0;
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: #9ca3af;
+.story-summary-acts + .story-summary-status {
+    margin-top: 12px;
 }
 
 .story-summary-close {
@@ -73,7 +86,7 @@
     cursor: pointer;
 }
 
-/* Landscape phones: a little tighter so a long recap needs less scrolling. */
+/* Landscape phones: tighter spacing, same readable text. */
 @media (orientation: landscape) and (max-height: 520px) {
     .story-summary-panel {
         padding: 14px 18px;
@@ -84,9 +97,19 @@
         margin-bottom: 8px;
     }
 
-    .story-summary-points {
-        gap: 6px;
-        font-size: 13px;
+    .story-summary-acts {
+        gap: 10px;
+    }
+
+    .story-summary-act h3 {
+        font-size: 12px;
+    }
+
+    .story-summary-act p,
+    .story-summary-empty,
+    .story-summary-status {
+        font-size: 15px;
+        line-height: 1.4;
     }
 
     .story-summary-close {

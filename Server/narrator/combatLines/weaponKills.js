@@ -187,7 +187,7 @@ export const WEAPON_KILLS = {
             `{user} pins {victim} beneath the shield. \"No,\" it says, as he starts to get up, and pulls the trigger.`
         ]
     },
-    'Ray Gun': { // Gene Shock: blue fusion fire from his bare hand
+    'Fusion Flame': { // Gene Shock: blue fusion fire from his bare hand
         enforcer_soldier: [
             `{user} hurls a ball of blue fire into {victim}'s visor, and the robot's lights go out one by one.`,
             `{user} catches {victim} mid-charge with a palm full of flame. The baton melts first, then the rest of the soldier folds.`,

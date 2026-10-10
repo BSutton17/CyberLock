@@ -145,6 +145,10 @@ reaction and thread).
 - **Who decides.** Decisions rotate to whoever decided least recently, using whichever of their
   top three attributes was used least recently: a full team passes calls around, and a solo
   player cycles their top three instead of hearing "Politician" every time (`decisions.js`).
+- **Bots get decisions too.** A bot's character takes their turn in the rotation like anyone
+  else, so the story treats the call as theirs ("Ghost Shell's call (Electrician)"). A person
+  presses the button for them: whichever person has decided least recently (`decidedBy` in the
+  `decisionOwner` sent with each decision).
 - **Moments never repeat the decision.** A personal moment is checked against the group decision
   that follows it; the AI is told to keep them about different things, and one that overlaps is
   swapped for a different moment.
@@ -160,11 +164,15 @@ reaction and thread).
 
 ## The story so far (Summarize button)
 
-The in-game top bar has a **Summarize** button. It opens a recap of the whole story up to now: how
-it began, which side the party joined, the choices that mattered, the threads in play and what
-they are after next. The narrator rewrites it after every fight (the AI from the story log and
-current state, or a recap the game builds from its own records in mock mode or if the model
-fails) and the server sends it to everyone; a player who reconnects fetches the latest one.
+The in-game top bar has a **Summarize** button. It opens the story so far as one short paragraph
+per act (Act I, then Act II, ...), up to the moment it is pressed, mid-act included.
+
+To save credits it is only written when someone presses the button, never automatically. Each act
+keeps its own record (story log entries, decisions, personal moments and won fights are tagged
+with their act), and an act's paragraph is only rewritten when that act has news since it was last
+written. A finished act costs one AI call; the current act one call per press when something has
+happened since the last. Two presses at once share one write, and the result goes to the whole
+room. In mock mode, or if the model fails, each paragraph is built from the game's own records.
 
 ## Seeing what the model sees
 

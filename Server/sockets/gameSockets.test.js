@@ -444,15 +444,22 @@ describe('combat turns', () => {
     });
   });
 
-  it('rewrites the story-so-far recap after a fight and hands it to anyone who asks', async () => {
+  it('writes the story so far only when someone presses Summarize, and shares it with the room', async () => {
     const { room, sockets: [a, b] } = await startFight([enemy('e1', 20, 2)]);
     fight(room).positions.e1 = { row: 5, col: 3 };
-    const pushed = waitFor(b, 'story_summary');
+    let pushedEarly = false;
+    b.once('story_summary', () => { pushedEarly = true; });
+    const ended = waitFor(a, 'combat_ended');
     await ack(a, 'combat_attack', { room, targetId: 'e1' });
-    const summary = await pushed;
-    expect(summary.fightsDone).toBe(1);
-    expect(summary.points.length).toBeGreaterThan(0);
-    expect(await ack(b, 'request_story_summary', { room })).toEqual({ summary });
+    await ended;
+    expect(pushedEarly).toBe(false);
+
+    const pushed = waitFor(b, 'story_summary');
+    const { summary } = await ack(a, 'request_story_summary', { room });
+    expect(summary.acts.length).toBeGreaterThan(0);
+    expect(summary.acts[0]).toMatchObject({ act: 1 });
+    expect(summary.acts[0].text.length).toBeGreaterThan(0);
+    expect(await pushed).toEqual(summary);
   });
 
   it('declares victory when the last enemy falls and patches the party up', async () => {

@@ -14,6 +14,7 @@ import ChooseAbilities from "./ChooseAbilities/ChooseAbilities.jsx"
 import SettingsMenu from "../Components/SettingsMenu";
 import MockToggle from "../Components/MockToggle";
 import { FaRotate } from "react-icons/fa6";
+import { createMusic } from "../Utils/music";
 
 const getIsMobilePortrait = () => {
   if (typeof window === 'undefined') {
@@ -59,8 +60,8 @@ function HomeScreen() {
 
   useEffect(() => {
     if (!titleMusicRef.current) {
-      titleMusicRef.current = new Audio('/audio/Title.mp3');
-      titleMusicRef.current.loop = true;
+      titleMusicRef.current = createMusic('/audio/Title.mp3');
+      titleMusicRef.current.setVolume(musicVolume * (2 / 3), isMuted);
     }
 
     const screensWithTitleMusic = [
@@ -80,25 +81,18 @@ function HomeScreen() {
           });
       }
     } else {
-      titleMusicRef.current.pause();
-      titleMusicRef.current.currentTime = 0;
+      titleMusicRef.current.stop();
     }
   }, [screen, isJoining]);
 
   useEffect(() => {
     return () => {
-      if (titleMusicRef.current) {
-        titleMusicRef.current.pause();
-        titleMusicRef.current.currentTime = 0;
-      }
+      titleMusicRef.current?.stop();
     };
   }, []);
 
   useEffect(() => {
-    if (titleMusicRef.current) {
-      titleMusicRef.current.volume = musicVolume * (2 / 3);
-      titleMusicRef.current.muted = isMuted;
-    }
+    titleMusicRef.current?.setVolume(musicVolume * (2 / 3), isMuted);
   }, [musicVolume, isMuted]);
 
   useEffect(() => {

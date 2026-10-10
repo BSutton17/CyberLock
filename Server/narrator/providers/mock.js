@@ -16,7 +16,7 @@ export function createMockProvider({ delayMs = 0, random = Math.random } = {}) {
 
       // The offline recap is the one the game builds from its own records.
       if (kind === 'summary') {
-        return JSON.stringify({ points: hints.recap || [] });
+        return JSON.stringify({ paragraph: hints.recap || '' });
       }
 
       if (kind === 'rules') {

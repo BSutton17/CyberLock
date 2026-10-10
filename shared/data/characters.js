@@ -63,7 +63,7 @@ export default {
       },
       "weapon": {
         "range": 3,
-        "name": "Ray Gun",
+        "name": "Fusion Flame",
         "damage": 4.5
       },
       "abilities": [],

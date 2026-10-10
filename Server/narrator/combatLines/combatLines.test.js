@@ -298,7 +298,7 @@ describe('pronouns', () => {
         const drone = { id: 'enforcer_drone_1', name: 'Enforcer Drone', key: 'enforcer_drone', side: 'enemy', boss: false, alive: true, kindAlive: 1, kindTotal: 1 };
         const text = createCombatNarrator({ random: () => 0 }).narrateTurn([
             { kind: 'move', actor: geneShock, direction: 'advance', other: drone },
-            { kind: 'weapon', actor: geneShock, target: drone, weapon: 'Ray Gun', share: 0.2 }
+            { kind: 'weapon', actor: geneShock, target: drone, weapon: 'Fusion Flame', share: 0.2 }
         ]);
         expect(text).toMatch(/^Gene Shock [^.]+\. He /);
     });

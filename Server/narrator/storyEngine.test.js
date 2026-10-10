@@ -154,6 +154,28 @@ describe('narrator flow', () => {
     expect(fightPrompt).toContain('Recent decisions');
   });
 
+  it('gives bots decisions too, with a person pressing the button for them', async () => {
+    const provider = scriptedProvider([beat()]);
+    const narrator = createNarrator({ provider, logger: quietLogger, decisionsPerInterlude: 3, personalMoments: false });
+    // Solo game: bryson plays Shipment, a bot plays Ghost Shell.
+    const solo = (overrides = {}) => context({ players: ['bryson'], bots: ['sean'], connectedPlayers: ['bryson'], ...overrides });
+    await narrator.handleEvent({ room: 'r1', eventType: 'choice_made', data: { faction: 'rebels' }, context: solo() });
+
+    const owners = [];
+    let result = await narrator.handleEvent({ room: 'r1', eventType: 'encounter_end', context: solo({ encounterIndex: 1 }) });
+    owners.push(result.decisionOwner);
+    for (const choice of ['Go left', 'Go right']) {
+      result = await narrator.handleEvent({ room: 'r1', eventType: 'choice_made', data: { choice }, context: solo({ encounterIndex: 1 }) });
+      if (result.options) owners.push(result.decisionOwner);
+    }
+
+    expect(owners.length).toBeGreaterThanOrEqual(2);
+    const botCalls = owners.filter(owner => owner.player === 'sean');
+    expect(botCalls.length).toBeGreaterThan(0);
+    for (const owner of botCalls) expect(owner).toMatchObject({ characterName: 'Ghost Shell', decidedBy: 'bryson', decidedByName: 'Shipment' });
+    for (const owner of owners.filter(owner => owner.player === 'bryson')) expect(owner.decidedBy).toBe('bryson');
+  });
+
   it('builds toward the act boss before a boss fight', async () => {
     const provider = scriptedProvider([beat()]);
     const narrator = createNarrator({ provider, logger: quietLogger, decisionsPerInterlude: 1 });
@@ -299,33 +321,86 @@ describe('logging', () => {
 });
 
 describe('the story so far (Summarize button)', () => {
-  it('asks the model to recap the whole story, and keeps its points', async () => {
-    const provider = scriptedProvider([beat(), { points: ['The party sided with the Rebels after the market bombing.', 'Shipment chose to hit the depot at night.'] }]);
-    const narrator = createNarrator({ provider, logger: quietLogger });
+  const summaryCalls = (provider) => provider.calls.filter(call => call.kind === 'summary');
+
+  it('writes one paragraph for the act the story is in, only when asked', async () => {
+    const provider = scriptedProvider([beat(), { paragraph: 'The party sided with the Rebels after the market bombing, and Shipment chose to hit the depot at night.' }]);
+    const narrator = createNarrator({ provider, logger: quietLogger, personalMoments: false });
     await narrator.handleEvent({ room: 'r1', eventType: 'choice_made', data: { faction: 'rebels' }, context: context() });
-    const summary = await narrator.summarize('r1', context(), { fightsDone: 1 });
-    const request = provider.calls[provider.calls.length - 1];
-    expect(request.kind).toBe('summary');
-    expect(request.messages[0].content).toMatch(/WHOLE story so far/);
-    expect(summary).toMatchObject({ fightsDone: 1, points: ['The party sided with the Rebels after the market bombing.', 'Shipment chose to hit the depot at night.'] });
+    narrator.recordFight('r1', { encounterIndex: 0, result: 'enemies_defeated' });
+    // Nothing is written until someone presses the button.
+    expect(summaryCalls(provider)).toHaveLength(0);
+
+    const summary = await narrator.summarize('r1', context({ encounterIndex: 1 }));
+    const [request] = summaryCalls(provider);
+    expect(request.messages[0].content).toMatch(/ONE plain paragraph/);
+    expect(request.messages[0].content).toContain('Act I - Eyes in the Sky');
+    expect(summary.acts).toEqual([
+      { act: 1, title: 'Act I - Eyes in the Sky', text: 'The party sided with the Rebels after the market bombing, and Shipment chose to hit the depot at night.', finished: false }
+    ]);
     expect(narrator.getSummary('r1')).toEqual(summary);
   });
 
-  it('falls back to a recap built from the game\'s own records', async () => {
+  it('only rewrites an act that has news, so a finished act costs one call', async () => {
+    const provider = scriptedProvider([beat(), (request) => JSON.stringify({ paragraph: `Recap number ${request.messages[0].content.length}.` })]);
+    const narrator = createNarrator({ provider, logger: quietLogger, decisionsPerInterlude: 1, personalMoments: false });
+    await narrator.handleEvent({ room: 'r1', eventType: 'choice_made', data: { faction: 'rebels' }, context: context() });
+
+    await narrator.summarize('r1', context({ encounterIndex: 1 }));
+    await narrator.summarize('r1', context({ encounterIndex: 1 }));
+    expect(summaryCalls(provider)).toHaveLength(1);
+
+    // Act I ends with the boss; the story moves into Act II.
+    narrator.recordFight('r1', { encounterIndex: 2, result: 'enemies_defeated' });
+    await narrator.handleEvent({ room: 'r1', eventType: 'encounter_end', context: context({ encounterIndex: 3 }) });
+    const later = await narrator.summarize('r1', context({ encounterIndex: 3 }));
+    expect(later.acts.map(act => [act.title, act.finished])).toEqual([['Act I - Eyes in the Sky', true], ['Act II - Blackout', false]]);
+    expect(summaryCalls(provider)).toHaveLength(3);
+    expect(summaryCalls(provider)[1].messages[0].content).toMatch(/boss fight against The Architect/);
+
+    // Pressing again with nothing new costs nothing.
+    await narrator.summarize('r1', context({ encounterIndex: 3 }));
+    expect(summaryCalls(provider)).toHaveLength(3);
+  });
+
+  it('shares one write between two presses at the same time', async () => {
+    const provider = scriptedProvider([beat(), { paragraph: 'Something happened.' }]);
+    const narrator = createNarrator({ provider, logger: quietLogger, personalMoments: false });
+    await narrator.handleEvent({ room: 'r1', eventType: 'choice_made', data: { faction: 'rebels' }, context: context() });
+    const [first, second] = await Promise.all([narrator.summarize('r1', context()), narrator.summarize('r1', context())]);
+    expect(first).toEqual(second);
+    expect(summaryCalls(provider)).toHaveLength(1);
+  });
+
+  it("falls back to a paragraph built from the game's own records", async () => {
     const provider = scriptedProvider([beat(), new Error('model down')]);
     const narrator = createNarrator({ provider, logger: quietLogger });
     await narrator.handleEvent({ room: 'r1', eventType: 'choice_made', data: { faction: 'enforcers' }, context: context() });
-    const { points } = await narrator.summarize('r1', context(), { fightsDone: 2 });
-    expect(points.join(' ')).toMatch(/fight with the Enforcers/);
-    expect(points.join(' ')).toMatch(/2 fights/);
+    narrator.recordFight('r1', { encounterIndex: 0, result: 'enemies_defeated' });
+    narrator.recordFight('r1', { encounterIndex: 1, result: 'enemies_defeated' });
+    const { acts } = await narrator.summarize('r1', context({ encounterIndex: 2 }));
+    expect(acts).toHaveLength(1);
+    expect(acts[0].text).toMatch(/fight with the Enforcers/);
+    expect(acts[0].text).toMatch(/2 fights/);
   });
 
-  it('drops recap points that name characters outside the party', async () => {
-    const provider = scriptedProvider([beat(), { points: ['Shipment kept the door.', 'Aaron Bray cheered.', 'Ghost Shell found the files.'] }]);
+  it('never calls the AI in mock mode', async () => {
+    const provider = scriptedProvider([beat()]);
+    const narrator = createNarrator({ provider, logger: quietLogger });
+    narrator.setMockMode('r1', true);
+    await narrator.handleEvent({ room: 'r1', eventType: 'choice_made', data: { faction: 'rebels' }, context: context() });
+    const { acts } = await narrator.summarize('r1', context({ encounterIndex: 1 }));
+    expect(acts[0].text).toMatch(/fight with the Rebels/);
+    expect(provider.calls).toHaveLength(0);
+  });
+
+  it('drops a paragraph that names characters outside the party', async () => {
+    const provider = scriptedProvider([beat(), { paragraph: 'Shipment kept the door while Aaron Bray cheered.' }]);
     const narrator = createNarrator({ provider, logger: quietLogger });
     await narrator.handleEvent({ room: 'r1', eventType: 'choice_made', data: { faction: 'rebels' }, context: context() });
-    const { points } = await narrator.summarize('r1', context(), { fightsDone: 1 });
-    expect(points).toEqual(['Shipment kept the door.', 'Ghost Shell found the files.']);
+    const { acts } = await narrator.summarize('r1', context());
+    expect(acts[0].text).not.toMatch(/Aaron Bray/);
+    expect(acts[0].text).toMatch(/Rebels/);
   });
 });
 
@@ -344,7 +419,7 @@ describe('building up to the bosses', () => {
     const narrator = createNarrator({ provider: createMockProvider(), logger: quietLogger, personalMoments: false, random: () => 0.6 });
     await narrator.handleEvent({ room: 'r1', eventType: 'choice_made', data: { faction: 'enforcers' }, context: context() });
     const result = await narrator.handleEvent({ room: 'r1', eventType: 'encounter_end', context: context({ encounterIndex: 2 }) });
-    expect(result.response).toMatch(/Garret|Maxwell|hammer/);
+    expect(result.response).toMatch(/Garret|Maxwell|hammer/i);
   });
 });
 

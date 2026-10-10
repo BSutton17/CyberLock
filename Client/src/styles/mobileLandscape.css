@@ -789,14 +789,14 @@
     }
 
     body .main-game-container .char-name {
-        font-size: 18px !important;
+        font-size: 21px !important;
         letter-spacing: 0.02em !important;
     }
 
     body .stat-speed,
     body .stat-hp,
     body .char-role {
-        font-size: 17px !important;
+        font-size: 19px !important;
     }
 
     /* ----- Character bar: smaller text so it stays short ----- */
@@ -910,18 +910,19 @@
 
     /* Story choices and personal moments over the character bar. */
     body .mobile-ai-overlay-text {
-        font-size: 30px !important;
+        font-size: 36px !important;
+        line-height: 1.35 !important;
     }
 
     /* In a fight the narration line shares the short character bar. */
     body .inventory:not(.story-phase) .mobile-ai-overlay-text {
-        font-size: 30px !important;
-        line-height: 1.3 !important;
+        font-size: 34px !important;
+        line-height: 1.25 !important;
     }
 
     body .mobile-ai-choice-owner,
     body .mobile-ai-overlay-status {
-        font-size: var(--phone-text) !important;
+        font-size: 28px !important;
     }
 
     body .mobile-ai-overlay-choices {
@@ -930,8 +931,8 @@
     }
 
     body .mobile-ai-overlay-choices button {
-        min-height: 72px !important;
-        font-size: 26px !important;
+        min-height: 80px !important;
+        font-size: 30px !important;
         padding: 8px 20px !important;
     }
 

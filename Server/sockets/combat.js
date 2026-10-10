@@ -35,7 +35,7 @@ export function createCombatController({
   buildNarratorContext = () => ({}),
   generateEnemies = generateEncounterEnemies,
   random = Math.random,
-  // Called once a fight has ended (the "story so far" recap is rewritten then).
+  // Called once a fight has ended (the win is noted for the Summarize button).
   onCombatEnded = () => {},
   // Where the party starts each fight. Tests replace this to set up exact positions.
   spawnPlayers = (players, characters, sceneKey) => generatePlayerSpawnPositions(players, characters, sceneKey, random)

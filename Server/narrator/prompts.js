@@ -293,9 +293,9 @@ export const DIALOGUE_RESPONSE_SCHEMA = {
 export const SUMMARY_RESPONSE_SCHEMA = {
   type: 'object',
   properties: {
-    points: { type: 'array', items: { type: 'string' }, description: 'Four to seven short recap points, oldest first.' }
+    paragraph: { type: 'string', description: 'One plain paragraph summing up the act.' }
   },
-  required: ['points'],
+  required: ['paragraph'],
   additionalProperties: false
 };
 

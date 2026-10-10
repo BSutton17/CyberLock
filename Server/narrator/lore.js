@@ -59,8 +59,7 @@ export const CHARACTERS = {
     realName: 'Aaron Bray',
     pronouns: 'he/him',
     role: 'DPS',
-    // The game calls it "Ray Gun"; it's fusion fire he throws from his bare hand.
-    weapon: 'blue fusion fire thrown from his hand (no gun)',
+    weapon: 'Fusion Flame: blue fusion fire he gathers in his bare hand and throws',
     bio: 'A bright student obsessed with Crown Gene\'s body modification tech, hired into its research and development team after winning design competitions. Most of his ideas were never approved for testing, so he tested them on his own body; some caused lasting damage, but they worked. Fusion cores under his skin let him gather blue fire in his bare hand and hurl it, which looks a lot like magic and is not. Crown Gene fired him when it found out, but by then he had everything he needed.'
   },
   aggressive_dps_2: {

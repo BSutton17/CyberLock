@@ -48,17 +48,11 @@ export function createGameState() {
 export function registerGameSockets({ io, state, narrator, timing, logger = console, combatOptions = {} }) {
   const random = combatOptions.random || Math.random;
   // buildNarratorContext is a function declaration below, so it can be handed over here.
-  const combat = createCombatController({ io, state, timing, narrator, logger, buildNarratorContext, onCombatEnded: refreshStorySummary, ...combatOptions });
+  const combat = createCombatController({ io, state, timing, narrator, logger, buildNarratorContext, onCombatEnded: recordFight, ...combatOptions });
 
-  // After every fight, the narrator rewrites the "story so far" recap (the Summarize button).
-  async function refreshStorySummary(room, { encounterIndex = 0 } = {}) {
-    if (!narrator?.summarize || !state.rooms[room]) return;
-    try {
-      const summary = await narrator.summarize(room, buildNarratorContext(room), { fightsDone: encounterIndex + 1 });
-      if (summary && state.rooms[room]) io.to(room).emit('story_summary', summary);
-    } catch (error) {
-      logger.warn?.(`[AI] story recap failed: ${error.message}`);
-    }
+  // Each won fight is noted for the Summarize button; the recap itself is only written on request.
+  function recordFight(room, fight) {
+    narrator?.recordFight?.(room, fight);
   }
 
   // -------------------------------------------------------------------------
@@ -162,7 +156,8 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
       options: result.options,
       attribute: result.attribute,
       startCombat: false,
-      dialogue: null
+      dialogue: null,
+      decisionOwner: result.decisionOwner || null
     };
     roomState.lastStoryMessage = message;
     io.to(room).emit('ai_message', { requestId: null, location: null, from: result.playerName, ...message });
@@ -176,7 +171,7 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
     (state.dialogueDeadlines ||= {})[room] = Date.now() + timeoutMs;
     const timer = setTimeout(() => {
       delete state.dialogueTimers[room];
-      resolveDialogue(room, narrator?.expireDialogue?.(room, dialogue.id));
+      resolveDialogue(room, narrator?.expireDialogue?.(room, dialogue.id, buildNarratorContext(room)));
     }, timeoutMs);
     timer.unref?.();
     state.dialogueTimers[room] = timer;
@@ -355,10 +350,11 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
         };
       });
 
-    // Story decisions always belong to people, never to bots.
+    // People make the story decisions; bots get decisions too, which a person makes for them.
     return {
       party,
       players: humanPlayers(roomState),
+      bots: (roomState?.bots || []).filter(bot => roomState.players.includes(bot)),
       attributesByPlayer,
       connectedPlayers: combat.connectedPlayers(room).filter(player => !isBot(roomState, player)),
       partyFaction: roomState?.selectedFaction || null,
@@ -609,10 +605,25 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
     });
 
     // The host can switch the room to the free offline narrator (testing without AI credits).
-    // The "story so far" recap, for a client that just opened the game or reconnected.
-    socket.on('request_story_summary', ({ room: payloadRoom } = {}, ack) => {
+    // The Summarize button: the story so far, one paragraph per act. Written only when someone
+    // presses it (to save AI credits), then shared with the whole room.
+    socket.on('request_story_summary', async ({ room: payloadRoom } = {}, ack) => {
+      const reply = (payload) => { if (typeof ack === 'function') ack(payload); };
       const room = currentRoom(payloadRoom);
-      if (typeof ack === 'function') ack({ summary: room ? narrator?.getSummary?.(room) || null : null });
+      if (!room || !narrator?.summarize) return reply({ summary: null });
+      try {
+        // Mid-fight, the room already counts the fight in progress as started; the story is
+        // still in that fight's act.
+        const context = buildNarratorContext(room);
+        const fight = combat.activeCombat(room);
+        if (fight && Number.isFinite(fight.encounterIndex)) context.encounterIndex = fight.encounterIndex;
+        const summary = await narrator.summarize(room, context);
+        if (summary && state.rooms[room]) io.to(room).emit('story_summary', summary);
+        reply({ summary });
+      } catch (error) {
+        logger.warn?.(`[AI] story recap failed: ${error.message}`);
+        reply({ summary: narrator.getSummary?.(room) || null });
+      }
     });
 
     socket.on('set_narrator_mode', ({ room: payloadRoom, mock } = {}, ack) => {
@@ -823,7 +834,8 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
               options: result.options || null,
               attribute: result.attribute || null,
               startCombat: !!result.startCombat,
-              dialogue: result.dialogue || null
+              dialogue: result.dialogue || null,
+              decisionOwner: result.decisionOwner || null
             };
           }
           if (result?.dialogue) startDialogueTimer(room, result.dialogue);
@@ -854,6 +866,7 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
         startCombat: !!result.startCombat,
         options: result.options || null,
         dialogue: withTimeLeft(room, result.dialogue || null),
+        decisionOwner: result.decisionOwner || null,
         from,
         ...(result.fallback ? { fallback: true } : {})
       };
@@ -873,7 +886,7 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
     socket.on('dialogue_reply', ({ room: payloadRoom, dialogueId, optionId } = {}, ack) => {
       const room = currentRoom(payloadRoom);
       const result = room && narrator?.answerDialogue
-        ? narrator.answerDialogue(room, { playerName: me(), dialogueId: String(dialogueId || ''), optionId: String(optionId || '') })
+        ? narrator.answerDialogue(room, { playerName: me(), dialogueId: String(dialogueId || ''), optionId: String(optionId || '') }, buildNarratorContext(room))
         : null;
       if (typeof ack === 'function') ack(result ? { ok: true } : { ok: false, message: 'That choice is not yours to make, or the moment has passed.' });
       resolveDialogue(room, result);

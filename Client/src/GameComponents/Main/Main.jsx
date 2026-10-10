@@ -12,6 +12,7 @@ import SettingsMenu from '../../Components/SettingsMenu';
 import MockToggle from '../../Components/MockToggle';
 import StorySummary from '../../Components/StorySummary';
 import DialogueChoices from './DialogueChoices';
+import { createMusic } from '../../Utils/music';
 
 const SCENE_BACKGROUNDS = {
     city_square: '/backgrounds/Background-City Square.png',
@@ -193,6 +194,8 @@ const TYPEWRITER_SENTENCE_GAP_FACTOR_MS = 18;
 const NARRATION_MIN_DISPLAY_MS = 2000;
 // ...and once a whole narration has finished, this much longer before the next one replaces it.
 const NARRATION_READ_PAUSE_MS = 1000;
+// Story narration (not fights) gets this much longer per sentence, to actually read it.
+const STORY_READING_EXTRA_MS = 2500;
 const TURN_ADVANCE_AFTER_TYPING_MS = 1000;
 // Real models can take several seconds for a story beat; fall back only if the server is truly stuck.
 const POST_COMBAT_NARRATION_TIMEOUT_MS = 25000;
@@ -211,19 +214,22 @@ const splitAiTextSegments = (message = '') => {
 
 // How long one sentence is on screen: typed out, then (unless it's the last) a pause that grows
 // with its length, but never less than the minimum in all.
-const sentenceOnScreenMs = (sentence, isLast) => Math.max(
+const sentenceOnScreenMs = (sentence, isLast, story = false) => Math.max(
     NARRATION_MIN_DISPLAY_MS,
-    sentence.length * TYPEWRITER_CHAR_INTERVAL_MS + (isLast ? 0 : sentence.length * TYPEWRITER_SENTENCE_GAP_FACTOR_MS)
+    sentence.length * TYPEWRITER_CHAR_INTERVAL_MS
+        + (isLast ? 0 : sentence.length * TYPEWRITER_SENTENCE_GAP_FACTOR_MS)
+        + (story ? STORY_READING_EXTRA_MS : 0)
 );
 
 // How long a narration holds the screen: each sentence in turn, then the reading pause.
-const narrationHoldMs = (message = '') => {
+const narrationHoldMs = (message = '', { story = false } = {}) => {
     const segments = splitAiTextSegments(message);
     if (segments.length === 0) return 0;
-    return segments.reduce((total, segment, index) => total + sentenceOnScreenMs(segment, index === segments.length - 1), 0)
+    return segments.reduce((total, segment, index) => total + sentenceOnScreenMs(segment, index === segments.length - 1, story), 0)
         + NARRATION_READ_PAUSE_MS;
 };
-const estimateTypewriterDurationMs = (message = '') => narrationHoldMs(message);
+// Story beats (the only narration that goes through a request) get the reading time.
+const estimateTypewriterDurationMs = (message = '') => narrationHoldMs(message, { story: true });
 
 
 function Main() {
@@ -300,6 +306,9 @@ function Main() {
     const [currentSceneKey, setCurrentSceneKey] = useState('city');
     const [aiOptions, setAiOptions] = useState(null);
     const [aiAttribute, setAiAttribute] = useState(null);
+    // Who the open decision belongs to, from the server: the character whose call it is (a bot's,
+    // sometimes) and the person who presses the button. Null for older messages.
+    const [decisionOwnerInfo, setDecisionOwnerInfo] = useState(null);
     const hasRequestedIntroRef = useRef(false);
     const pendingStartCombatRef = useRef(false);
     const selectedFactionRef = useRef(selectedFaction);
@@ -345,12 +354,10 @@ function Main() {
 
     useEffect(() => {
         if (!battleMusicRef.current) {
-            battleMusicRef.current = new Audio('/audio/BattleMusic.mp3');
-            battleMusicRef.current.loop = true;
+            battleMusicRef.current = createMusic('/audio/BattleMusic.mp3');
         }
-        
-        battleMusicRef.current.volume = musicVolume * (2 / 3);
-        battleMusicRef.current.muted = isMuted;
+
+        battleMusicRef.current.setVolume(musicVolume * (2 / 3), isMuted);
 
         const playPromise = battleMusicRef.current.play();
         if (playPromise !== undefined) {
@@ -360,18 +367,12 @@ function Main() {
         }
 
         return () => {
-            if (battleMusicRef.current) {
-                battleMusicRef.current.pause();
-                battleMusicRef.current.currentTime = 0;
-            }
+            battleMusicRef.current?.stop();
         };
     }, []);
 
     useEffect(() => {
-        if (battleMusicRef.current) {
-            battleMusicRef.current.volume = musicVolume * (2 / 3);
-            battleMusicRef.current.muted = isMuted;
-        }
+        battleMusicRef.current?.setVolume(musicVolume * (2 / 3), isMuted);
     }, [musicVolume, isMuted]);
 
     useEffect(() => {
@@ -491,6 +492,8 @@ function Main() {
     };
 
     const canPlayerDecide = (requiredAttribute) => {
+        // The server says who presses the button (for a bot's call, one of the people).
+        if (decisionOwnerInfo?.decidedBy) return decisionOwnerInfo.decidedBy === playerName;
         const owner = getDecisionOwner(requiredAttribute);
         if (!owner) return isStoryController;
         return owner === playerName;
@@ -516,6 +519,18 @@ function Main() {
 
     const getDecisionOwnerDisplay = (rawAttribute, fallbackAttribute = 'politician') => {
         const normalizedAttribute = normalizeDecisionAttribute(rawAttribute || fallbackAttribute) || fallbackAttribute;
+        if (decisionOwnerInfo?.decidedBy) {
+            const label = formatDecisionAttributeLabel(decisionOwnerInfo.attribute || normalizedAttribute);
+            const { player, characterName, decidedBy, decidedByName } = decisionOwnerInfo;
+            const mine = decidedBy === playerName;
+            if (player === decidedBy) {
+                return mine ? `Your call (${label}) - talk it over, then choose for the team` : `${characterName} (${player}) decides (${label})`;
+            }
+            // A bot's call: the story treats it as theirs, a person presses the button.
+            return mine
+                ? `${characterName}'s call (${label}) - you choose for them`
+                : `${characterName}'s call (${label}) - ${decidedByName || decidedBy} chooses for them`;
+        }
         const owner = getDecisionOwner(normalizedAttribute) || livingStoryController;
         const attributeLabel = formatDecisionAttributeLabel(normalizedAttribute);
         if (owner && owner === playerName) {
@@ -781,6 +796,7 @@ function Main() {
             setAiOptions(last.options);
             setDialogue(null);
             setAiAttribute(normalizeDecisionAttribute(last.attribute || '') || null);
+            setDecisionOwnerInfo(last.decisionOwner || null);
             setAiNarrationComplete(true);
             setIntroNarrationGate(false);
             if (last.eventType === 'game_start' && !selectedFactionRef.current) {
@@ -820,6 +836,7 @@ function Main() {
                 setAiText('');
                 setAiOptions(null);
                 setAiAttribute(null);
+                setDecisionOwnerInfo(null);
             }
         }
         
@@ -869,6 +886,7 @@ function Main() {
         setAiNarrationComplete(false);
         setAiOptions(null);
         setAiAttribute(null);
+        setDecisionOwnerInfo(null);
 
         if (eventType === 'game_start') {
             setAllowFallbackFactionChoices(false);
@@ -1160,15 +1178,19 @@ function Main() {
     const sentenceStartedAtRef = useRef(0);
     const narrationDoneAtRef = useRef(0);
     const pendingNarrationRef = useRef(null);
+    // Whether the waiting narration, and the one on screen, are story (more reading time) or a fight.
+    const pendingIsStoryRef = useRef(false);
+    const narrationIsStoryRef = useRef(false);
     const narrationHoldTimerRef = useRef(null);
 
     const showNextNarration = () => {
         clearTimeout(narrationHoldTimerRef.current);
         if (narrationTypingRef.current || pendingNarrationRef.current === null) return;
 
-        // Free once the last one has been up for the minimum and then for the reading pause.
+        // Free once the last one has been up for the minimum and then for the reading pause
+        // (longer after story narration).
         const waitMs = Math.max(narrationDoneAtRef.current, sentenceStartedAtRef.current + NARRATION_MIN_DISPLAY_MS)
-            + NARRATION_READ_PAUSE_MS - Date.now();
+            + NARRATION_READ_PAUSE_MS + (narrationIsStoryRef.current ? STORY_READING_EXTRA_MS : 0) - Date.now();
         if (waitMs > 0) {
             narrationHoldTimerRef.current = setTimeout(showNextNarration, waitMs);
             return;
@@ -1178,6 +1200,7 @@ function Main() {
         pendingNarrationRef.current = null;
         const segments = splitAiTextSegments(message);
         narrationTypingRef.current = true;
+        narrationIsStoryRef.current = pendingIsStoryRef.current;
         sentenceStartedAtRef.current = Date.now();
         setSentencesSource(message);
         setAiSentences(segments.length > 0 ? segments : [message]);
@@ -1198,6 +1221,7 @@ function Main() {
         }
 
         pendingNarrationRef.current = message;
+        pendingIsStoryRef.current = !aiTextIsCombat;
         showNextNarration();
     }, [aiText]);
 
@@ -1233,7 +1257,8 @@ function Main() {
         }
 
         // The next sentence replaces this one after its pause, and never before the minimum.
-        const pauseMs = currentSentence.length * TYPEWRITER_SENTENCE_GAP_FACTOR_MS;
+        const pauseMs = currentSentence.length * TYPEWRITER_SENTENCE_GAP_FACTOR_MS
+            + (narrationIsStoryRef.current ? STORY_READING_EXTRA_MS : 0);
         const minimumLeftMs = sentenceStartedAtRef.current + NARRATION_MIN_DISPLAY_MS - Date.now();
         const timer = setTimeout(() => {
             sentenceStartedAtRef.current = Date.now();
@@ -1378,7 +1403,7 @@ function Main() {
             );
         };
 
-        const handleAiMessage = ({ requestId, eventType, response, location, attribute, startCombat, options, fallback, dialogue: incomingDialogue }) => {
+        const handleAiMessage = ({ requestId, eventType, response, location, attribute, startCombat, options, fallback, dialogue: incomingDialogue, decisionOwner: incomingDecisionOwner }) => {
             const normalizedIncomingOptions = Array.isArray(options)
                 ? options.map(option => String(option || '').trim()).filter(Boolean)
                 : [];
@@ -1453,6 +1478,7 @@ function Main() {
 
             // Store attribute for decision-making
             setAiAttribute(canShowDecisionOptions ? (resolvedIncomingAttribute || null) : null);
+            setDecisionOwnerInfo(canShowDecisionOptions ? (incomingDecisionOwner || null) : null);
 
             // Handle post-combat narration FIRST, before options display logic
             if (
@@ -1496,6 +1522,7 @@ function Main() {
                 setAllowFallbackNextEncounterChoice(false);
                 setAiOptions(null);
                 setAiAttribute(null);
+                setDecisionOwnerInfo(null);
 
                 if (!selectedFactionRef.current) {
                     pendingStartCombatRef.current = true;
@@ -1686,6 +1713,7 @@ function Main() {
                 setAllowFallbackNextEncounterChoice(false);
                 setAiOptions(null);
                 setAiAttribute(null);
+                setDecisionOwnerInfo(null);
                 setAiBusy(false);
                 clearPendingPostCombatFallback();
                 pendingPostCombatNarrationRequestIdRef.current = null;

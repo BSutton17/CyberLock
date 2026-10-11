@@ -509,7 +509,7 @@ describe('first meetings and plain words', () => {
     const joined = await narrator.handleEvent({ room: 'r1', eventType: 'choice_made', data: { faction: 'rebels' }, context: context() });
     // Either hand-written introduction: how she looks, her name, what she wants.
     expect(joined.response).toMatch(/Rhea Vance/);
-    expect(joined.response).toMatch(/glows amber/);
+    expect(joined.response).toMatch(/amber/);
     expect(joined.response).toMatch(/prove|Proof/);
     const after = await narrator.handleEvent({ room: 'r1', eventType: 'encounter_end', context: context({ encounterIndex: 1 }) });
     expect(after.response).toMatch(/Rhea Vance/);

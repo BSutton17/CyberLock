@@ -17,6 +17,7 @@ import { generateEnemySpawnPositions, generatePlayerSpawnPositions } from '../ga
 import { isBot } from '../game/bots.js';
 import { chooseStep } from '../../shared/combat/partyAI.js';
 import { flavorCombatLog } from '../narrator/combatFlavor.js';
+import { buildNarrationScreens } from '../../shared/text/narrationScreens.js';
 import { createCombatNarrator } from '../narrator/combatLines/index.js';
 
 const ENDED_COMBAT_CLEANUP_MS = 5000;
@@ -136,7 +137,7 @@ export function createCombatController({
 
   // How long the client takes to type `text` out and leave it up to be read (see Main.jsx).
   function displayMs(text) {
-    const sentences = String(text || '').trim().split(/(?<=[.!?])\s+|\n+/).filter(Boolean);
+    const sentences = buildNarrationScreens(text);
     if (sentences.length === 0) return 0;
     // Each sentence is on screen at least the minimum (even "Good."), then the narration's pause.
     const onScreen = sentences.reduce((total, sentence, index) => total + Math.max(

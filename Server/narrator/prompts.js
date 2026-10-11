@@ -91,6 +91,13 @@ STAKES AND CHOICES
 - Come back to a theme or a question only when something new comes with it: new information, a
   sharper conflict, or a decision. Never ask the same thing twice.
 
+FORMATTING
+- Lay the narration out like a page of a book: paragraphs separated by a blank line (\n\n).
+- A new paragraph every time a different person speaks. Never put two speakers' lines in the same
+  paragraph. A speaker's line and their own action beat stay together in one paragraph.
+- Narration between lines of dialogue is its own paragraph, one to three sentences.
+- Never break one person's line of dialogue across paragraphs.
+
 DIALOGUE
 - Let people talk, in quotation marks, with plain tags ("she says", "he replies") or an action
   beat instead of a tag (he shrugs, takes another bite).

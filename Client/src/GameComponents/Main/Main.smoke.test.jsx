@@ -416,6 +416,22 @@ describe('Main (combat)', () => {
     await waitFor(() => expect(document.querySelector('.ai-text').textContent).toBe('Leo ducks under the baton.'), { timeout: 3000 });
   });
 
+  it("lays story dialogue out like a book: each speaker on their own line, never split mid-line", async () => {
+    const socket = createFakeSocket();
+    render(<Harness socket={socket} playerName="sean" />);
+    const shown = () => document.querySelector('.ai-text').textContent;
+    act(() => {
+      socket.serverSends('ai_message', {
+        requestId: 'x',
+        eventType: 'encounter_end',
+        response: 'Smoke rolls off the market.\n\n"I know. Neither did we," she says.\n\n"Then who did?" Leo asks.',
+        options: null,
+        startCombat: false
+      });
+    });
+    await waitFor(() => expect(shown()).toBe('Smoke rolls off the market.\n"I know. Neither did we," she says.\n"Then who did?" Leo asks.'), { timeout: 8000 });
+  }, 15000);
+
   it('keeps even a one-word sentence on screen for two seconds before the next sentence', async () => {
     const socket = createFakeSocket();
     render(<Harness socket={socket} serverStoryState={storyInProgress} initialCombat={fightSnapshot()} />);

@@ -270,9 +270,10 @@ export function publicDialogue(dialogue) {
 }
 
 /** The narration after a choice: what was said, how the NPC took it, and back to the group. */
+// Separate paragraphs, like a book: the answer, the other person's reaction, back to the group.
 export function followUpNarration(dialogue, option, { ownerName = null, random = Math.random } = {}) {
-    const back = ownerName ? ' ' + fill(BACK_TO_THE_GROUP[Math.floor(random() * BACK_TO_THE_GROUP.length) % BACK_TO_THE_GROUP.length], { owner: ownerName }) : '';
-    return `${option.told} ${option.reaction}${back}`;
+    const back = ownerName ? fill(BACK_TO_THE_GROUP[Math.floor(random() * BACK_TO_THE_GROUP.length) % BACK_TO_THE_GROUP.length], { owner: ownerName }) : '';
+    return [option.told, option.reaction, back].map(part => String(part || '').trim()).filter(Boolean).join('\n\n');
 }
 
 // Exposed for tests.

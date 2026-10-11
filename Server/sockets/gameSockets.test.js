@@ -736,7 +736,8 @@ describe('personal moments', () => {
     const told = waitFor(a, 'ai_message', message => message.eventType === 'dialogue_reply');
     expect((await ack(b, 'dialogue_reply', { room, dialogueId: 'd1', optionId: 'honest' })).ok).toBe(true);
     const message = await told;
-    expect(message.response).toMatch(/^Livewire: "We're just passing through\." /);
+    // The answer and the reaction are separate paragraphs (different speakers).
+    expect(message.response).toMatch(/^Livewire: "We're just passing through\."\n\n/);
     expect(message.options).toEqual(['Go left', 'Go right']);
     expect(session.npcAttitudes['A checkpoint guard']).toBe(1);
     expect(game.state.rooms[room].lastStoryMessage.options).toEqual(['Go left', 'Go right']);

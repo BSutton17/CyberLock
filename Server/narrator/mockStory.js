@@ -104,7 +104,7 @@ function opening(hints, tools, ctx) {
             'Both sides have seen them now, and both are waiting for an answer. Help the Enforcers, or help the Rebels.',
             'Standing still is not an option anymore. The Enforcers, or the Rebels?'
         ]);
-    return [...details, ...members, restLine, strangers, incident, frame].map(sentence).filter(Boolean).join(' ');
+    return [...details, ...members, restLine, strangers, incident, frame].map(sentence).filter(Boolean).join('\n\n');
 }
 
 // ---------------------------------------------------------------------------
@@ -123,27 +123,70 @@ const COMMIT = {
 };
 
 // The first meeting with the side's leader: what they look like, who they are, what they want.
-// {a} is a party member.
+// {a} is a party member. One paragraph per speaker, like a book.
+const paragraphs = (...parts) => parts.join('\n\n');
 const ALLY_INTRODUCTIONS = {
     rebels: [
-        'A short, solid woman with a shaved head pushes through the smoke. One of her eyes is a cheap metal implant that glows amber and flickers like a bad bulb. "Rhea Vance," she says. "I run this cell. Rebels, if you\'re wondering, the people the Enforcers call terrorists." {a} asks what she wants with them. "Proof," Rhea says. "Somebody bombed that market and blamed us. Help me find out who, and the city stops looking at us like animals." She rubs the skin around the bad eye. "First, though, we live through the next five minutes."',
-        'A woman in a patched work jacket with too many pockets drops into cover next to the party. Her left eye is metal, glowing amber, and it clicks as it looks them over. "Commander Rhea Vance. Don\'t salute, it draws fire." "Commander of what?" {a} asks. "Of the people still willing to fight the corporations. Today that\'s about forty of us. Now forty-something." She points at the Enforcer line. "They\'re going to pin the bombing on us. We\'re going to prove they did it. Stay close."'
+        paragraphs(
+            'A short, solid woman with a shaved head pushes through the smoke. One of her eyes is a cheap metal implant that glows amber and flickers like a bad bulb.',
+            '"Rhea Vance," she says. "I run this cell. Rebels, if you\'re wondering, the people the Enforcers call terrorists."',
+            '{a} asks what she wants with them.',
+            '"Proof," Rhea says. "Somebody bombed that market and blamed us. Help me find out who, and the city stops looking at us like animals. First, though, we live through the next five minutes."'
+        ),
+        paragraphs(
+            'A woman in a patched work jacket with too many pockets drops into cover next to the party. Her left eye is metal, glowing amber, and it clicks as it looks them over.',
+            '"Commander Rhea Vance. Don\'t salute, it draws fire."',
+            '"Commander of what?" {a} asks.',
+            '"Of the people still willing to fight the corporations. Today that\'s about forty of us. Now forty-something." She points at the Enforcer line. "They\'re going to pin the bombing on us. We\'re going to prove they did it. Stay close."'
+        )
     ],
     enforcers: [
-        'A tall woman in a black uniform without a single wrinkle walks up as if the shooting is happening to someone else. Grey buzz cut, a thin glass slate in one hand, the kind of tablet officers use to read orders. "Captain Mara Kessler. Division." {a} asks what Division is. "The part of the Enforcers that investigates," she says. "We find out who did it. Then we make sure they can\'t do it again." She taps the slate twice. "The rebels bombed this market. Help me prove it, and this ends before it becomes a war."',
-        'The Enforcer line parts for a woman in a pressed black uniform, grey hair cut short, a glass slate glowing in her hand. "Mara Kessler," she says. "Captain, Division. We\'re the Enforcers who ask questions before the robots stop asking." "And what are you asking us?" {a} says. "To be useful." She swipes the slate and a list of names appears. "Somebody set off that bomb. I want them found, quietly and fast, before the city tears itself apart."'
+        paragraphs(
+            'A tall woman in a black uniform without a single wrinkle walks up as if the shooting is happening to someone else. Grey buzz cut, a thin glass slate in one hand, the kind of tablet officers use to read orders.',
+            '"Captain Mara Kessler. Division."',
+            '{a} asks what Division is.',
+            '"The part of the Enforcers that investigates," she says. "We find out who did it. Then we make sure they can\'t do it again." She taps the slate twice. "The rebels bombed this market. Help me prove it, and this ends before it becomes a war."'
+        ),
+        paragraphs(
+            'The Enforcer line parts for a woman in a pressed black uniform, grey hair cut short, a glass slate glowing in her hand.',
+            '"Mara Kessler," she says. "Captain, Division. We\'re the Enforcers who ask questions before the robots stop asking."',
+            '"And what are you asking us?" {a} says.',
+            '"To be useful." She swipes the slate and a list of names appears. "Somebody set off that bomb. I want them found, quietly and fast, before the city tears itself apart."'
+        )
     ]
 };
 
 // After the opening fight, the leader gives the party a direction. {a} is a party member.
 const ALLY_BRIEFINGS = {
     rebels: [
-        'Rhea Vance waves the party into a back room that smells like solder and cold coffee. "Here\'s the plan," she says. "Singularity, the company that builds the robots and the drones, runs a surveillance grid over the whole city. Cameras, drones, all of it feeding one place." {a} asks what that has to do with the bombing. "Everything. If the grid saw the bombing, the footage exists. We get it, the city sees who really did it." She doesn\'t say how many people she lost getting this far. Her eye flickers anyway.',
-        '"Sit," Rhea Vance says, and nobody argues. "The man at the top of Singularity calls himself The Architect. His drones watch every street in this city." {a} asks if that is a problem. "It\'s the problem. And the answer. His grid recorded the bombing. We take the grid apart, we find the footage, we win the argument." She counts something on her fingers and stops at a number she doesn\'t say out loud.'
+        paragraphs(
+            'Rhea Vance waves the party into a back room that smells like solder and cold coffee.',
+            '"Here\'s the plan," she says. "Singularity, the company that builds the robots and the drones, runs a surveillance grid over the whole city. Cameras, drones, all of it feeding one place."',
+            '{a} asks what that has to do with the bombing.',
+            '"Everything. If the grid saw the bombing, the footage exists. We get it, the city sees who really did it."',
+            'She doesn\'t say how many people she lost getting this far. Her eye flickers anyway.'
+        ),
+        paragraphs(
+            '"Sit," Rhea Vance says, and nobody argues. "The man at the top of Singularity calls himself The Architect. His drones watch every street in this city."',
+            '{a} asks if that is a problem.',
+            '"It\'s the problem. And the answer. His grid recorded the bombing. We take the grid apart, we find the footage, we win the argument."',
+            'She counts something on her fingers and stops at a number she doesn\'t say out loud.'
+        )
     ],
     enforcers: [
-        'Mara Kessler sets her slate on a crate so the party can read it. A face fills the screen: a broad, scarred man with a hammer slung over his shoulder. "Garret Maxwell," she says. "Rebel leader. His parents died when a Particle Genesis fusion plant blew up, the kind of power plant that runs this whole city. Now he wants to blow up another one, with a district around it." {a} asks why he would do that. "Because grief makes people stupid," Kessler says. She taps the slate twice, done talking. For a second her eyes stay on one line of the file, like something in it doesn\'t add up.',
-        '"Here\'s what I know," Mara Kessler says, and lists it like a shopping list. "A bomb. A market. A rebel symbol painted nearby. And a rebel named Garret Maxwell who hates Particle Genesis, the company that runs the city\'s power plants, more than anyone alive." {a} points out that anyone can paint a symbol. Kessler looks at them a beat too long. "Yes," she says. "So we find Maxwell before his people reach a plant, and we find out who really built that bomb." She does not say who else she suspects.'
+        paragraphs(
+            'Mara Kessler sets her slate on a crate so the party can read it. A face fills the screen: a broad, scarred man with a hammer slung over his shoulder.',
+            '"Garret Maxwell," she says. "Rebel leader. His parents died when a Particle Genesis fusion plant blew up, the kind of power plant that runs this whole city. Now he wants to blow up another one, with a district around it."',
+            '{a} asks why he would do that.',
+            '"Because grief makes people stupid," Kessler says.',
+            'She taps the slate, done talking. For a second her eyes stay on one line of the file, like something in it doesn\'t add up.'
+        ),
+        paragraphs(
+            '"Here\'s what I know," Mara Kessler says, and lists it like a shopping list. "A bomb. A market. A rebel symbol painted nearby. And a rebel named Garret Maxwell who hates Particle Genesis, the company that runs the city\'s power plants, more than anyone alive."',
+            '{a} points out that anyone can paint a symbol.',
+            'Kessler looks at them a beat too long. "Yes," she says. "So we find Maxwell before his people reach a plant, and we find out who really built that bomb."',
+            'She does not say who else she suspects.'
+        )
     ]
 };
 const ERUPT = [
@@ -587,7 +630,8 @@ export function mockStoryBeat(hints = {}, random = Math.random, recent = []) {
     }
 
     return {
-        narration: lines.map(sentence).filter(Boolean).join(' '),
+        // Each piece is its own paragraph (a new speaker starts a new one, like a book).
+        narration: lines.map(sentence).filter(Boolean).join('\n\n'),
         options,
         location,
         memory: memory || `${ctx.names[0] || 'The party'} pressed on.`

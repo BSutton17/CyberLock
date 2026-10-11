@@ -797,6 +797,8 @@ p {
     height: auto;
     overflow-wrap: break-word;
     word-break: break-word;
+    /* A screen of narration can hold a few short paragraphs: each speaker on their own line. */
+    white-space: pre-line;
 }
 
 .ai-choices {
@@ -1506,7 +1508,7 @@ p {
         font-size: 8vmin;
         line-height: 1.35;
         color: #eaeaf0;
-        white-space: normal;
+        white-space: pre-line;
         overflow-wrap: break-word;
         word-break: break-word;
         max-width: 100%;

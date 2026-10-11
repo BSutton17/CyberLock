@@ -12,6 +12,7 @@ import SettingsMenu from '../../Components/SettingsMenu';
 import MockToggle from '../../Components/MockToggle';
 import StorySummary from '../../Components/StorySummary';
 import PauseButton from '../../Components/PauseButton';
+import { buildNarrationScreens } from '@shared/text/narrationScreens.js';
 import DialogueChoices from './DialogueChoices';
 import { createMusic } from '../../Utils/music';
 
@@ -177,11 +178,14 @@ const sanitizeAiNarrationText = (rawText = '') => {
         .map(line => line.trim())
         .filter(line => line && line !== '/' && line !== '\\' && line !== '```' && line !== '```json');
 
+    // Each line is a paragraph (a new speaker starts a new one), so the breaks stay.
     return lines
-        .join(' ')
-        .replace(/\b(?:location|attribute|start_?combat|options)\b\s*(?:[:=]|is)?\s*(?:null|none|true|false|\[[^\]]*\]|"[^"]*"|[a-z_]+)/gi, '')
-        .replace(/\s+/g, ' ')
-        .trim();
+        .map(line => line
+            .replace(/\b(?:location|attribute|start_?combat|options)\b\s*(?:[:=]|is)?\s*(?:null|none|true|false|\[[^\]]*\]|"[^"]*"|[a-z_]+)/gi, '')
+            .replace(/\s+/g, ' ')
+            .trim())
+        .filter(Boolean)
+        .join('\n');
 };
 
 const resolveSceneKey = (rawKeyword = '') => {
@@ -201,20 +205,17 @@ const TURN_ADVANCE_AFTER_TYPING_MS = 1000;
 // Real models can take several seconds for a story beat; fall back only if the server is truly stuck.
 const POST_COMBAT_NARRATION_TIMEOUT_MS = 25000;
 
-const splitAiTextSegments = (message = '') => {
+// The screens a narration is shown in: paragraphs for the story, sentences in a fight (see
+// shared/text/narrationScreens.js). Dialogue is never split inside a quotation.
+const splitAiTextSegments = (message = '', { story = false } = {}) => {
     const trimmedMessage = String(message || '').trim();
     if (!trimmedMessage) return [];
-
-    const segments = trimmedMessage
-        .split(/(?<=[.!?])\s+|\n+/)
-        .map(segment => segment.trim())
-        .filter(Boolean);
-
-    return segments.length > 0 ? segments : [trimmedMessage];
+    const screens = buildNarrationScreens(trimmedMessage, { story });
+    return screens.length > 0 ? screens : [trimmedMessage];
 };
 
-// How long one sentence is on screen: typed out, then (unless it's the last) a pause that grows
-// with its length, but never less than the minimum in all.
+// How long one screen is up: typed out, then (unless it's the last) a pause that grows with its
+// length, but never less than the minimum in all.
 const sentenceOnScreenMs = (sentence, isLast, story = false) => Math.max(
     NARRATION_MIN_DISPLAY_MS,
     sentence.length * TYPEWRITER_CHAR_INTERVAL_MS
@@ -224,7 +225,7 @@ const sentenceOnScreenMs = (sentence, isLast, story = false) => Math.max(
 
 // How long a narration holds the screen: each sentence in turn, then the reading pause.
 const narrationHoldMs = (message = '', { story = false } = {}) => {
-    const segments = splitAiTextSegments(message);
+    const segments = splitAiTextSegments(message, { story });
     if (segments.length === 0) return 0;
     return segments.reduce((total, segment, index) => total + sentenceOnScreenMs(segment, index === segments.length - 1, story), 0)
         + NARRATION_READ_PAUSE_MS;
@@ -1224,7 +1225,7 @@ function Main() {
 
         const message = pendingNarrationRef.current;
         pendingNarrationRef.current = null;
-        const segments = splitAiTextSegments(message);
+        const segments = splitAiTextSegments(message, { story: pendingIsStoryRef.current });
         narrationTypingRef.current = true;
         narrationIsStoryRef.current = pendingIsStoryRef.current;
         sentenceStartedAtRef.current = Date.now();

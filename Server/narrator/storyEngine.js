@@ -19,6 +19,7 @@ import { parseJsonObject } from './json.js';
 import { createMockProvider } from './providers/mock.js';
 import { createDialogue, publicDialogue, followUpNarration, TONE_EFFECT, attitudeLabel } from './dialogue.js';
 import { chooseCast, castify, CAST_ROLES } from './cast.js';
+import { splitParagraphs, splitSentences } from '../../shared/text/narrationScreens.js';
 
 export const FACTION_OPTIONS = ['Fight with the Enforcers', 'Fight with the Rebels'];
 export const SHOP_INTRO_OPTIONS = ['Leave shop', 'Continue shopping'];
@@ -131,30 +132,41 @@ export function resolveFaction(...values) {
   return null;
 }
 
-const splitSentences = (text) =>
-  String(text || '')
-    .split(/(?<=[.!?]["”']?)\s+/)
-    .map(sentence => sentence.trim())
-    .filter(Boolean);
+// Paragraphs are kept (a new one for each speaker, like a book; see FORMATTING in the style
+// guide), separated by a blank line.
+const PARAGRAPH_BREAK = '\n\n';
+
+/** Joins pieces of narration as separate paragraphs. */
+export const joinParagraphs = (...pieces) => pieces.flat().map(piece => String(piece || '').trim()).filter(Boolean).join(PARAGRAPH_BREAK);
 
 export function cleanNarration(text, maxChars = MAX_STORY_CHARS) {
-  let cleaned = String(text || '')
-    .replace(/\*\*|__|`/g, '')
-    .replace(/^#+\s*/gm, '')
-    .replace(/\bWhat (?:do|will) (?:you|they|the party) do\?/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+  const paragraphs = splitParagraphs(
+    String(text || '')
+      .replace(/\*\*|__|`/g, '')
+      .replace(/^#+\s*/gm, '')
+      .replace(/\bWhat (?:do|will) (?:you|they|the party) do\?/gi, '')
+  );
 
-  if (cleaned.length > maxChars) {
-    const sentences = splitSentences(cleaned);
-    let result = '';
-    for (const sentence of sentences) {
-      if ((result + ' ' + sentence).trim().length > maxChars) break;
-      result = `${result} ${sentence}`.trim();
+  // Too long: keep whole sentences (never half a line of dialogue), paragraph by paragraph.
+  const kept = [];
+  let length = 0;
+  for (const paragraph of paragraphs) {
+    const room = maxChars - length - (kept.length ? PARAGRAPH_BREAK.length : 0);
+    if (paragraph.length <= room) {
+      kept.push(paragraph);
+      length += paragraph.length + (kept.length > 1 ? PARAGRAPH_BREAK.length : 0);
+      continue;
     }
-    cleaned = result || cleaned.slice(0, maxChars);
+    let partial = '';
+    for (const sentence of splitSentences(paragraph)) {
+      if ((partial ? partial.length + 1 : 0) + sentence.length > room) break;
+      partial = partial ? `${partial} ${sentence}` : sentence;
+    }
+    if (partial) kept.push(partial);
+    break;
   }
-  return cleaned;
+  const cleaned = kept.join(PARAGRAPH_BREAK);
+  return cleaned || paragraphs.join(PARAGRAPH_BREAK).slice(0, maxChars);
 }
 
 export function cleanOptions(options, count = 2) {
@@ -199,7 +211,8 @@ export function findOutsiderNames(text, party = []) {
 }
 
 const stripSentencesMentioning = (text, names) =>
-  splitSentences(text).filter(sentence => !names.some(name => sentence.includes(name))).join(' ');
+  joinParagraphs(splitParagraphs(text).map(paragraph =>
+    splitSentences(paragraph).filter(sentence => !names.some(name => sentence.includes(name))).join(' ')));
 
 // ---------------------------------------------------------------------------
 // Narrator
@@ -720,7 +733,7 @@ export function createNarrator({
     if (dialogue) noteWhoAppears(session, `${dialogue.npc} ${dialogue.intro}`);
     if (dialogue) {
       // The moment is told in the narration; its choices show now, the group's after the answer.
-      const narration = `${beat.narration} ${dialogue.intro}`;
+      const narration = joinParagraphs(beat.narration, dialogue.intro);
       session.pendingDialogue = { ...dialogue, followUp: { options, attribute: decision.attribute, ownerName } };
       session.lastNarration = narration;
       return { response: narration, location, attribute: decision.attribute, startCombat: false, options: null, fallback: !!beat.fallback, dialogue: publicDialogue(dialogue) };

@@ -445,3 +445,71 @@ describe("each game's NPC names", () => {
     expect(result.response).toMatch(/is waiting by the stall/);
   });
 });
+
+describe('first meetings and plain words', () => {
+  const lastPrompt = (provider) => provider.calls[provider.calls.length - 1].messages[0].content;
+
+  it("introduces the side's leader properly the first time the party meets them", async () => {
+    const provider = scriptedProvider([beat({ options: [], narration: 'A woman with a glowing eye steps out. "Rhea Vance," she says.' })]);
+    const narrator = createNarrator({ provider, logger: quietLogger, personalMoments: false });
+    await narrator.handleEvent({ room: 'r1', eventType: 'choice_made', data: { faction: 'rebels' }, context: context() });
+    const prompt = lastPrompt(provider);
+    expect(prompt).toMatch(/meeting them for the first time/);
+    expect(prompt).toMatch(/introduce themselves by name/);
+    expect(prompt).toMatch(/Not met yet[^\n]*Commander Rhea Vance/);
+    expect(narrator.getSession('r1').metNpcs).toContain('Commander Rhea Vance');
+  });
+
+  it('has the leader give the party a direction after the opening fight, and lists who they have met', async () => {
+    const provider = scriptedProvider([beat({ options: [], narration: 'Rhea Vance nods at them.' }), beat()]);
+    const narrator = createNarrator({ provider, logger: quietLogger, personalMoments: false });
+    await narrator.handleEvent({ room: 'r1', eventType: 'choice_made', data: { faction: 'rebels' }, context: context() });
+    await narrator.handleEvent({ room: 'r1', eventType: 'encounter_end', context: context({ encounterIndex: 1 }) });
+    const prompt = lastPrompt(provider);
+    expect(prompt).toMatch(/Commander Rhea Vance pulls the party aside/);
+    expect(prompt).toMatch(/what they want from the party next/);
+    expect(prompt).toMatch(/Recurring NPCs the party has met: Commander Rhea Vance/);
+    // Already met: no second introduction.
+    expect(prompt).not.toMatch(/first time the party meets Commander Rhea Vance/);
+  });
+
+  it("remembers what the narration explained so it isn't explained again", async () => {
+    const provider = scriptedProvider([beat({ options: [], explained: ['uplink', 'Division'] }), beat()]);
+    const narrator = createNarrator({ provider, logger: quietLogger, personalMoments: false });
+    await narrator.handleEvent({ room: 'r1', eventType: 'choice_made', data: { faction: 'rebels' }, context: context() });
+    await narrator.handleEvent({ room: 'r1', eventType: 'encounter_end', context: context({ encounterIndex: 1 }) });
+    expect(lastPrompt(provider)).toMatch(/Already explained to the players \(don't explain again\): uplink, Division/);
+    expect(lastPrompt(provider)).toMatch(/narration, options, location, memory, explained/);
+  });
+
+  it('gives scenes room to talk', async () => {
+    const provider = scriptedProvider([beat()]);
+    const narrator = createNarrator({ provider, logger: quietLogger, decisionsPerInterlude: 3, personalMoments: false });
+    await narrator.handleEvent({ room: 'r1', eventType: 'choice_made', data: { faction: 'rebels' }, context: context() });
+    await narrator.handleEvent({ room: 'r1', eventType: 'encounter_end', context: context({ encounterIndex: 2 }) });
+    expect(lastPrompt(provider)).toMatch(/mostly conversation/);
+    await narrator.handleEvent({ room: 'r1', eventType: 'choice_made', data: { choice: 'Go left' }, context: context({ encounterIndex: 2 }) });
+    expect(lastPrompt(provider)).toMatch(/4-7 sentences, with people talking/);
+    expect(lastPrompt(provider)).toMatch(/talk it through/);
+  });
+
+  it('tells the model how every recurring NPC looks, sounds and slowly reveals who they are', async () => {
+    const provider = scriptedProvider([beat()]);
+    const narrator = createNarrator({ provider, logger: quietLogger });
+    await narrator.handleEvent({ room: 'r1', eventType: 'game_start', context: context() });
+    const { system } = provider.calls[0];
+    expect(system).toMatch(/PLAIN WORDS FOR NEWCOMERS/);
+    expect(system).toMatch(/SHOW, DON'T TELL/);
+    expect(system).toMatch(/Commander Rhea Vance[\s\S]*Looks: [\s\S]*Sounds like: [\s\S]*Wants: [\s\S]*Act I: [\s\S]*Act III: /);
+  });
+
+  it('has the offline narrator introduce the leader too, then brief the party after the first fight', async () => {
+    const narrator = createNarrator({ provider: createMockProvider(), logger: quietLogger, personalMoments: false, random: () => 0 });
+    const joined = await narrator.handleEvent({ room: 'r1', eventType: 'choice_made', data: { faction: 'rebels' }, context: context() });
+    expect(joined.response).toMatch(/Rhea Vance/);
+    expect(joined.response).toMatch(/I run this cell/);
+    const after = await narrator.handleEvent({ room: 'r1', eventType: 'encounter_end', context: context({ encounterIndex: 1 }) });
+    expect(after.response).toMatch(/Rhea Vance/);
+    expect(after.response).toMatch(/surveillance grid|The Architect/);
+  });
+});

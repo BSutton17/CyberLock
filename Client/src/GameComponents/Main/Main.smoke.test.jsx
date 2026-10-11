@@ -42,7 +42,8 @@ const character = (id, name, speed) => ({
   weapon: { name: 'Energy Sword', damage: 9, range: 1 }
 });
 
-function Harness({ socket, playerName = 'bryson', serverStoryState = null, initialCombat = null }) {
+function Harness({ socket, playerName = 'bryson', serverStoryState: initialStoryState = null, initialCombat = null }) {
+  const [serverStoryState, setServerStoryState] = useState(initialStoryState);
   const [playerCharacters, setPlayerCharacters] = useState({
     bryson: character('aggressive_dps_2', 'Leo', 40),
     sean: character('hacker_support_4', 'Ghost Shell', 25)
@@ -83,10 +84,16 @@ function Harness({ socket, playerName = 'bryson', serverStoryState = null, initi
     isMuted: true,
     connectedPlayers: ['bryson', 'sean'],
     serverStoryState,
+    setServerStoryState,
     combatState
   };
 
-  return <GameContext.Provider value={value}><Main /></GameContext.Provider>;
+  return (
+    <GameContext.Provider value={value}>
+      <Main />
+      <span data-testid="server-story-message">{serverStoryState?.lastStoryMessage ? 'pending' : 'used'}</span>
+    </GameContext.Provider>
+  );
 }
 
 const aiRequests = (socket, eventType) =>
@@ -257,6 +264,8 @@ describe('Main (story flow)', () => {
     expect(screen.getAllByText(/^Your call \(Spy\)/).length).toBeGreaterThan(0);
     // The story already started, so the opening must not be requested again.
     expect(aiRequests(socket, 'game_start')).toHaveLength(0);
+    // Used once: coming back to this screen later must not replay it.
+    await waitFor(() => expect(screen.getByTestId('server-story-message').textContent).toBe('used'));
   });
 
   it("shows only a personal moment's choices until it is answered, then the group decision", async () => {

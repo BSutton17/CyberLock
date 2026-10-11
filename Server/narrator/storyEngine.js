@@ -11,21 +11,22 @@ import {
   SUMMARY_RESPONSE_SCHEMA,
   DIALOGUE_RESPONSE_SCHEMA
 } from './prompts.js';
-import { CHARACTERS, BOSSES, OPENING_SCENES, VALID_LOCATIONS, LOCATIONS, DECISION_ATTRIBUTES } from './lore.js';
+import { CHARACTERS, BOSSES, NPCS, OPENING_SCENES, VALID_LOCATIONS, LOCATIONS, DECISION_ATTRIBUTES } from './lore.js';
 import { getActFor, getPath, getCombatLocation, TOTAL_ENCOUNTERS, BOSS_ENCOUNTERS } from './campaign.js';
 import { chooseDecisionAttribute, getDecisionOwner, normalizeAttribute } from './decisions.js';
 import { FALLBACK_NARRATION, optionsForAttribute } from './fallbacks.js';
 import { parseJsonObject } from './json.js';
 import { createMockProvider } from './providers/mock.js';
 import { createDialogue, publicDialogue, followUpNarration, TONE_EFFECT, attitudeLabel } from './dialogue.js';
-import { chooseCast, castify } from './cast.js';
+import { chooseCast, castify, CAST_ROLES } from './cast.js';
 
 export const FACTION_OPTIONS = ['Fight with the Enforcers', 'Fight with the Rebels'];
 export const SHOP_INTRO_OPTIONS = ['Leave shop', 'Continue shopping'];
 export const SHOP_CONTINUE_OPTIONS = ['Leave shop', 'Keep browsing'];
 
 const STORY_LOCATIONS = VALID_LOCATIONS.filter(location => location !== 'boss' && location !== 'shop');
-const MAX_STORY_CHARS = 1400;
+// Room for a real conversation in each scene (see PEOPLE TALK in the style guide).
+const MAX_STORY_CHARS = 2200;
 // The opening scene sets up the world and the party, so it gets more room.
 const OPENING_MAX_CHARS = 2800;
 const MAX_LOG_ENTRY_CHARS = 220;
@@ -48,6 +49,10 @@ export function createStorySession() {
     timesAddressed: {},
     npcAttitudes: {},
     personalMoments: [],
+    // Recurring NPCs who have appeared, and terms the narration has explained, so nobody gets
+    // introduced twice and nothing gets explained twice (see FIRST MEETINGS / PLAIN WORDS).
+    metNpcs: [],
+    explainedTerms: [],
     // The Summarize button: what happened in each act, the fights won, and the paragraphs already
     // written (an act is only rewritten when it has news). Written only when someone asks.
     encounterIndex: 0,
@@ -57,6 +62,36 @@ export function createStorySession() {
     summary: null
   };
 }
+
+// Each recurring NPC by any part of their (original) name, to tell when one shows up.
+const NPC_NAME_PATTERNS = NPCS.map(npc => {
+  const canonical = CAST_ROLES[npc.role]?.canonical || {};
+  const parts = [canonical.full, canonical.first, canonical.last].filter(Boolean).map(part => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  return { name: npc.name, pattern: parts.length ? new RegExp(`\\b(?:${parts.join('|')})\\b`) : null };
+});
+
+/** Marks the recurring NPCs a piece of narration shows or names as met. */
+export function noteWhoAppears(session, text) {
+  for (const { name, pattern } of NPC_NAME_PATTERNS) {
+    if (pattern?.test(String(text || '')) && !session.metNpcs.includes(name)) session.metNpcs.push(name);
+  }
+}
+
+/** Remembers the terms a narration explained, so they aren't explained again. */
+export function noteExplained(session, terms) {
+  if (!Array.isArray(terms)) return;
+  const known = new Set(session.explainedTerms.map(term => term.toLowerCase()));
+  for (const raw of terms) {
+    const term = String(raw || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+    if (!term || known.has(term.toLowerCase())) continue;
+    known.add(term.toLowerCase());
+    session.explainedTerms.push(term);
+  }
+  if (session.explainedTerms.length > 60) session.explainedTerms.splice(0, session.explainedTerms.length - 60);
+}
+
+// The side's leader the party works with (see FIRST MEETINGS).
+const ALLY_LEADER = { rebels: 'Commander Rhea Vance', enforcers: 'Captain Mara Kessler' };
 
 // After a fight an NPC always has something to say to someone; after a group decision, sometimes.
 const DIALOGUE_CHANCE_AFTER_DECISION = 0.35;
@@ -220,7 +255,7 @@ export function createNarrator({
   }
 
   // Story beat with fact guard: one retry if the model mentions characters outside the party.
-  async function writeStoryBeat({ session, context, instructions, hints, maxChars = MAX_STORY_CHARS, maxTokens = 900 }) {
+  async function writeStoryBeat({ session, context, instructions, hints, maxChars = MAX_STORY_CHARS, maxTokens = 1400 }) {
     const actInfo = session.faction ? getActFor(session.faction, context.encounterIndex) : null;
     const state = buildStateBlock(session, {
       party: context.party,
@@ -229,7 +264,7 @@ export function createNarrator({
       actInfo
     });
     const lastNarration = session.lastNarration ? `\n\nPrevious narration (continue from here, do not repeat it):\n${session.lastNarration.slice(0, 700)}` : '';
-    const baseContent = `${state}${lastNarration}\n\nTASK\n${instructions}\n\nReturn JSON with fields: narration, options, location, memory.`;
+    const baseContent = `${state}${lastNarration}\n\nTASK\n${instructions}\n\nReturn JSON with fields: narration, options, location, memory, explained.`;
     // What the game knows, for providers that write from structured facts (the offline narrator).
     hints = {
       faction: session.faction || null,
@@ -262,6 +297,8 @@ export function createNarrator({
       }
     }
 
+    noteWhoAppears(session, narration);
+    noteExplained(session, parsed.explained);
     return {
       narration,
       options: cleanOptions(parsed.options),
@@ -538,7 +575,7 @@ export function createNarrator({
       'Along the way, show how and why these party members ended up here, together, today (a job, a debt, a rumor, plain bad luck), drawn from their backstories and shown through a thought, a line of dialogue or something they do. They may barely know each other yet.',
       'Then let this incident break in:',
       OPENING_SCENES[session.openingScene],
-      'Show the party members reacting in character (use their callsigns). Give one or two NPCs a line of dialogue.',
+      'Show the party members reacting in character (use their callsigns) and talking: to each other and to one or two people in the scene. Anything unfamiliar gets explained as it comes up.',
       `End by framing the choice: help the Enforcers or help the Rebels. ${ownerName} (Politician) must make the call for the group.`,
       `Set options to exactly ${JSON.stringify(FACTION_OPTIONS)} and location to "city_square".`
     ].join('\n');
@@ -573,15 +610,19 @@ export function createNarrator({
     const other = faction === 'enforcers' ? 'Rebels' : 'Enforcers';
     const chosen = faction === 'enforcers' ? 'Enforcers' : 'Rebels';
     const location = getCombatLocation(faction, 0, 'city_square');
+    const leader = ALLY_LEADER[faction];
+    const firstMeeting = !session.metNpcs.includes(leader);
     const instructions = [
       `The party sides with the ${chosen} against the ${other}.`,
-      'In 2-3 sentences: show them committing (an NPC from the chosen side reacts with one line), then the opening battle erupts.',
+      firstMeeting
+        ? `${leader} leads the ${chosen} here, and the party is meeting them for the first time. In 6-10 sentences, mostly a short conversation: show what ${leader} looks and sounds like, let them introduce themselves by name, and give one or two party members a chance to talk back. In a line or two ${leader} says what the ${chosen} are fighting for right now and what they need from the party. Then the opening battle erupts and there is no more time to talk.`
+        : `In 4-6 sentences: show them committing, with ${leader} and a party member trading a line or two, then the opening battle erupts.`,
       `Set options to [] and location to "${location}".`
     ].join('\n');
 
     let beat;
     try {
-      beat = await writeStoryBeat({ session, context, instructions, hints: { eventType: 'faction', partyNames: partyNames(context), startsCombat: true, location } });
+      beat = await writeStoryBeat({ session, context, instructions, hints: { eventType: 'faction', partyNames: partyNames(context), startsCombat: true, location, allyIntro: firstMeeting } });
     } catch (error) {
       logger.warn?.(`[AI] faction choice fell back: ${error.message}`);
       beat = { narration: `The party sides with the ${chosen} against the ${other}. ${FALLBACK_NARRATION.faction_choice}`, fallback: true };
@@ -615,6 +656,7 @@ export function createNarrator({
       dialogue
         ? `Then set up the next decision: describe the situation, which calls for ${decision.attribute[0].toUpperCase()}${decision.attribute.slice(1)} skills (${DECISION_ATTRIBUTES[decision.attribute] || 'their expertise'}), so it will be ${ownerName}'s call. Do NOT say whose call it is or ask for the choice yet: a short moment with ${dialogue.npc} and ${dialogue.characterName} comes first and is added after your narration.`
         : `Then present the next decision. It is ${ownerName}'s call, because the situation calls for ${decision.attribute[0].toUpperCase()}${decision.attribute.slice(1)} skills: ${DECISION_ATTRIBUTES[decision.attribute] || 'their expertise'}.`,
+      'Before the choice, let the people in the scene talk it through: a few short lines from party members and NPCs that show what is at stake. Show, don\'t tell.',
       'Write exactly two options that play to that skill, each under 9 words, leading in different directions.',
       'Set location to the location key where this scene happens (not "boss" or "shop"), or "none" to stay put.'
     ].join('\n');
@@ -650,6 +692,7 @@ export function createNarrator({
       dialogue = replanDialogue(session, context, dialogue, options);
     }
 
+    if (dialogue) noteWhoAppears(session, `${dialogue.npc} ${dialogue.intro}`);
     if (dialogue) {
       // The moment is told in the narration; its choices show now, the group's after the answer.
       const narration = `${beat.narration} ${dialogue.intro}`;
@@ -671,7 +714,7 @@ export function createNarrator({
     const instructions = [
       intro,
       actInfo?.encounter ? `Lead straight into the next fight: ${actInfo.encounter.setup}` : 'Lead straight into the next fight.',
-      boss ? `${boss.name} appears in person: give them one line of dialogue that fits their personality.` : 'Keep it tight: 2-4 sentences.',
+      boss ? `${boss.name} appears in person: give them a line or two of dialogue that fits their personality, and let a party member answer.` : 'Keep it moving: 3-6 sentences, with a line or two of dialogue.',
       boss ? '' : foreshadowing(session, context),
       `End the moment the fight begins. Set options to [] and location to "${location}".`
     ].join('\n');
@@ -700,14 +743,23 @@ export function createNarrator({
       return ending(session, context);
     }
 
+    // After the opening fight, the side's leader gives the party a direction.
+    const leader = ALLY_LEADER[session.faction];
+    const briefing = justFinished === 0 && leader && !defeatedBoss;
     const intro = defeatedBoss
-      ? `The party just defeated ${defeatedBoss.name}. Describe the aftermath in 2-3 sentences and close this act. ${nextAct?.act ? `Then open the next act: ${nextAct.act.title} - ${nextAct.act.goal}` : ''}`
-      : 'The fight is over. Describe the aftermath in 2-3 sentences (what the party finds, who is watching), moving the current act forward.';
+      ? `The party just defeated ${defeatedBoss.name}. Show the aftermath as a short scene (5-9 sentences, with people talking) and close this act. ${nextAct?.act ? `Then open the next act: ${nextAct.act.title} - ${nextAct.act.goal}` : ''}`
+      : briefing
+        ? [
+          `The opening fight is over. ${leader} pulls the party aside and they talk properly, 6-10 sentences, mostly conversation.`,
+          session.metNpcs.includes(leader) ? '' : `This is the first time the party meets ${leader}: show what they look like and let them introduce themselves.`,
+          `${leader} explains, in their own voice, what the ${session.faction === 'rebels' ? 'Rebels' : 'Enforcers'} are trying to do right now (${nextAct?.act?.goal || 'the current act'}) and what they want from the party next. Party members ask questions; ${leader} answers some and dodges others. Enough for a direction, not everything.`
+        ].filter(Boolean).join(' ')
+        : 'The fight is over. Show the aftermath as a short scene (5-9 sentences, mostly conversation): the party catches their breath and talks with each other or with someone nearby about what they found and what it means, moving the current act forward.';
 
     return presentDecision(session, context, {
       eventType: 'encounter_end',
       intro,
-      extraHints: { defeatedBossId: defeatedBoss ? actInfo.act.boss : null, nextActGoal: defeatedBoss && nextAct?.act ? nextAct.act.goal : null }
+      extraHints: { defeatedBossId: defeatedBoss ? actInfo.act.boss : null, nextActGoal: defeatedBoss && nextAct?.act ? nextAct.act.goal : null, allyBriefing: briefing }
     });
   }
 
@@ -743,7 +795,7 @@ export function createNarrator({
     session.pendingDialogue = null;
     recordChoice(session, context, choice);
     session.decisionsThisInterlude += 1;
-    const intro = `${session.decisions[session.decisions.length - 1]?.by || 'The party'} decided: "${choice}". Narrate the consequence in 2-4 sentences; it should matter.`;
+    const intro = `${session.decisions[session.decisions.length - 1]?.by || 'The party'} decided: "${choice}". Narrate the consequence in 4-7 sentences, with people talking; it should matter.`;
 
     if (session.decisionsThisInterlude >= decisionsPerInterlude) {
       return leadIntoFight(session, context, { eventType: 'choice_made', intro, lastChoice: choice });
@@ -760,7 +812,7 @@ export function createNarrator({
       beat = await writeStoryBeat({
         session,
         context,
-        instructions: `${eventType === 'shop_intro' ? 'The party visits Dex "Static" Moreno\'s shop. Describe it in 2-3 sentences with one line from Dex.' : 'The party keeps browsing. One or two sentences: Dex shows something interesting.'} ${ownerName} (Banker) handles the money. Set options to ${JSON.stringify(options)} and location to "shop".`,
+        instructions: `${eventType === 'shop_intro' ? 'The party visits Dex "Static" Moreno\'s shop. Describe it in 3-5 sentences, with Dex and a party member trading a few lines.' : 'The party keeps browsing. One or two sentences: Dex shows something interesting.'} ${ownerName} (Banker) handles the money. Set options to ${JSON.stringify(options)} and location to "shop".`,
         hints: { eventType, partyNames: partyNames(context), ownerName, attribute: 'banker', needsOptions: true, fixedOptions: options, location: 'shop' }
       });
     } catch {

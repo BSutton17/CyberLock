@@ -111,6 +111,29 @@ success, a complication, or a success with a cost, villains get entrance and sen
 ending recalls the party's actual first and last decisions. It remembers recent lines so it doesn't
 repeat itself. Add situations or lines there to give it more range.
 
+## How the story reads
+
+The style guide (`STYLE_GUIDE` in `Server/narrator/prompts.js`) holds the rules every story beat
+follows. The ones that shape it most:
+
+- **Show, don't tell.** Nobody's feelings, personality or motives are stated; they come out in
+  what people do, say, avoid and let slip.
+- **Plain words for newcomers.** Players are assumed to know nothing about the world. Every term,
+  gadget, group or place is explained the first time it comes up, either by the narrator in
+  passing (and what it looks like, if it's an object) or by a party member asking and an NPC
+  answering, whichever breaks the flow less. The model reports what it explained (`explained`),
+  and later prompts list those terms so they aren't explained twice.
+- **People talk.** Scenes are carried by conversation between party members and NPCs. Scene
+  lengths leave room for it (aftermaths 5-9 sentences, consequences 4-7).
+- **First meetings.** NPCs have no picture, so the first time the party meets one, the narration
+  shows how they look and sound, they introduce themselves, and they give the party a direction.
+  The game tracks who has appeared (`metNpcs`). Picking a side brings the side's leader (Rhea
+  Vance or Mara Kessler) in with a proper introduction, and after the opening fight that leader
+  briefs the party on the act's goal. The offline narrator has hand-written versions of both.
+- **NPCs deepen act by act.** Each recurring NPC in `lore.js` has how they look, how they sound,
+  what they want, and three layers of who they really are; the model may only hint at the layer
+  for the current act, through action and slips. These are drafts: rewrite them freely.
+
 ## Personal moments (dialogue)
 
 Personal moments are told inside the narration. After every fight (and after about a third of group

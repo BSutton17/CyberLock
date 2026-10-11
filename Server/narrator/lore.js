@@ -175,31 +175,81 @@ REBELS
 `.trim();
 
 // Recurring cast so the world has faces. DRAFT.
+// The recurring NPCs. None of them has a picture in the game, so the narration is the only way
+// players see them: `looks` and `voice` are for showing them, `wants` is what drives them, and
+// `layers` is who they really are, revealed one act at a time and only through what they do and
+// let slip (see FIRST MEETINGS and PEOPLE in the style guide). DRAFT: rewrite freely.
+// `role` matches cast.js, which renames them per game.
 export const NPCS = [
   {
+    role: 'rebelCommander',
     name: 'Commander Rhea Vance',
     allegiance: 'rebels',
-    bio: 'Rebel cell commander with a glowing cybernetic eye. Practical and tired. Recruits the party if they side with the rebels; hunts them if they do not.'
+    bio: 'Rebel cell commander. Recruits the party if they side with the rebels; hunts them if they do not.',
+    looks: 'Mid-forties, short and solid, a shaved head with a burn scar over one ear, a cheap cybernetic left eye that glows amber and flickers when she is tired, a patched work jacket with too many pockets.',
+    voice: 'Practical and dry, short sentences, gives orders like she is asking for the salt. Rubs the skin around her bad eye when she is stressed.',
+    wants: 'Proof that the Twilight Market bombing was staged by Division, so the city turns on the corporations instead of the rebels.',
+    layers: [
+      'She counts every rebel she sends out and every one who comes back, and it is wearing her down.',
+      'She used to be a Singularity engineer until robots replaced her whole team; the eye is a Crown Gene implant she can no longer afford to fix, and it hurts.',
+      'She has decided she will spend anyone, the party included, if it finally breaks the corporations, and she hates herself a little for it.'
+    ]
   },
   {
+    role: 'enforcerCaptain',
     name: 'Captain Mara Kessler',
     allegiance: 'enforcers',
-    bio: 'Division captain, cold and exact. Hands out targets on data slates. Recruits the party if they side with the Enforcers; hunts them if they do not.'
+    bio: 'Division captain. Recruits the party if they side with the Enforcers; hunts them if they do not.',
+    looks: 'Tall, late thirties, grey buzz cut, a pressed black Division uniform without a single wrinkle, always holding a data slate (a thin glass tablet that shows orders and files).',
+    voice: 'Cold, exact, never wastes a word, calls people by their full names. Taps the slate twice when she has made up her mind.',
+    wants: 'Order. The bombing case closed fast and clean before the city tears itself apart.',
+    layers: [
+      'She truly believes chaos kills more people than she ever will, and she has seen a riot up close.',
+      'The bombing evidence does not add up, and she has started quietly investigating her own side.',
+      'When it comes down to it she must choose between the truth and her career, and she does not know which one she will pick.'
+    ]
   },
   {
+    role: 'witness',
     name: 'Ines Calder',
     allegiance: 'civilians',
-    bio: 'Elderly street vendor who saw who really bombed the Twilight Market. A witness both sides want silenced or used.'
+    bio: 'Elderly street vendor who saw who really bombed the Twilight Market. A witness both sides want silenced or used.',
+    looks: 'Small and wiry, seventy-something, white hair pinned up with a chopstick, a coat two sizes too big, a dented noodle cart she will not leave behind.',
+    voice: 'Blunt, clipped, calls everyone "kid", feeds people before she trusts them.',
+    wants: 'Justice for her neighbor, who died in the bombing, without getting her family killed for it.',
+    layers: [
+      'She is scared, but too stubborn to show it, and she keeps her hands busy so nobody sees them shake.',
+      'Her son is an Enforcer, and testifying could end his career or his life.',
+      'She recorded the bombing on an old phone and has hidden it where nobody would ever look.'
+    ]
   },
   {
+    role: 'fixer',
     name: 'Dex "Static" Moreno',
     allegiance: 'neutral',
-    bio: 'Fixer who runs the party\'s favorite shop out of a shipping container. Sells to anyone, gossips about everyone.'
+    bio: 'Fixer (a middleman who finds and sells anything, no questions asked) who runs the party\'s favorite shop out of a shipping container.',
+    looks: 'Big and heavyset, faded tattoos up both arms, a cheap chrome prosthetic right hand that clicks when he drums it on the counter, a radio always playing static.',
+    voice: 'Talks fast, gossips about everyone, jokes to change the subject, haggles out of habit even when he is giving something away.',
+    wants: 'To stay neutral and stay in business while everyone else picks a side.',
+    layers: [
+      'He sells to everyone, and he quietly keeps a list of who bought what.',
+      'He still owes Crown Gene for that prosthetic hand, and they lean on him to pass along what he hears.',
+      'He has been feeding Director Hale information to keep his shop open, and he can either confess or let the party walk into it.'
+    ]
   },
   {
+    role: 'director',
     name: 'Director Hale',
     allegiance: 'enforcers',
-    bio: 'Corporate liaison who answers to all three founders. Never raises his voice. Appears on screens more than in person.'
+    bio: 'Corporate liaison who answers to all three founders. Appears on screens more than in person.',
+    looks: 'Silver suit, silver tie, perfectly still, a pleasant smile that never reaches his eyes; usually a face on a wall screen rather than a person in the room.',
+    voice: 'Never raises his voice, polite to the point of being creepy, thanks people before threatening them.',
+    wants: 'To keep the three founders in power and himself the one person they all need.',
+    layers: [
+      'He is the smiling public face of the corporations, and the city half believes him.',
+      'He plays the three founders against each other so none of them can ever replace him.',
+      'He signed off on the Twilight Market bombing himself.'
+    ]
   }
 ];
 

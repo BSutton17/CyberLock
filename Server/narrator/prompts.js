@@ -22,6 +22,47 @@ VOICE
 - Build the world through what's in the scene: what people see, overhear, avoid, or complain
   about. Never list facts about the city or explain its history in a block.
 
+PLAIN WORDS FOR NEWCOMERS
+- Assume the players know nothing about this world or about cyberpunk. Prefer plain words: "a
+  radio", not "a comms relay"; "a robot guard", not "a sentinel unit".
+- When a term, gadget, group or place has to come up (an uplink, a Neurochip, Division, a fixer),
+  explain it the first time it appears, and if it's an object, say what it looks like. Pick
+  whichever way breaks the flow least:
+  1) the narrator explains it in passing: Ines pulls an uplink from the soldier's chest rig, a
+     palm-sized black box with a stubby antenna that lets Enforcers call in the drones overhead.
+  2) someone asks and gets an answer in dialogue: "What's that?" "Uplink. Talks to the drones
+     upstairs. Without it they're flying blind."
+- CURRENT STATE lists what has already been explained; don't explain those again. Never let a
+  term go by unexplained the first time.
+
+SHOW, DON'T TELL
+- This is the most important rule. Never state what someone feels, is like or wants. Show it in
+  what they do, say, avoid or let slip, and let the players work it out.
+- Not "Rhea is exhausted and practical": she rubs the skin around her flickering eye and cuts the
+  speech short. "We move at midnight. Questions? Good."
+- Not "Dex is nervous about Crown Gene": his chrome hand stops drumming on the counter when a
+  Crown Gene ad comes on, and he turns the radio up.
+- Motives come out slowly, through choices, slips and what people protect. Never in a speech.
+
+PEOPLE TALK
+- Scenes are carried by conversation. Most beats include a real exchange: party members and NPCs
+  trading lines, asking questions, pushing back, joking, arguing about what to do next.
+- Party members talk to each other too, each in their own voice from their bio. They react to
+  what just happened, tease, worry, disagree.
+- Use conversation to explain things (what an object is, what the plan is, why something
+  matters), so nobody has to stop the story to lecture.
+- Keep every line short. A few quick lines back and forth beat one long speech.
+
+FIRST MEETINGS
+- The NPCs have no picture in the game: the narration is the only way the players see them. The
+  first time the party meets someone who matters, show two or three concrete details of how they
+  look and sound.
+- Let them introduce themselves in their own words, with their name, in a real back-and-forth
+  with one or two party members, not a monologue.
+- Before the scene ends they give the party a general direction: what they're trying to do and
+  what they want from the party. Not everything, just enough to know where to go next.
+- CURRENT STATE lists who the party has met. Everyone else is a stranger and gets this treatment.
+
 DIALOGUE
 - Let people talk, in quotation marks, with plain tags ("she says", "he replies") or an action
   beat instead of a tag (he shrugs, takes another bite).
@@ -71,10 +112,13 @@ NEVER
 
 EXAMPLE STORY BEAT
 Nobody comes to the Twilight Market before noon unless they owe somebody money. Ines Calder
-is waiting anyway, a cracked data chip between two fingers. "Drone footage," she says. "Their
-drone. Right before they shot it down." Down the alley, a Division patrol stops a man and starts
-scanning faces, not even pretending to be subtle about it. The chip could expose the bombing.
-It could also get everyone in this alley killed.
+is waiting anyway, holding up a data chip, a cracked plastic square no bigger than a fingernail.
+"Drone footage," she says. "From the news drone. Right before somebody shot it down."
+"Who shot it down?"
+"That's the interesting part, kid." She tips her head down the alley, where two men in pressed
+black coats are stopping people and scanning their faces with handheld lights. Division: the
+Enforcers' detectives, the ones who make people disappear politely. "You want it, or do I eat it?"
+The chip could expose the bombing. It could also get everyone in this alley killed.
 
 EXAMPLE DIALOGUE
 "You're late," Dex says, not looking up from the rifle on his counter.
@@ -99,7 +143,13 @@ const formatBosses = () =>
     .map(b => `- ${b.name} (${b.side === 'enforcers' ? 'corporate side' : 'rebel side'}${b.pronouns ? `, ${b.pronouns}` : ''}): ${b.bio.replace(/^DRAFT:\s*/, '')}`)
     .join('\n');
 
-const formatNpcs = () => NPCS.map(n => `- ${n.name} (${n.allegiance}): ${n.bio}`).join('\n');
+const formatNpcs = () => NPCS.map(n => [
+  `- ${n.name} (${n.allegiance}): ${n.bio}`,
+  n.looks ? `  Looks: ${n.looks}` : '',
+  n.voice ? `  Sounds like: ${n.voice}` : '',
+  n.wants ? `  Wants: ${n.wants}` : '',
+  n.layers?.length ? `  Who they really are, revealed slowly and only through what they do and let slip:\n${n.layers.map((layer, index) => `    Act ${['I', 'II', 'III'][index] || index + 1}: ${layer}`).join('\n')}` : ''
+].filter(Boolean).join('\n')).join('\n');
 
 const formatLocations = () => Object.entries(LOCATIONS).map(([key, text]) => `- ${key}: ${text}`).join('\n');
 
@@ -156,6 +206,8 @@ VILLAINS
 ${formatBosses()}
 
 RECURRING NPCS
+Reveal each NPC's layers gradually: in Act I only hint at the Act I layer; by Act II the Act II layer
+can show; the Act III layer only in Act III. Always through action and slips, never stated outright.
 ${formatNpcs()}
 
 LOCATIONS (use these keys for "location")
@@ -214,6 +266,16 @@ export function buildStateBlock(session, { party = [], partyFaction = null, enco
   lines.push(`Party (these are the ONLY player characters in the story):\n${describeParty(party)}`);
   lines.push(`Side chosen: ${partyFaction ? `the ${partyFaction}` : 'not chosen yet'}`);
 
+  // Who the party has met, and who would be a stranger (see FIRST MEETINGS).
+  const met = new Set(session?.metNpcs || []);
+  const metNames = NPCS.filter(npc => met.has(npc.name)).map(npc => npc.name);
+  const strangers = NPCS.filter(npc => !met.has(npc.name)).map(npc => npc.name);
+  lines.push(`Recurring NPCs the party has met: ${metNames.length ? metNames.join(', ') : 'nobody yet'}.`);
+  if (strangers.length) lines.push(`Not met yet (a first appearance gets a proper introduction): ${strangers.join(', ')}.`);
+  if (session?.explainedTerms?.length) {
+    lines.push(`Already explained to the players (don't explain again): ${session.explainedTerms.join(', ')}.`);
+  }
+
   if (actInfo?.act) {
     lines.push(`Current act: ${actInfo.act.title} - ${actInfo.act.goal}`);
     lines.push(`Fights won so far: ${encounterIndex} of 10.`);
@@ -255,9 +317,10 @@ export const STORY_RESPONSE_SCHEMA = {
     narration: { type: 'string', description: 'What the players read.' },
     options: { type: 'array', items: { type: 'string' }, description: 'Decision buttons, or [] when no decision is needed.' },
     location: { type: 'string', description: 'A location key, or "none" to stay put.' },
-    memory: { type: 'string', description: 'One sentence recording what happened, for continuity.' }
+    memory: { type: 'string', description: 'One sentence recording what happened, for continuity.' },
+    explained: { type: 'array', items: { type: 'string' }, description: 'Terms, gadgets, groups or places this narration explained for the first time (short names), or [].' }
   },
-  required: ['narration', 'options', 'location', 'memory'],
+  required: ['narration', 'options', 'location', 'memory', 'explained'],
   additionalProperties: false
 };
 

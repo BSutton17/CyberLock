@@ -262,6 +262,7 @@ function Main() {
         isMuted,
         connectedPlayers,
         serverStoryState,
+        setServerStoryState,
         combatState,
         bots = []
     } = useGameContext();
@@ -788,6 +789,9 @@ function Main() {
 
     // The server remembers the story too. When it is ahead of this browser (rejoining from another
     // device, cleared storage, a second tab), adopt its progress and re-show any pending decision.
+    // The snapshot is taken when the socket (re)joins, so its story message is used once and then
+    // dropped: otherwise a snapshot from the prologue would replay the prologue every time this
+    // screen comes back (after a level-up, say).
     useEffect(() => {
         if (!isStoryStateHydrated || !serverStoryState) return;
 
@@ -835,6 +839,10 @@ function Main() {
 
         if (serverStoryState.gameOver) {
             setGameOver(true);
+        }
+
+        if (last) {
+            setServerStoryState?.(current => (current === serverStoryState ? { ...current, lastStoryMessage: null } : current));
         }
     }, [isStoryStateHydrated, serverStoryState]);
 

@@ -8,7 +8,7 @@ describe('style guide', () => {
   });
 
   it('covers voice, dialogue and fights', () => {
-    for (const section of ['VOICE', 'DIALOGUE', 'FIGHTS', 'NEVER']) {
+    for (const section of ['VOICE', 'PLAIN WORDS FOR NEWCOMERS', "SHOW, DON'T TELL", 'PEOPLE TALK', 'FIRST MEETINGS', 'DIALOGUE', 'FIGHTS', 'NEVER']) {
       expect(STYLE_GUIDE).toMatch(new RegExp(`^${section}$`, 'm'));
     }
   });

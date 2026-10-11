@@ -1,0 +1,106 @@
+/* The pause screen. Rendered on the page itself (not inside the half-scale phone canvas), so
+   sizes here are real sizes. */
+.pause-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    box-sizing: border-box;
+    background: rgba(5, 5, 15, 0.82);
+}
+
+.pause-panel {
+    width: min(520px, 100%);
+    max-height: calc(100vh - 32px);
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+    box-sizing: border-box;
+    padding: 24px 28px;
+    border-radius: 10px;
+    border: 2px solid rgba(139, 92, 246, 0.5);
+    background: rgba(20, 20, 40, 0.97);
+    color: #e5e7eb;
+    text-align: center;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+.pause-panel h2 {
+    margin: 0 0 12px;
+    font-size: 26px;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: #c4b5fd;
+}
+
+.pause-panel p {
+    margin: 0 0 18px;
+    font-size: 17px;
+    line-height: 1.5;
+}
+
+.pause-panel .pause-error {
+    color: #fca5a5;
+}
+
+.pause-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.pause-primary,
+.pause-secondary {
+    min-height: 48px;
+    min-width: 150px;
+    padding: 0 24px;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+}
+
+.pause-primary {
+    border: none;
+    background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+    color: #fff;
+}
+
+.pause-secondary {
+    border: 2px solid rgba(139, 92, 246, 0.6);
+    background: transparent;
+    color: #ddd6fe;
+}
+
+.pause-primary:disabled,
+.pause-button:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+/* Landscape phones: everything fits on one screen. */
+@media (orientation: landscape) and (max-height: 520px) {
+    .pause-panel {
+        padding: 16px 20px;
+    }
+
+    .pause-panel h2 {
+        font-size: 22px;
+        margin-bottom: 8px;
+    }
+
+    .pause-panel p {
+        font-size: 17px;
+        margin-bottom: 12px;
+    }
+
+    .pause-primary,
+    .pause-secondary {
+        min-height: 44px;
+    }
+}

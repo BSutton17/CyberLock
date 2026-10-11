@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import './DialogueChoices.css';
 
-const formatAttribute = (attribute) => (attribute ? attribute.charAt(0).toUpperCase() + attribute.slice(1) : '');
-
 // The countdown appears once this much time is left to answer.
 export const COUNTDOWN_FROM_MS = 30000;
+
+// A moment never offers more than three answers.
+const MAX_ANSWERS = 3;
 
 /**
  * The choices for a personal moment in the narration: one party member answers an NPC (or asks
@@ -12,7 +13,7 @@ export const COUNTDOWN_FROM_MS = 30000;
  * next narration, which then brings up the group's decision.
  *
  * @param {object} props
- * @param {object} props.dialogue - { id, kind: 'reply'|'ask', npc, playerName, characterName, options: [{ id, text, attribute }],
+ * @param {object} props.dialogue - { id, kind: 'reply'|'ask', npc, playerName, characterName, options: [{ id, text }],
  *   timeLeftMs } (time left to answer when it was sent; a countdown shows for the last 30 s)
  * @param {string} props.playerName - this client's player
  * @param {(optionId: string) => void} props.onChoose
@@ -52,9 +53,8 @@ function DialogueChoices({ dialogue, playerName, onChoose, busy = false, mobile 
                     {isMine ? `${secondsLeft}s left to answer` : `${secondsLeft}s left for ${dialogue.characterName} to answer`}
                 </div>
             )}
-            {dialogue.options.map(option => (
+            {dialogue.options.slice(0, MAX_ANSWERS).map(option => (
                 <button key={option.id} onClick={() => onChoose(option.id)} disabled={!isMine || busy}>
-                    {option.attribute && <span className="dialogue-tag">{formatAttribute(option.attribute)}</span>}
                     {option.text}
                 </button>
             ))}

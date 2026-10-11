@@ -7,6 +7,7 @@ import { createNarrator } from '../narrator/storyEngine.js';
 import { createMockProvider } from '../narrator/providers/mock.js';
 import { createDialogue } from '../narrator/dialogue.js';
 import { generatePlayerSpawnPositions } from '../game/spawning.js';
+import { seatBot } from '../game/rooms.js';
 
 const quiet = { log: () => {}, warn: () => {}, error: () => {} };
 
@@ -726,18 +727,18 @@ describe('personal moments', () => {
     const { room, sockets: [a, b] } = await createRoomWith([['u1', 'A'], ['u2', 'B']]);
     const session = game.narrator.getSession(room);
     session.pendingDialogue = {
-      ...createDialogue({ target: { playerName: 'B', characterName: 'Livewire' }, attributes: ['politician'], faction: 'rebels', random: () => 0 }),
+      ...createDialogue({ target: { playerName: 'B', characterName: 'Livewire' }, faction: 'rebels', random: () => 0 }),
       followUp: { options: ['Go left', 'Go right'], attribute: 'navigator', ownerName: 'Shipment' }
     };
 
-    expect((await ack(a, 'dialogue_reply', { room, dialogueId: 'd1', optionId: 'skill' })).ok).toBe(false);
+    expect((await ack(a, 'dialogue_reply', { room, dialogueId: 'd1', optionId: 'honest' })).ok).toBe(false);
 
     const told = waitFor(a, 'ai_message', message => message.eventType === 'dialogue_reply');
-    expect((await ack(b, 'dialogue_reply', { room, dialogueId: 'd1', optionId: 'skill' })).ok).toBe(true);
+    expect((await ack(b, 'dialogue_reply', { room, dialogueId: 'd1', optionId: 'honest' })).ok).toBe(true);
     const message = await told;
-    expect(message.response).toMatch(/^Livewire: "We came to save someone\." /);
+    expect(message.response).toMatch(/^Livewire: "We're just passing through\." /);
     expect(message.options).toEqual(['Go left', 'Go right']);
-    expect(session.npcAttitudes['A checkpoint guard']).toBe(2);
+    expect(session.npcAttitudes['A checkpoint guard']).toBe(1);
     expect(game.state.rooms[room].lastStoryMessage.options).toEqual(['Go left', 'Go right']);
   });
 });
@@ -926,5 +927,173 @@ describe('narrator events', () => {
     a.emit('ai_request', { requestId: 'dup', room, eventType: 'turn_action', message: 'A swings.' });
     await new Promise(resolve => setTimeout(resolve, 200));
     expect(count).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Dropping out, leaving, pausing
+// ---------------------------------------------------------------------------
+
+describe('disconnects', () => {
+  const named = (id, name, speed = 20) => ({ ...character(id, speed), name });
+
+  it('shows everyone how long a dropped player has to come back, then lets them go', async () => {
+    const { room, sockets: [a, b] } = await createRoomWith([['u1', 'A'], ['u2', 'B']]);
+    seedCharacters(room, { A: named('offensive_tank_1', 'Shipment'), B: named('offensive_support_2', 'Livewire') });
+    game.narrator.getSession(room);
+
+    const away = waitFor(a, 'presence_updated', ({ away = {} }) => away.B > 0);
+    const left = waitFor(a, 'player_left');
+    b.disconnect();
+    const presence = await away;
+    expect(presence.away.B).toBeLessThanOrEqual(150);
+    expect(presence.connected).not.toContain('B');
+
+    expect(await left).toEqual({ playerName: 'B', characterName: 'Livewire' });
+    expect(game.state.rooms[room].players).toEqual(['A']);
+    expect(game.narrator.getSession(room).storyLog.at(-1)).toMatch(/Livewire left the party/);
+  });
+
+  it('clears the countdown when they come back in time', async () => {
+    const { room, sockets: [a, b] } = await createRoomWith([['u1', 'A'], ['u2', 'B']]);
+    seedCharacters(room, { A: named('a', 'Shipment'), B: named('b', 'Livewire') });
+    const away = waitFor(a, 'presence_updated', ({ away = {} }) => away.B > 0);
+    b.disconnect();
+    await away;
+    const b2 = await connect('u2', 'B');
+    const back = waitFor(a, 'presence_updated', ({ away = {}, connected }) => !away.B && connected.includes('B'));
+    await ack(b2, 'join_room', room, 'B');
+    await back;
+    await new Promise(resolve => setTimeout(resolve, 250));
+    expect(game.state.rooms[room].players).toContain('B');
+  });
+
+  it('hands an open decision to someone who is here, and back when its owner returns', async () => {
+    const { room, sockets: [a, b] } = await createRoomWith([['u1', 'A'], ['u2', 'B']]);
+    seedCharacters(room, { A: named('a', 'Shipment'), B: named('b', 'Livewire') });
+    game.narrator.getSession(room).pendingDecision = { attribute: 'spy', owner: 'B', decidedBy: 'B', ownerName: 'Livewire', options: ['Go left', 'Go right'] };
+    game.state.rooms[room].lastStoryMessage = { eventType: 'encounter_end', response: 'x', options: ['Go left', 'Go right'], attribute: 'spy' };
+
+    const handedOff = waitFor(a, 'decision_owner_changed');
+    b.disconnect();
+    expect((await handedOff).decisionOwner).toMatchObject({ player: 'B', characterName: 'Livewire', decidedBy: 'A', decidedByName: 'Shipment' });
+    expect(game.state.rooms[room].lastStoryMessage.decisionOwner.decidedBy).toBe('A');
+
+    const b2 = await connect('u2', 'B');
+    const handedBack = waitFor(b2, 'decision_owner_changed');
+    await ack(b2, 'join_room', room, 'B');
+    expect((await handedBack).decisionOwner).toMatchObject({ player: 'B', decidedBy: 'B' });
+  });
+
+  it('ends the personal moment of a player who left for good', async () => {
+    const { room, sockets: [a, b] } = await createRoomWith([['u1', 'A'], ['u2', 'B']]);
+    seedCharacters(room, { A: named('a', 'Shipment'), B: named('b', 'Livewire') });
+    const session = game.narrator.getSession(room);
+    const moment = createDialogue({ target: { playerName: 'B', characterName: 'Livewire' }, faction: 'rebels', random: () => 0 });
+    session.pendingDialogue = { ...moment, followUp: { options: ['Go left', 'Go right'], attribute: 'spy', ownerName: 'Shipment' } };
+    game.state.rooms[room].lastStoryMessage = { eventType: 'encounter_end', response: 'x', options: null, dialogue: { id: moment.id, playerName: 'B' } };
+
+    const moved = waitFor(a, 'ai_message', message => message.eventType === 'dialogue_reply');
+    b.emit('leave_room');
+    const message = await moved;
+    expect(message.options).toEqual(['Go left', 'Go right']);
+  });
+
+  it('weakens the enemies when a player leaves for good mid-fight', async () => {
+    const { room, sockets: [a, b] } = await createRoomWith([['u1', 'A'], ['u2', 'B']]);
+    seedCharacters(room, { A: character('a', 40), B: character('b', 10) });
+    nextEnemies = [enemy('e1', 20)];
+    const first = waitFor(a, 'combat_state');
+    a.emit('start_combat', { room, sceneKey: 'street', playerPositions: { A: { row: 6, col: 3 }, B: { row: 6, col: 6 } } });
+    await first;
+    expect(game.state.combat[room].partySize).toBe(2);
+
+    const shrunk = waitFor(a, 'combat_state', snapshot => !snapshot.turnOrder.some(t => t.id === 'B'));
+    b.emit('leave_room');
+    await shrunk;
+    const fight = game.state.combat[room];
+    expect(fight.partySize).toBe(1);
+    expect(fight.enemies[0].stats.maxHealth).toBeLessThan(40);
+    expect(fight.enemies[0].stats.health).toBe(fight.enemies[0].stats.maxHealth);
+  });
+});
+
+describe('pausing a single-player game', () => {
+  const BOT = 'Patchwork (bot)';
+
+  async function soloWithBot() {
+    const { room, sockets: [a] } = await createRoomWith([['u1', 'A']]);
+    seedCharacters(room, { A: character('a', 40) });
+    seatBot(game.state.rooms[room], BOT, character('bot', 10));
+    return { room, a };
+  }
+
+  it('is only for one person (with any number of bots)', async () => {
+    const { room, sockets: [a] } = await createRoomWith([['u1', 'A'], ['u2', 'B']]);
+    expect(await ack(a, 'set_paused', { room, paused: true })).toMatchObject({ ok: false });
+    expect(game.state.rooms[room].paused).toBeFalsy();
+  });
+
+  it('stops the fight, refuses actions, and picks up again on resume', async () => {
+    const { room, a } = await soloWithBot();
+    nextEnemies = [enemy('e1', 20)];
+    const first = waitFor(a, 'combat_state');
+    a.emit('start_combat', { room, sceneKey: 'street', playerPositions: { A: { row: 6, col: 3 }, [BOT]: { row: 6, col: 6 } } });
+    expect((await first).currentTurn.id).toBe('A');
+
+    const told = waitFor(a, 'game_paused');
+    expect(await ack(a, 'set_paused', { room, paused: true })).toMatchObject({ ok: true, paused: true, windowMs: 600000 });
+    expect(await told).toMatchObject({ paused: true });
+
+    // The 600 ms turn clock is stopped, and nothing can be done while paused.
+    await new Promise(resolve => setTimeout(resolve, 800));
+    const fight = game.state.combat[room];
+    expect(fight.turn.id).toBe('A');
+    expect(fight.paused).toBe(true);
+    expect(await ack(a, 'combat_end_turn', { room })).toMatchObject({ ok: false, error: 'paused' });
+
+    const moving = waitFor(a, 'combat_state', snapshot => snapshot.currentTurn?.id !== 'A', 3000);
+    expect(await ack(a, 'set_paused', { room, paused: false })).toMatchObject({ ok: true, paused: false });
+    await moving; // A's turn clock runs again and their turn ends
+  });
+
+  it('keeps the seat for ten minutes when the player steps away while paused', async () => {
+    const { room, a } = await soloWithBot();
+    await ack(a, 'set_paused', { room, paused: true });
+    a.disconnect();
+    await new Promise(resolve => setTimeout(resolve, 300)); // well past the 150 ms grace
+    expect(game.state.rooms[room]?.players).toContain('A');
+    expect(game.state.awayDeadlines[room].A - Date.now()).toBeGreaterThan(590000);
+
+    const a2 = await connect('u1', 'A');
+    const paused = waitFor(a2, 'game_paused');
+    await ack(a2, 'join_room', room, 'A');
+    expect(await paused).toMatchObject({ paused: true });
+    expect(game.state.awayDeadlines[room].A).toBeUndefined();
+  });
+
+  it('holds a personal moment clock while paused', async () => {
+    const { room, a } = await soloWithBot();
+    const roomState = game.state.rooms[room];
+    roomState.selectedFaction = 'rebels';
+    const session = game.narrator.getSession(room);
+    session.faction = 'rebels';
+    session.openingCombatStarted = true;
+    const story = waitFor(a, 'ai_message', message => message.eventType === 'encounter_end');
+    a.emit('ai_request', { requestId: 'after-fight', room, eventType: 'encounter_end' });
+    const told = await story;
+    expect(told.dialogue?.playerName).toBe('A');
+
+    const held = waitFor(a, 'dialogue_time');
+    await ack(a, 'set_paused', { room, paused: true });
+    expect(await held).toMatchObject({ id: told.dialogue.id, timeLeftMs: null });
+    // The 200 ms moment would have closed by now.
+    await expectNo(a, 'ai_message', message => message.eventType === 'dialogue_reply', 400);
+
+    const restarted = waitFor(a, 'dialogue_time');
+    const silence = waitFor(a, 'ai_message', message => message.eventType === 'dialogue_reply');
+    await ack(a, 'set_paused', { room, paused: false });
+    expect((await restarted).timeLeftMs).toBeGreaterThan(0);
+    await silence;
   });
 });

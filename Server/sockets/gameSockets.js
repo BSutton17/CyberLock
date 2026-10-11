@@ -31,6 +31,8 @@ export function createGameState() {
     combat: {},
     sockets: {},            // room -> { playerName: Set(socketId) }
     pendingDisconnects: {}, // room -> { playerName: timeoutId }
+    awayDeadlines: {},      // room -> { playerName: when their seat is given up }
+    dialoguePausedMs: {},   // room -> time left on a personal moment while the game is paused
     combatTimers: {},       // room -> the fight's next scheduled step
     narrationTimers: {},    // room -> pending combat narration timers
     combatLineMemory: {},   // room -> combat lines used lately, so they don't repeat
@@ -59,9 +61,12 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
   // Helpers
   // -------------------------------------------------------------------------
 
+  // Who is here, and for anyone who dropped, how long until their seat is given up.
   const emitPresence = (room) => {
     if (!state.rooms[room]) return;
-    io.to(room).emit('presence_updated', { connected: combat.connectedPlayers(room) });
+    const now = Date.now();
+    const away = Object.fromEntries(Object.entries(state.awayDeadlines?.[room] || {}).map(([player, deadline]) => [player, Math.max(0, deadline - now)]));
+    io.to(room).emit('presence_updated', { connected: combat.connectedPlayers(room), away });
   };
 
   const emitBots = (room, target = io.to(room)) => {
@@ -117,6 +122,8 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
     delete state.dialogueDeadlines?.[room];
     for (const timeoutId of Object.values(state.pendingDisconnects[room] || {})) clearTimeout(timeoutId);
     delete state.pendingDisconnects[room];
+    delete state.awayDeadlines?.[room];
+    delete state.dialoguePausedMs?.[room];
     delete state.rooms[room];
     delete state.combat[room];
     delete state.sockets[room];
@@ -148,6 +155,7 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
     clearTimeout(state.dialogueTimers[room]);
     delete state.dialogueTimers[room];
     delete state.dialogueDeadlines?.[room];
+    delete state.dialoguePausedMs?.[room];
     const roomState = state.rooms[room];
     if (!roomState) return false;
     const message = {
@@ -165,9 +173,14 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
   }
 
   // A moment nobody answers can't hold up the group forever.
-  function startDialogueTimer(room, dialogue) {
+  function startDialogueTimer(room, dialogue, timeoutMs = timing.dialogueTimeoutMs ?? 180000) {
     clearTimeout(state.dialogueTimers[room]);
-    const timeoutMs = timing.dialogueTimeoutMs ?? 180000;
+    delete state.dialoguePausedMs?.[room];
+    if (state.rooms[room]?.paused) {
+      // Paused: the clock starts when the game resumes.
+      (state.dialoguePausedMs ||= {})[room] = timeoutMs;
+      return;
+    }
     (state.dialogueDeadlines ||= {})[room] = Date.now() + timeoutMs;
     const timer = setTimeout(() => {
       delete state.dialogueTimers[room];
@@ -276,8 +289,10 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
       clearTimeout(pending);
       delete state.pendingDisconnects[room][playerName];
     }
+    delete state.awayDeadlines?.[room]?.[playerName];
     if (!roomState || !roomState.players.includes(playerName)) return;
 
+    const characterName = roomState.characterSelections[playerName]?.name || null;
     const newAdmin = removePlayer(roomState, playerName);
     delete state.sockets[room]?.[playerName];
 
@@ -299,6 +314,61 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
     emitReadyStatuses(room);
     emitPresence(room);
     maybeAdvanceGates(room);
+
+    // The story goes on without them: the narrator knows they left, their open moment ends, an
+    // open decision goes to someone who is here, and later fights are built for the new party.
+    io.to(room).emit('player_left', { playerName, characterName });
+    narrator?.noteDeparture?.(room, characterName);
+    const moment = roomState.lastStoryMessage?.dialogue;
+    if (moment?.playerName === playerName) {
+      resolveDialogue(room, narrator?.expireDialogue?.(room, moment.id, buildNarratorContext(room)));
+    }
+    handOffDecision(room);
+    // Pausing is for single-player games; a paused room that gained players can't stay paused.
+    if (roomState.paused && humanPlayers(roomState).length !== 1) setPaused(room, false);
+  }
+
+  // An open decision needs someone connected to press the button (see reassignDecision).
+  function handOffDecision(room) {
+    const roomState = state.rooms[room];
+    if (!roomState || !narrator?.reassignDecision) return;
+    const decisionOwner = narrator.reassignDecision(room, buildNarratorContext(room));
+    if (!decisionOwner) return;
+    if (roomState.lastStoryMessage) roomState.lastStoryMessage.decisionOwner = decisionOwner;
+    io.to(room).emit('decision_owner_changed', { decisionOwner });
+  }
+
+  // ---- Pause (single-player games: one person, any number of bots) ----
+
+  const pauseStateFor = (room) => ({ paused: !!state.rooms[room]?.paused, windowMs: timing.pauseGraceMs ?? 600000 });
+
+  function setPaused(room, paused) {
+    const roomState = state.rooms[room];
+    if (!roomState || !!roomState.paused === paused) return;
+    roomState.paused = paused ? { at: Date.now() } : null;
+
+    // A personal moment's clock stops too, and picks up where it left off.
+    const moment = roomState.lastStoryMessage?.dialogue;
+    if (paused) {
+      const deadline = state.dialogueDeadlines?.[room];
+      if (deadline) {
+        clearTimeout(state.dialogueTimers[room]);
+        delete state.dialogueTimers[room];
+        delete state.dialogueDeadlines[room];
+        (state.dialoguePausedMs ||= {})[room] = Math.max(1000, deadline - Date.now());
+      }
+      if (moment) io.to(room).emit('dialogue_time', { id: moment.id, timeLeftMs: null });
+    } else {
+      const left = state.dialoguePausedMs?.[room];
+      if (left && moment) {
+        startDialogueTimer(room, moment, left);
+        io.to(room).emit('dialogue_time', { id: moment.id, timeLeftMs: left });
+      }
+    }
+
+    combat.setPaused(room, paused);
+    io.to(room).emit('game_paused', pauseStateFor(room));
+    logger.log?.(`[ROOM] ${room} ${paused ? 'paused' : 'resumed'}`);
   }
 
   const ultimateIdOf = (character) => (typeof character?.ultimate === 'string' ? character.ultimate : character?.ultimate?.id) || null;
@@ -423,6 +493,7 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
         clearTimeout(pending);
         delete state.pendingDisconnects[code][playerName];
       }
+      delete state.awayDeadlines?.[code]?.[playerName];
 
       socket.join(code);
       socket.data.room = code;
@@ -439,6 +510,10 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
       emitBots(code, socket);
       socket.emit('narrator_mode', { mock: !!roomState.narratorMock });
       emitPresence(code);
+      // A second person joining ends a single-player pause.
+      if (roomState.paused && humanPlayers(roomState).length !== 1) setPaused(code, false);
+      socket.emit('game_paused', pauseStateFor(code));
+      handOffDecision(code);
 
       if (Object.keys(roomState.characterSelections).length > 0) {
         socket.emit('update_character_selections', roomState.characterSelections);
@@ -486,13 +561,29 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
 
       combat.removeFromFight(room, playerName);
 
+      // They keep their seat for a while (longer if they paused a single-player game first);
+      // everyone else sees how long.
+      const graceMs = roomState.paused ? (timing.pauseGraceMs ?? 600000) : timing.disconnectGraceMs;
+      ((state.awayDeadlines ||= {})[room] ||= {})[playerName] = Date.now() + graceMs;
       emitPresence(room);
+      handOffDecision(room);
 
       state.pendingDisconnects[room] = state.pendingDisconnects[room] || {};
       clearTimeout(state.pendingDisconnects[room][playerName]);
-      const timeoutId = setTimeout(() => finalizePlayer(room, playerName), timing.disconnectGraceMs);
+      const timeoutId = setTimeout(() => finalizePlayer(room, playerName), graceMs);
       timeoutId.unref?.();
       state.pendingDisconnects[room][playerName] = timeoutId;
+    });
+
+    socket.on('set_paused', ({ room: payloadRoom, paused } = {}, ack) => {
+      const reply = (payload) => { if (typeof ack === 'function') ack(payload); };
+      const room = currentRoom(payloadRoom);
+      if (!room) return reply({ ok: false, message: 'You are not in a game.' });
+      if (humanPlayers(state.rooms[room]).length !== 1) {
+        return reply({ ok: false, message: 'Pausing is only for single-player games.' });
+      }
+      setPaused(room, !!paused);
+      reply({ ok: true, ...pauseStateFor(room) });
     });
 
     socket.on('player_screen_updated', ({ room: payloadRoom, screen } = {}) => {
@@ -548,6 +639,7 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
         gameOver: false,
         cooldowns: {},
         partyPositions: null,
+        paused: null,
         stage: 'lobby'
       });
       setScreens(room, 'waiting');

@@ -126,6 +126,19 @@ time with a short pause (`BOT_STEP_MS`, default 900 ms) so players can follow al
 person disconnects, the fight pauses instead of letting bots play on alone, and a room with only
 bots left is closed.
 
+**Dropping out and leaving.** A player who disconnects keeps their seat for
+`DISCONNECT_GRACE_MS` (default 3 minutes); everyone else sees a countdown, and their turns are
+skipped until they return. If they don't come back (or press Leave), they leave the party for
+good, and the game adjusts to the smaller party: the enemies in the current fight are rescaled as if
+it had been built for the new size (`rescaleEnemiesForPartySize` in `shared/combat/encounters.js`),
+and every later fight is built for it.
+
+**Pause (single player).** In a game with one person and any number of bots, the top bar has a
+Pause button. Pausing stops the fight before the next turn (a player's own turn stops its clock at
+once) and holds any personal moment's clock. While paused the player can step away or close the
+game and come back within `PAUSE_GRACE_MS` (default 10 minutes); the game picks up where it
+stopped.
+
 The party bot looks one turn ahead: for each sensible option it plays the fight forward on a copy
 and keeps the best. Live bots weigh at most 20 options per step to keep the server responsive.
 

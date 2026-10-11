@@ -273,14 +273,13 @@ export const DIALOGUE_RESPONSE_SCHEMA = {
       items: {
         type: 'object',
         properties: {
-          approach: { type: 'string', enum: ['honest', 'defiant', 'sly', 'skill'] },
-          attribute: { type: 'string', description: 'For a skill answer, the attribute it uses; otherwise empty.' },
+          approach: { type: 'string', enum: ['honest', 'defiant', 'sly'] },
           text: { type: 'string', description: 'The answer as the player picks it, under 12 words.' },
           told: { type: 'string', description: 'How the narration reports it, one sentence.' },
           reaction: { type: 'string', description: 'How the NPC reacts, one or two sentences.' },
           lead: { type: 'string', description: 'The story thread this answer starts, one sentence, stated as something now true.' }
         },
-        required: ['approach', 'attribute', 'text', 'told', 'reaction', 'lead'],
+        required: ['approach', 'text', 'told', 'reaction', 'lead'],
         additionalProperties: false
       }
     }

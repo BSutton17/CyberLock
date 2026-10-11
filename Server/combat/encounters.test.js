@@ -10,6 +10,7 @@ import {
   createEnemyInstance,
   encounterComposition,
   enemyPowerFor,
+  rescaleEnemiesForPartySize,
   ENEMY_POWER,
   isFinalEncounter,
   ORDERED_BOSS_IDS_BY_FACTION
@@ -137,5 +138,30 @@ describe('enemy scaling and abilities', () => {
       const picked = assignEnemyAbilities({ level: 5, behavior: 'intelligent' }, seeded(seed));
       expect(picked.some(ability => ['charge', 'gtg', 'eagle_eye'].includes(ability.id))).toBe(false);
     }
+  });
+});
+
+describe('a party that shrinks mid-fight', () => {
+  const foe = (health, maxHealth = 100) => ({ id: 'e', stats: { health, maxHealth, strength: 20, resistance: 10, ta: 10 } });
+
+  it('rescales the living enemies as if the fight was built for the smaller party', () => {
+    const enemies = [foe(50), foe(100), { ...foe(0), isDeadBody: true }];
+    const { power, health } = rescaleEnemiesForPartySize(enemies, 0, 3, 2);
+    expect(power).toBeCloseTo(enemyPowerFor(0, 2) / enemyPowerFor(0, 3));
+    // A low fight fields one fewer enemy for two players than for three.
+    expect(health).toBeCloseTo(power * (3 / 4));
+    expect(enemies[1].stats.maxHealth).toBe(Math.round(100 * health));
+    expect(enemies[1].stats.health).toBe(enemies[1].stats.maxHealth);
+    // Keeps its share of health.
+    expect(enemies[0].stats.health / enemies[0].stats.maxHealth).toBeCloseTo(0.5, 1);
+    expect(enemies[0].stats.strength).toBe(Math.round(20 * power));
+    // The dead stay dead.
+    expect(enemies[2].stats.health).toBe(0);
+  });
+
+  it('leaves a fight alone when the size did not change', () => {
+    const enemies = [foe(50)];
+    expect(rescaleEnemiesForPartySize(enemies, 4, 2, 2)).toEqual({ power: 1, health: 1 });
+    expect(enemies[0].stats).toMatchObject({ health: 50, maxHealth: 100, strength: 20 });
   });
 });

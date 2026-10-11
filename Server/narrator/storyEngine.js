@@ -303,7 +303,6 @@ export function createNarrator({
 
     const dialogue = createDialogue({
       target: { playerName: target.playerName, characterName: target.characterName },
-      attributes: context.attributesByPlayer[target.playerName] || [],
       faction: session.faction,
       used: new Set(session.dialoguesUsed),
       random,
@@ -333,11 +332,10 @@ export function createNarrator({
   }
 
   // The AI writes the moment fresh for the scene it just narrated: its own NPC, question and three
-  // (or four) answers that each send the story somewhere different. `planned` (from the pool) says
+  // answers that each send the story somewhere different. `planned` (from the pool) says
   // who answers and stands in if the model can't deliver.
   async function writeDialogue(session, context, planned, sceneNarration, decisionOptions = []) {
     const member = (context.party || []).find(m => m.playerName === planned.playerName);
-    const top = (context.attributesByPlayer[planned.playerName] || []).map(normalizeAttribute).filter(Boolean).slice(0, 3);
     const actInfo = session.faction ? getActFor(session.faction, context.encounterIndex) : null;
     const state = buildStateBlock(session, { party: context.party, partyFaction: session.faction, encounterIndex: context.encounterIndex, actInfo });
     const who = planned.characterName;
@@ -348,9 +346,8 @@ export function createNarrator({
       decisionOptions.length ? `Right after this moment the group decides between: ${decisionOptions.map(option => `"${option}"`).join(' and ')}. The moment must be about something else entirely: a different question, a different subject, nothing that makes that choice early.` : '',
       `Write a short personal moment that happens right after that scene, for ${who}${member?.role ? ` (${member.role})` : ''}. Either someone in the scene turns to ${who} and asks them something pointed (kind "reply"), or ${who} gets a chance to ask someone something (kind "ask"). Pick someone who fits the scene: a named NPC from the cast or a vivid unnamed one ("a checkpoint guard"). Never another party member.`,
       'intro: one or two sentences in the narration voice. For "reply" it ends with the question in quotes; for "ask" it ends by giving them the chance to ask.',
-      `options: exactly three answers ${who} could give, each a genuinely different approach (approach "honest", "defiant" and "sly"): not three wordings of one idea. Each under 12 words, in ${who}'s voice (for "ask", a short phrase like "Ask who paid for the van.").` +
-        (top.length ? ` ${who} is strongest at ${top.join(', ')}: if one of those fits, add a fourth answer that uses it, with approach "skill" and that attribute.` : ''),
-      'For every option: told is how the narration reports it (one sentence); reaction is how the other person reacts (one or two sentences); lead is the story thread the answer starts, one sentence stated as something now true (a patrol on their trail, a shortcut, a favor owed, a name to chase, an enemy made). Every option\'s lead must point somewhere different. attribute is empty unless approach is "skill".',
+      `options: exactly three answers ${who} could give, each a genuinely different approach (approach "honest", "defiant" and "sly"): not three wordings of one idea. Each under 12 words, in ${who}'s voice (for "ask", a short phrase like "Ask who paid for the van."). Never more than three.`,
+      'For every option: told is how the narration reports it (one sentence); reaction is how the other person reacts (one or two sentences); lead is the story thread the answer starts, one sentence stated as something now true (a patrol on their trail, a shortcut, a favor owed, a name to chase, an enemy made). Every option\'s lead must point somewhere different.',
       'No numbers, no game mechanics. Return JSON only.'
     ].join('\n\n');
 
@@ -361,21 +358,19 @@ export function createNarrator({
       const intro = clean(parsed.intro, 500);
       const used = new Set();
       const options = (Array.isArray(parsed.options) ? parsed.options : []).map(raw => {
-        let tone = ['honest', 'defiant', 'sly', 'skill'].includes(raw?.approach) ? raw.approach : 'sly';
-        const attribute = tone === 'skill' ? normalizeAttribute(raw?.attribute) : null;
-        if (tone === 'skill' && !(attribute && top.includes(attribute))) tone = 'sly';
+        const tone = ['honest', 'defiant', 'sly'].includes(raw?.approach) ? raw.approach : 'sly';
         const id = used.has(tone) ? `${tone}${used.size + 1}` : tone;
         used.add(tone);
         return {
           id,
           tone,
-          attribute: tone === 'skill' ? attribute : null,
+          attribute: null,
           text: clean(raw?.text, 90),
           told: clean(raw?.told, 300),
           reaction: clean(raw?.reaction, 400),
           lead: clean(raw?.lead, 300)
         };
-      }).filter(option => option.text && option.told && option.reaction && option.lead).slice(0, 4);
+      }).filter(option => option.text && option.told && option.reaction && option.lead).slice(0, 3);
 
       const texts = [intro, ...options.flatMap(option => [option.told, option.reaction, option.lead])].join(' ');
       if (!npc || !intro || options.length < 3 || findOutsiderNames(texts, context.party).length > 0) {
@@ -384,8 +379,6 @@ export function createNarrator({
       if (overlapsDecision({ options }, decisionOptions)) {
         throw new Error('the moment asked the same thing as the group decision');
       }
-      // Skill answers first, like the hand-written moments.
-      options.sort((a, b) => (b.tone === 'skill') - (a.tone === 'skill'));
       const silent = parsed.kind === 'ask'
         ? { told: `${who} lets the moment pass without asking anything.`, reaction: `${npc} goes back to what they were doing.` }
         : { told: `${who} doesn't answer.`, reaction: `${npc} waits, shrugs, and turns away.` };
@@ -409,7 +402,6 @@ export function createNarrator({
     for (let tries = 0; tries < 6; tries++) {
       const next = createDialogue({
         target: { playerName: dialogue.playerName, characterName: dialogue.characterName },
-        attributes: context.attributesByPlayer[dialogue.playerName] || [],
         faction: session.faction,
         used,
         random,
@@ -955,6 +947,31 @@ export function createNarrator({
           .finally(() => { session.summaryInFlight = null; });
       }
       return forPlayers(room, await session.summaryInFlight);
+    },
+
+    /** A party member left the game for good: the story notes it, so the narrator can explain their absence. */
+    noteDeparture(room, characterName) {
+      const session = sessions.get(room);
+      if (session && characterName) remember(session, `${characterName} left the party and is no longer with them.`);
+    },
+
+    /**
+     * Makes sure the open decision has someone connected to press the button: its own player if
+     * they are here, otherwise whoever has decided least recently. Returns the new owner info for
+     * clients when it changed, otherwise null.
+     */
+    reassignDecision(room, context = {}) {
+      const session = sessions.get(room);
+      const pending = session?.pendingDecision;
+      if (!pending) return null;
+      const players = context.players || [];
+      const here = (context.connectedPlayers || players).filter(player => players.includes(player));
+      let decidedBy = pending.decidedBy || pending.owner;
+      if (here.includes(pending.owner)) decidedBy = pending.owner;
+      else if (!here.includes(decidedBy)) decidedBy = personToDecideFor(session, { ...context, players, connectedPlayers: here });
+      if (!decidedBy || decidedBy === (pending.decidedBy || pending.owner)) return null;
+      pending.decidedBy = decidedBy;
+      return forPlayers(room, decisionOwnerFor(session, context));
     },
 
     /** Notes a finished fight for the Summarize button (no AI). */

@@ -55,6 +55,14 @@ export const GameProvider = ({ children }) => {
     const { token, logout } = useAuth();
     const [connectionStatus, setConnectionStatus] = useState('disconnected');
     const [connectedPlayers, setConnectedPlayers] = useState([]);
+    // Players who dropped out: when their seat is given up, by this device's clock.
+    const [awayPlayers, setAwayPlayers] = useState({});
+    // A single-player game the player paused (Pause button in the top bar).
+    const [gamePaused, setGamePaused] = useState({ paused: false, windowMs: 600000 });
+    // This player stepped away from a paused game (their socket is closed until they rejoin).
+    const [steppedAway, setSteppedAway] = useState(null);
+    // "Livewire (sean) left the party.", shown for a few seconds.
+    const [partyNotice, setPartyNotice] = useState(null);
 
     useEffect(() => {
       if (token) {
@@ -65,7 +73,10 @@ export const GameProvider = ({ children }) => {
     }, [socket, token]);
 
     useEffect(() => {
-      const handleConnect = () => setConnectionStatus('connected');
+      const handleConnect = () => {
+        setConnectionStatus('connected');
+        setSteppedAway(null);
+      };
       const handleDisconnect = (reason) => {
         // "io client disconnect" means we closed it on purpose (sign-out).
         setConnectionStatus(reason === 'io client disconnect' ? 'disconnected' : 'reconnecting');
@@ -77,13 +88,25 @@ export const GameProvider = ({ children }) => {
           setConnectionStatus('reconnecting');
         }
       };
-      const handlePresence = ({ connected } = {}) => setConnectedPlayers(Array.isArray(connected) ? connected : []);
+      const handlePresence = ({ connected, away } = {}) => {
+        setConnectedPlayers(Array.isArray(connected) ? connected : []);
+        const now = Date.now();
+        setAwayPlayers(Object.fromEntries(Object.entries(away || {}).map(([player, msLeft]) => [player, now + (Number(msLeft) || 0)])));
+      };
+      const handlePaused = ({ paused, windowMs } = {}) => setGamePaused({ paused: !!paused, windowMs: Number(windowMs) || 600000 });
+      const handlePlayerLeft = ({ playerName: who, characterName } = {}) => {
+        setPartyNotice({ text: `${characterName ? `${characterName} (${who})` : who} left the party.`, at: Date.now() });
+      };
 
       socket.on('connect', handleConnect);
       socket.on('disconnect', handleDisconnect);
       socket.on('connect_error', handleConnectError);
       socket.on('presence_updated', handlePresence);
+      socket.on('game_paused', handlePaused);
+      socket.on('player_left', handlePlayerLeft);
       return () => {
+        socket.off('game_paused', handlePaused);
+        socket.off('player_left', handlePlayerLeft);
         socket.off('connect', handleConnect);
         socket.off('disconnect', handleDisconnect);
         socket.off('connect_error', handleConnectError);
@@ -145,6 +168,10 @@ export const GameProvider = ({ children }) => {
         socket,
         connectionStatus,
         connectedPlayers,
+        awayPlayers,
+        gamePaused,
+        steppedAway, setSteppedAway,
+        partyNotice, setPartyNotice,
         serverStoryState, setServerStoryState,
         combatState, setCombatState,
         gamePhase, setGamePhase,

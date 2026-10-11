@@ -137,6 +137,32 @@ export function enemyPowerFor(encounterIndex, partySize) {
     return row[clamp(Math.round(Number(partySize) || 1), 1, 6) - 1] ?? 1;
 }
 
+/**
+ * When the party changes size mid-fight (someone left for good), rescales the living enemies as
+ * if the fight had been built for the new size: damage and toughness follow ENEMY_POWER, and
+ * health also follows how many enemies that size would have faced. Each enemy keeps its share
+ * of health. Returns the multipliers used.
+ */
+export function rescaleEnemiesForPartySize(enemies, encounterIndex, fromSize, toSize) {
+    const from = clamp(Math.round(Number(fromSize) || 1), 1, 6);
+    const to = clamp(Math.round(Number(toSize) || 1), 1, 6);
+    if (from === to) return { power: 1, health: 1 };
+    const count = (size) => Object.values(encounterComposition(encounterIndex, size)).reduce((sum, n) => sum + n, 0) || 1;
+    const power = enemyPowerFor(encounterIndex, to) / enemyPowerFor(encounterIndex, from);
+    const health = power * (count(to) / count(from));
+    for (const enemy of enemies || []) {
+        const stats = enemy?.stats;
+        if (!stats || enemy.isDeadBody || (stats.health || 0) <= 0) continue;
+        const share = stats.health / (stats.maxHealth || stats.health);
+        stats.maxHealth = Math.max(1, Math.round((stats.maxHealth || stats.health) * health));
+        stats.health = clamp(Math.round(stats.maxHealth * share), 1, stats.maxHealth);
+        for (const key of ['strength', 'resistance', 'ta']) {
+            if (Number.isFinite(stats[key])) stats[key] = Math.max(1, Math.round(stats[key] * power));
+        }
+    }
+    return { power, health };
+}
+
 // ---------------------------------------------------------------------------
 // Enemy creation
 // ---------------------------------------------------------------------------

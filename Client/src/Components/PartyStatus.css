@@ -1,0 +1,43 @@
+/* Dropped-out players and departures, just under the top bar. Rendered on the page itself (not
+   inside the half-scale phone canvas), so sizes here are real sizes. */
+.party-status {
+    position: fixed;
+    top: 72px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1500;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: center;
+    pointer-events: none;
+    max-width: calc(100vw - 32px);
+}
+
+.party-status-line {
+    padding: 6px 16px;
+    border-radius: 8px;
+    border: 1px solid rgba(250, 204, 21, 0.6);
+    background: rgba(20, 20, 40, 0.92);
+    color: #fde68a;
+    font-size: 15px;
+    font-weight: 600;
+    text-align: center;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.party-status-left {
+    border-color: rgba(248, 113, 113, 0.6);
+    color: #fecaca;
+}
+
+@media (orientation: landscape) and (max-height: 520px) {
+    .party-status {
+        top: 40px;
+    }
+
+    .party-status-line {
+        font-size: 14px;
+        padding: 4px 12px;
+    }
+}

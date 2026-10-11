@@ -789,14 +789,14 @@
     }
 
     body .main-game-container .char-name {
-        font-size: 21px !important;
+        font-size: 24px !important;
         letter-spacing: 0.02em !important;
     }
 
     body .stat-speed,
     body .stat-hp,
     body .char-role {
-        font-size: 19px !important;
+        font-size: 21px !important;
     }
 
     /* ----- Character bar: smaller text so it stays short ----- */
@@ -872,16 +872,16 @@
     body .ability-cd-ultimate,
     body .ability-range,
     body .ultimate-name {
-        font-size: 16px !important;
+        font-size: 18px !important;
     }
 
     body .ability-name {
-        font-size: 22px !important;
+        font-size: 24px !important;
     }
 
     body .ability-desc,
     body .ultimate-desc {
-        font-size: 18px !important;
+        font-size: 20px !important;
         line-height: 1.2 !important;
         display: -webkit-box;
         -webkit-line-clamp: 3;
@@ -910,19 +910,20 @@
 
     /* Story choices and personal moments over the character bar. */
     body .mobile-ai-overlay-text {
-        font-size: 36px !important;
+        font-size: 42px !important;
         line-height: 1.35 !important;
     }
 
     /* In a fight the narration line shares the short character bar. */
     body .inventory:not(.story-phase) .mobile-ai-overlay-text {
-        font-size: 34px !important;
+        font-size: 38px !important;
         line-height: 1.25 !important;
     }
 
     body .mobile-ai-choice-owner,
-    body .mobile-ai-overlay-status {
-        font-size: 28px !important;
+    body .mobile-ai-overlay-status,
+    body .dialogue-choices .dialogue-countdown {
+        font-size: 32px !important;
     }
 
     body .mobile-ai-overlay-choices {
@@ -931,9 +932,10 @@
     }
 
     body .mobile-ai-overlay-choices button {
-        min-height: 80px !important;
-        font-size: 30px !important;
-        padding: 8px 20px !important;
+        min-height: 88px !important;
+        font-size: 36px !important;
+        line-height: 1.25 !important;
+        padding: 8px 24px !important;
     }
 
     /* ---------- Level up: five stat cards in a row, Ready underneath ---------- */

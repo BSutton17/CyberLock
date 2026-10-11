@@ -121,12 +121,12 @@ decisions) one party member gets a moment of their own, of one of two kinds:
 - **They get to ask an NPC something.** *Ines Calder is picking through the wreck of her stall...
   Livewire has a moment to ask her something.*
 
-Everyone sees the choices where the story choices go; only that player can pick. Every answer is a
-different approach: straight with them, pushing back, a sly angle, and a special one if they rank a
-fitting attribute in their top three (a Politician can answer "We came to save someone"). The next
+Everyone sees the choices where the story choices go; only that player can pick. There are never
+more than three answers, each a different approach: straight with them, pushing back, or a sly
+angle (attributes don't add answers; they decide who makes the group's calls). The next
 narration tells what they said and how the NPC took it, then brings up the group's decision, which
-waits until then. If they don't answer within `DIALOGUE_TIMEOUT_MS` (default 60 s), their character
-stays silent and the story moves on.
+waits until then. If they don't answer within `DIALOGUE_TIMEOUT_MS` (default 180 s), their
+character stays silent and the story moves on.
 
 **Answers steer the story.** Each one starts its own thread (`lead`): a patrol on the party's trail,
 a shortcut, a favor owed, a name worth chasing. Threads go into the story log and every later
@@ -149,6 +149,10 @@ reaction and thread).
   else, so the story treats the call as theirs ("Ghost Shell's call (Electrician)"). A person
   presses the button for them: whichever person has decided least recently (`decidedBy` in the
   `decisionOwner` sent with each decision).
+- **Nobody waits on someone who dropped out.** If the person meant to press a decision's button
+  disconnects, it passes to someone who is here (`decision_owner_changed`), and back if they
+  return. A player who leaves for good is noted in the story log, so the narrator can explain their
+  absence, and a personal moment that was theirs ends.
 - **Moments never repeat the decision.** A personal moment is checked against the group decision
   that follows it; the AI is told to keep them about different things, and one that overlaps is
   swapped for a different moment.

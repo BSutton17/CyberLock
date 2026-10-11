@@ -11,20 +11,19 @@ const dialogue = {
   playerName: 'B',
   characterName: 'Livewire',
   options: [
-    { id: 'skill', text: 'We came to save someone.', attribute: 'politician' },
-    { id: 'honest', text: "We're just passing through.", attribute: null },
-    { id: 'defiant', text: "It's none of your business.", attribute: null }
+    { id: 'honest', text: "We're just passing through." },
+    { id: 'defiant', text: "It's none of your business." },
+    { id: 'sly', text: 'Asking for a friend? Here, for your trouble.' }
   ]
 };
 
 afterEach(cleanup);
 
 describe('DialogueChoices', () => {
-  it('lets the chosen player pick, with attribute answers tagged', () => {
+  it('lets the chosen player pick', () => {
     const onChoose = vi.fn();
     render(<DialogueChoices dialogue={dialogue} playerName="B" onChoose={onChoose} />);
     expect(screen.getByText('Your answer to a checkpoint guard')).toBeTruthy();
-    expect(screen.getByText('Politician')).toBeTruthy();
     fireEvent.click(screen.getByText("It's none of your business."));
     expect(onChoose).toHaveBeenCalledWith('defiant');
   });
@@ -36,6 +35,13 @@ describe('DialogueChoices', () => {
     const buttons = screen.getAllByRole('button');
     expect(buttons).toHaveLength(3);
     expect(buttons.every(button => button.disabled)).toBe(true);
+  });
+
+  it('never shows more than three answers, and no attribute tags', () => {
+    const extra = { ...dialogue, options: [...dialogue.options, { id: 'skill', text: 'We came to save someone.', attribute: 'politician' }] };
+    render(<DialogueChoices dialogue={extra} playerName="B" onChoose={() => {}} />);
+    expect(screen.getAllByRole('button')).toHaveLength(3);
+    expect(screen.queryByText('Politician')).toBeNull();
   });
 
   it('words questions to an NPC as asking', () => {

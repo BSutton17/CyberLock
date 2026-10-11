@@ -88,8 +88,11 @@ export const config = {
     botActionDelayMs: toInt(env.BOT_ACTION_DELAY_MS, 700),
     // How long a player has to answer a personal moment before their character stays silent.
     dialogueTimeoutMs: toInt(env.DIALOGUE_TIMEOUT_MS, 180000),
-    // How long a disconnected player keeps their seat before being removed.
-    disconnectGraceMs: toInt(env.DISCONNECT_GRACE_MS, 60000),
+    // How long a disconnected player keeps their seat before being removed (everyone else sees
+    // a countdown)...
+    disconnectGraceMs: toInt(env.DISCONNECT_GRACE_MS, 180000),
+    // ...and how long a single-player game the player paused waits for them to come back.
+    pauseGraceMs: toInt(env.PAUSE_GRACE_MS, 600000),
     // Combat narration (hand-written lines, never the AI) arrives this long after the turn it tells.
     combatNarrationDelayMs: toInt(env.COMBAT_NARRATION_DELAY_MS ?? env.MOCK_AI_COMBAT_DELAY_MS, 900),
     // How the client types narration out (Main.jsx): per character, a pause between sentences per

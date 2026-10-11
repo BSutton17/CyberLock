@@ -3,7 +3,6 @@ import { createDialogue, publicDialogue, followUpNarration, attitudeLabel, DIALO
 import { createNarrator } from './storyEngine.js';
 import { createMockProvider } from './providers/mock.js';
 import { buildStateBlock } from './prompts.js';
-import { VALID_ATTRIBUTES } from './lore.js';
 
 const quiet = { log() {}, warn() {} };
 const target = { playerName: 'B', characterName: 'Livewire' };
@@ -11,30 +10,32 @@ const askIndexes = new Set(DIALOGUE_EXCHANGES.map((exchange, index) => (exchange
 const replyIndexes = new Set(DIALOGUE_EXCHANGES.map((exchange, index) => (exchange.kind === 'reply' ? index : -1)).filter(i => i >= 0));
 
 describe('personal moments', () => {
-  it('come in both kinds, with sensible attribute answers', () => {
+  it('come in both kinds, with three answers each and no attribute answers', () => {
     expect(askIndexes.size).toBeGreaterThanOrEqual(3);
     expect(replyIndexes.size).toBeGreaterThanOrEqual(5);
     for (const exchange of DIALOGUE_EXCHANGES) {
-      for (const attribute of Object.keys(exchange.skills)) expect(VALID_ATTRIBUTES).toContain(attribute);
+      expect(exchange.skills).toBeUndefined();
       expect(exchange.intro).toContain('{character}');
     }
   });
 
   it('has an NPC ask the player a question inside the narration', () => {
     // Exchange 0 is the checkpoint guard: "Why are you here?"
-    const plain = createDialogue({ target, attributes: ['banker', 'spy', 'medic'], faction: 'rebels', random: () => 0 });
+    const plain = createDialogue({ target, faction: 'rebels', random: () => 0 });
     expect(plain.kind).toBe('reply');
     expect(plain.intro).toBe('A checkpoint guard steps into the party\'s path and looks straight at Livewire. "Why are you here?"');
     expect(publicDialogue(plain).options.map(option => option.id)).toEqual(['honest', 'defiant', 'sly']);
 
-    const politician = createDialogue({ target, attributes: ['spy', 'politician'], faction: 'rebels', random: () => 0 });
-    expect(politician.options[0]).toMatchObject({ tone: 'skill', attribute: 'politician', text: 'We came to save someone.' });
-    expect(politician.options.map(option => option.text)).toContain("It's none of your business.");
+    expect(plain.options.map(option => option.text)).toContain("It's none of your business.");
   });
 
-  it('only counts an attribute ranked in the top three', () => {
-    const dialogue = createDialogue({ target, attributes: ['spy', 'medic', 'banker', 'politician'], faction: 'rebels', random: () => 0 });
-    expect(dialogue.options.some(option => option.tone === 'skill')).toBe(false);
+  it('never offers more than three answers', () => {
+    for (let index = 0; index < DIALOGUE_EXCHANGES.length; index++) {
+      const used = new Set(DIALOGUE_EXCHANGES.map((_, other) => other).filter(other => other !== index));
+      const dialogue = createDialogue({ target, faction: 'rebels', used, random: () => 0 });
+      expect(publicDialogue(dialogue).options.length).toBeLessThanOrEqual(3);
+      expect(dialogue.options.some(option => option.attribute)).toBe(false);
+    }
   });
 
   it('lets the player ask an NPC something, told as narration afterwards', () => {
@@ -63,7 +64,7 @@ describe('personal moments', () => {
   it('gives every answer its own words, reaction and story thread', () => {
     const allLeads = [];
     for (const exchange of DIALOGUE_EXCHANGES) {
-      const answers = [exchange.honest, exchange.defiant, exchange.sly, ...Object.values(exchange.skills)];
+      const answers = [exchange.honest, exchange.defiant, exchange.sly];
       for (const field of ['text', 'reaction', 'lead']) {
         const values = answers.map(answer => answer[field]);
         expect(values.every(Boolean), `${exchange.npc} ${field}`).toBe(true);
@@ -169,7 +170,7 @@ describe('personal moments written by the AI', () => {
       { approach: 'honest', attribute: '', text: 'Neither. We just need in.', told: 'x says they need in.', reaction: 'The foreman shrugs.', lead: 'The foreman left the side gate unlocked.' },
       { approach: 'defiant', attribute: '', text: 'Move.', told: 'x tells him to move.', reaction: 'He moves, and calls someone.', lead: 'Company security knows the party is at the depot.' },
       { approach: 'sly', attribute: '', text: 'Union. Obviously.', told: 'x lies smoothly.', reaction: 'He grins and lowers his voice.', lead: 'The union is planning a walkout the party could use as cover.' },
-      { approach: 'skill', attribute: 'politician', text: 'We are here for the workers.', told: 'x makes a promise.', reaction: 'The foreman takes off his cap.', lead: 'The dock workers will back the party in a fight at the depot.' }
+      { approach: 'honest', attribute: '', text: 'We are here for the workers.', told: 'x makes a promise.', reaction: 'The foreman takes off his cap.', lead: 'The dock workers will back the party in a fight at the depot.' }
     ],
     ...overrides
   });
@@ -193,9 +194,9 @@ describe('personal moments written by the AI', () => {
     expect(provider.calls.at(-1).messages[0].content).toMatch(/genuinely different approach/);
     expect(result.dialogue.npc).toBe('A dock foreman');
     expect(result.response).toContain('union or the company');
-    // Livewire (B) ranks Politician first, so the skill answer is offered, first.
-    const ids = result.dialogue.options.map(option => option.id);
-    if (result.dialogue.playerName === 'B') expect(ids[0]).toBe('skill');
+    // The model sent four answers; players only ever see three, none tied to an attribute.
+    expect(result.dialogue.options).toHaveLength(3);
+    expect(result.dialogue.options.some(option => option.attribute)).toBe(false);
     const answer = narrator.answerDialogue('r', { playerName: result.dialogue.playerName, dialogueId: result.dialogue.id, optionId: 'sly' });
     expect(answer.response).toMatch(/He grins/);
     expect(narrator.getSession('r').personalMoments.at(-1).lead).toBe('The union is planning a walkout the party could use as cover.');

@@ -11,7 +11,7 @@ import {
   insertAllyIntoTurnOrder,
   isEnemyAlive
 } from '../../shared/combat/turnOrder.js';
-import { generateEncounterEnemies, getEncounterConfig, isFinalEncounter, TOTAL_ENCOUNTERS } from '../../shared/combat/encounters.js';
+import { generateEncounterEnemies, getEncounterConfig, isFinalEncounter, rescaleEnemiesForPartySize, TOTAL_ENCOUNTERS } from '../../shared/combat/encounters.js';
 import { getAbility } from '../../shared/combat/effects.js';
 import { generateEnemySpawnPositions, generatePlayerSpawnPositions } from '../game/spawning.js';
 import { isBot } from '../game/bots.js';
@@ -286,6 +286,14 @@ export function createCombatController({
     combat.paused = false;
     combat.turnDeadline = null;
 
+    // The single player paused the game: the fight stops here until they resume.
+    if (state.rooms[room]?.paused) {
+      combat.paused = true;
+      clearTimer(room);
+      broadcast(room);
+      return;
+    }
+
     if (!turn) {
       checkEnd(room);
       return;
@@ -521,6 +529,8 @@ export function createCombatController({
       positions: { ...playerSpots, ...enemySpots },
       turnOrder: calculateTurnOrder(activePlayers, roomState.characterSelections, enemies)
     });
+    // The party size the enemies were built for (see removeFromFight).
+    combat.partySize = roomState.players.length;
     state.combat[room] = combat;
     logger.log?.(`[COMBAT] Room ${room} encounter ${encounterIndex}: ${enemies.length} enemies, ${activePlayers.length} players`);
 
@@ -553,6 +563,7 @@ export function createCombatController({
     const ctx = contextFor(room);
     if (!ctx || ctx.combat.endedResult) return { ok: false, error: 'no_combat', message: 'There is no fight going on.' };
     if (ctx.combat.ending) return { ok: false, error: 'combat_over', message: 'The fight is over.' };
+    if (state.rooms[room]?.paused) return { ok: false, error: 'paused', message: 'The game is paused.' };
 
     if (kind === 'end_turn') {
       const allowed = engine.canEndTurn(ctx, playerName);
@@ -588,7 +599,16 @@ export function createCombatController({
     const { combat } = ctx;
 
     const wasCurrentTurn = removeAllyFromTurnOrder(combat, playerName);
-    if (leftForGood) delete combat.positions[playerName];
+    if (leftForGood) {
+      delete combat.positions[playerName];
+      // Fewer fighters: the enemies get rescaled to the party that's left.
+      const size = state.rooms[room]?.players.length || 0;
+      if (size > 0 && combat.partySize && size !== combat.partySize) {
+        const { health } = rescaleEnemiesForPartySize(combat.enemies, combat.encounterIndex, combat.partySize, size);
+        logger.log?.(`[COMBAT] Room ${room}: party of ${combat.partySize} is now ${size}; enemy health x${health.toFixed(2)}`);
+        combat.partySize = size;
+      }
+    }
     if (checkEnd(room)) return;
 
     if (wasCurrentTurn) {
@@ -620,6 +640,28 @@ export function createCombatController({
     return true;
   }
 
+  /**
+   * The single player paused or resumed. A player's turn stops its clock right away; a bot or
+   * enemy in the middle of its turn finishes it, and the fight stops before the next turn
+   * (see announce). Resuming starts the current turn again.
+   */
+  function setPaused(room, paused) {
+    const ctx = contextFor(room);
+    if (!ctx || ctx.combat.endedResult) return;
+    const { combat } = ctx;
+    if (paused) {
+      const turn = combat.turn;
+      if (turn?.type === 'ally' && !turn.finished && !isBot(state.rooms[room], turn.id)) {
+        clearTimer(room);
+        combat.paused = true;
+        combat.turnDeadline = null;
+        broadcast(room);
+      }
+    } else if (combat.paused) {
+      announce(room);
+    }
+  }
+
   function stopRoom(room) {
     clearTimer(room);
     for (const timer of state.narrationTimers?.[room] || []) clearTimeout(timer);
@@ -639,6 +681,7 @@ export function createCombatController({
     endCombat,
     checkEnd,
     stopRoom,
-    activeCombat
+    activeCombat,
+    setPaused
   };
 }

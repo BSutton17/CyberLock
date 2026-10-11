@@ -207,6 +207,32 @@ describe('Main (story flow)', () => {
     expect(buttons.every(button => button.disabled)).toBe(true);
   });
 
+  it("passes a decision to someone who is here when its player drops out", async () => {
+    const socket = createFakeSocket();
+    render(<Harness socket={socket} playerName="bryson" />);
+    const owner = { player: 'sean', characterName: 'Gene Shock', attribute: 'spy' };
+
+    act(() => {
+      socket.serverSends('ai_message', {
+        requestId: 'x',
+        eventType: 'encounter_end',
+        response: 'A guard blocks the gate.',
+        options: ['Cut the power', 'Talk our way in'],
+        attribute: 'spy',
+        startCombat: false,
+        decisionOwner: { ...owner, decidedBy: 'sean', decidedByName: 'Gene Shock' }
+      });
+    });
+    const buttons = await screen.findAllByText('Cut the power', {}, { timeout: 3000 });
+    expect(buttons.every(button => button.disabled)).toBe(true);
+
+    act(() => {
+      socket.serverSends('decision_owner_changed', { decisionOwner: { ...owner, decidedBy: 'bryson', decidedByName: 'Leo' } });
+    });
+    await waitFor(() => expect(screen.getAllByText("Gene Shock's call (Spy) - you choose for them").length).toBeGreaterThan(0));
+    expect(screen.getAllByText('Cut the power').some(button => !button.disabled)).toBe(true);
+  });
+
   it('restores a pending decision from the server after a reconnect', async () => {
     const socket = createFakeSocket();
     render(

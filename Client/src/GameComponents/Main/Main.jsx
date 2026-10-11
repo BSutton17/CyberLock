@@ -11,6 +11,7 @@ import ChatBot from '../ChatBot/ChatBot';
 import SettingsMenu from '../../Components/SettingsMenu';
 import MockToggle from '../../Components/MockToggle';
 import StorySummary from '../../Components/StorySummary';
+import PauseButton from '../../Components/PauseButton';
 import DialogueChoices from './DialogueChoices';
 import { createMusic } from '../../Utils/music';
 
@@ -309,6 +310,23 @@ function Main() {
     // Who the open decision belongs to, from the server: the character whose call it is (a bot's,
     // sometimes) and the person who presses the button. Null for older messages.
     const [decisionOwnerInfo, setDecisionOwnerInfo] = useState(null);
+
+    // The server hands an open decision to someone else when the person meant to press the button
+    // drops out (and back when they return), and stops a personal moment's clock while paused.
+    useEffect(() => {
+        const handleOwnerChanged = ({ decisionOwner } = {}) => {
+            if (decisionOwner) setDecisionOwnerInfo(decisionOwner);
+        };
+        const handleDialogueTime = ({ id, timeLeftMs } = {}) => {
+            setDialogue(current => (current && current.id === id ? { ...current, timeLeftMs: Number.isFinite(timeLeftMs) ? timeLeftMs : null } : current));
+        };
+        socket.on('decision_owner_changed', handleOwnerChanged);
+        socket.on('dialogue_time', handleDialogueTime);
+        return () => {
+            socket.off('decision_owner_changed', handleOwnerChanged);
+            socket.off('dialogue_time', handleDialogueTime);
+        };
+    }, [socket]);
     const hasRequestedIntroRef = useRef(false);
     const pendingStartCombatRef = useRef(false);
     const selectedFactionRef = useRef(selectedFaction);
@@ -2566,6 +2584,7 @@ function Main() {
                     <SettingsMenu />
                     <button className='leave-main-help' onClick={() => setChat(true)}>Help</button>
                     <StorySummary />
+                    <PauseButton />
                     <MockToggle inRoom inline />
                 </div>
                 <h2 className='title'>{SCENE_LABELS[currentSceneKey] || SCENE_LABELS.city_square}</h2>

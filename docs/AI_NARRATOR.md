@@ -130,6 +130,17 @@ follows. The ones that shape it most:
   The game tracks who has appeared (`metNpcs`). Picking a side brings the side's leader (Rhea
   Vance or Mara Kessler) in with a proper introduction, and after the opening fight that leader
   briefs the party on the act's goal. The offline narrator has hand-written versions of both.
+- **Continuity.** The model reports the concrete details each scene established (`facts`: who
+  looks or wears what, injuries, who holds what, deadlines); later prompts list them as
+  "Established details", and the whole previous scene is passed along, not just its end.
+- **Introductions in proportion.** A one-scene character needs a look and a line; a recurring NPC
+  gets their look, name and direction over their first scene or two, and nobody is called by a
+  name the party hasn't heard yet.
+- **Stakes and choices.** Party members drive the plot, it ties back to their backstories (those
+  played by people first; the prompt says who is played by a person), conclusions are shown being
+  reached, and a theme only comes back with something new.
+- **One personal moment per person between fights.** Answers are played out in the scene (never
+  "Leo admits..."), and the NPC's reaction has to reveal something or change the relationship.
 - **NPCs deepen act by act.** Each recurring NPC in `lore.js` has how they look, how they sound,
   what they want, and three layers of who they really are; the model may only hint at the layer
   for the current act, through action and slips. These are drafts: rewrite them freely.

@@ -187,7 +187,7 @@ export const NPCS = [
     allegiance: 'rebels',
     bio: 'Rebel cell commander. Recruits the party if they side with the rebels; hunts them if they do not.',
     looks: 'Mid-forties, short and solid, a shaved head with a burn scar over one ear, a cheap cybernetic left eye that glows amber and flickers when she is tired, a patched work jacket with too many pockets.',
-    voice: 'Practical and dry, short sentences, gives orders like she is asking for the salt. Rubs the skin around her bad eye when she is stressed.',
+    voice: 'Practical and dry, short sentences, gives orders like she is asking for the salt. When she is stressed she sometimes rubs the skin around her bad eye (an occasional tell, not every scene).',
     wants: 'Proof that the Twilight Market bombing was staged by Division, so the city turns on the corporations instead of the rebels.',
     layers: [
       'She counts every rebel she sends out and every one who comes back, and it is wearing her down.',
@@ -201,7 +201,7 @@ export const NPCS = [
     allegiance: 'enforcers',
     bio: 'Division captain. Recruits the party if they side with the Enforcers; hunts them if they do not.',
     looks: 'Tall, late thirties, grey buzz cut, a pressed black Division uniform without a single wrinkle, always holding a data slate (a thin glass tablet that shows orders and files).',
-    voice: 'Cold, exact, never wastes a word, calls people by their full names. Taps the slate twice when she has made up her mind.',
+    voice: 'Cold, exact, never wastes a word, calls people by their full names. Taps the slate twice when she has made up her mind (now and then, not every scene).',
     wants: 'Order. The bombing case closed fast and clean before the city tears itself apart.',
     layers: [
       'She truly believes chaos kills more people than she ever will, and she has seen a riot up close.',

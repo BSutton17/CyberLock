@@ -53,6 +53,11 @@ export function createStorySession() {
     // introduced twice and nothing gets explained twice (see FIRST MEETINGS / PLAIN WORDS).
     metNpcs: [],
     explainedTerms: [],
+    // Concrete details the story established (looks, clothes, injuries, who holds what), so later
+    // scenes don't contradict them.
+    continuityFacts: [],
+    // Who has had a personal moment since the last fight (one each per stretch of story).
+    momentsThisInterlude: [],
     // The Summarize button: what happened in each act, the fights won, and the paragraphs already
     // written (an act is only rewritten when it has news). Written only when someone asks.
     encounterIndex: 0,
@@ -75,6 +80,16 @@ export function noteWhoAppears(session, text) {
   for (const { name, pattern } of NPC_NAME_PATTERNS) {
     if (pattern?.test(String(text || '')) && !session.metNpcs.includes(name)) session.metNpcs.push(name);
   }
+}
+
+/** Keeps the details a narration established, newest last, so later scenes stay consistent. */
+export function noteFacts(session, facts) {
+  if (!Array.isArray(facts)) return;
+  for (const raw of facts) {
+    const fact = String(raw || '').replace(/\s+/g, ' ').trim().slice(0, 160);
+    if (fact && !session.continuityFacts.includes(fact)) session.continuityFacts.push(fact);
+  }
+  if (session.continuityFacts.length > 30) session.continuityFacts.splice(0, session.continuityFacts.length - 30);
 }
 
 /** Remembers the terms a narration explained, so they aren't explained again. */
@@ -259,12 +274,14 @@ export function createNarrator({
     const actInfo = session.faction ? getActFor(session.faction, context.encounterIndex) : null;
     const state = buildStateBlock(session, {
       party: context.party,
+      players: context.players,
       partyFaction: session.faction,
       encounterIndex: context.encounterIndex,
       actInfo
     });
-    const lastNarration = session.lastNarration ? `\n\nPrevious narration (continue from here, do not repeat it):\n${session.lastNarration.slice(0, 700)}` : '';
-    const baseContent = `${state}${lastNarration}\n\nTASK\n${instructions}\n\nReturn JSON with fields: narration, options, location, memory, explained.`;
+    // The whole previous scene, so details carry over (who wears what, who holds what).
+    const lastNarration = session.lastNarration ? `\n\nPrevious narration (continue from here, do not repeat it, keep its details consistent):\n${session.lastNarration.slice(0, MAX_STORY_CHARS)}` : '';
+    const baseContent = `${state}${lastNarration}\n\nTASK\n${instructions}\n\nReturn JSON with fields: narration, options, location, memory, explained, facts.`;
     // What the game knows, for providers that write from structured facts (the offline narrator).
     hints = {
       faction: session.faction || null,
@@ -299,6 +316,7 @@ export function createNarrator({
 
     noteWhoAppears(session, narration);
     noteExplained(session, parsed.explained);
+    noteFacts(session, parsed.facts);
     return {
       narration,
       options: cleanOptions(parsed.options),
@@ -327,9 +345,11 @@ export function createNarrator({
   function planDialogue(session, context, eventType) {
     if (!personalMoments || !session.faction) return null;
     if (eventType !== 'encounter_end' && random() >= DIALOGUE_CHANCE_AFTER_DECISION) return null;
+    // People only, and each at most once between fights, so one player isn't asked twice in a row.
     const people = (context.party || []).filter(member =>
       context.players.includes(member.playerName) &&
-      (!context.connectedPlayers || context.connectedPlayers.includes(member.playerName))
+      (!context.connectedPlayers || context.connectedPlayers.includes(member.playerName)) &&
+      !(session.momentsThisInterlude || []).includes(member.playerName)
     );
     if (people.length === 0) return null;
 
@@ -337,6 +357,7 @@ export function createNarrator({
     const candidates = people.filter(member => (session.timesAddressed[member.playerName] || 0) === fewest);
     const target = candidates[Math.floor(random() * candidates.length) % candidates.length];
     session.timesAddressed[target.playerName] = fewest + 1;
+    (session.momentsThisInterlude ||= []).push(target.playerName);
 
     const dialogue = createDialogue({
       target: { playerName: target.playerName, characterName: target.characterName },
@@ -374,22 +395,24 @@ export function createNarrator({
   async function writeDialogue(session, context, planned, sceneNarration, decisionOptions = []) {
     const member = (context.party || []).find(m => m.playerName === planned.playerName);
     const actInfo = session.faction ? getActFor(session.faction, context.encounterIndex) : null;
-    const state = buildStateBlock(session, { party: context.party, partyFaction: session.faction, encounterIndex: context.encounterIndex, actInfo });
+    const state = buildStateBlock(session, { party: context.party, players: context.players, partyFaction: session.faction, encounterIndex: context.encounterIndex, actInfo });
     const who = planned.characterName;
+    const before = session.personalMoments.filter(moment => moment.by === who).slice(-3);
     const content = [
       state,
+      before.length ? `${who}'s earlier personal moments (move forward from these, never ask the same thing again; prefer someone new unless returning to them deepens the conflict):\n${before.map(moment => `- ${moment.npc} / ${who}: "${moment.reply}"`).join('\n')}` : '',
       `The scene that was just narrated:\n${String(sceneNarration || '').slice(0, 1200)}`,
       'TASK',
       decisionOptions.length ? `Right after this moment the group decides between: ${decisionOptions.map(option => `"${option}"`).join(' and ')}. The moment must be about something else entirely: a different question, a different subject, nothing that makes that choice early.` : '',
       `Write a short personal moment that happens right after that scene, for ${who}${member?.role ? ` (${member.role})` : ''}. Either someone in the scene turns to ${who} and asks them something pointed (kind "reply"), or ${who} gets a chance to ask someone something (kind "ask"). Pick someone who fits the scene: a named NPC from the cast or a vivid unnamed one ("a checkpoint guard"). Never another party member.`,
       'intro: one or two sentences in the narration voice. For "reply" it ends with the question in quotes; for "ask" it ends by giving them the chance to ask.',
       `options: exactly three answers ${who} could give, each a genuinely different approach (approach "honest", "defiant" and "sly"): not three wordings of one idea. Each under 12 words, in ${who}'s voice (for "ask", a short phrase like "Ask who paid for the van."). Never more than three.`,
-      'For every option: told is how the narration reports it (one sentence); reaction is how the other person reacts (one or two sentences); lead is the story thread the answer starts, one sentence stated as something now true (a patrol on their trail, a shortcut, a favor owed, a name to chase, an enemy made). Every option\'s lead must point somewhere different.',
+      `For every option: told is the answer happening in the scene, ${who} saying it in quotes with a small action (one or two sentences), never a summary like "${who} admits..."; reaction is how the other person reacts (two or three sentences) and it must reveal something about them or change the relationship, not just acknowledge the answer; lead is the story thread the answer starts, one sentence stated as something now true (a patrol on their trail, a shortcut, a favor owed, a name to chase, an enemy made). Every option\'s lead must point somewhere different.`,
       'No numbers, no game mechanics. Return JSON only.'
-    ].join('\n\n');
+    ].filter(Boolean).join('\n\n');
 
     try {
-      const parsed = await callModel({ session, kind: 'story', system: STORY_SYSTEM_PROMPT, userContent: content, schema: DIALOGUE_RESPONSE_SCHEMA, maxTokens: 900, hints: { dialogue: true } });
+      const parsed = await callModel({ session, kind: 'story', system: STORY_SYSTEM_PROMPT, userContent: content, schema: DIALOGUE_RESPONSE_SCHEMA, maxTokens: 1200, hints: { dialogue: true } });
       const clean = (text, max) => cleanNarration(String(text || ''), max);
       const npc = clean(parsed.npc, 80).replace(/[.!?]+$/, '');
       const intro = clean(parsed.intro, 500);
@@ -403,8 +426,8 @@ export function createNarrator({
           tone,
           attribute: null,
           text: clean(raw?.text, 90),
-          told: clean(raw?.told, 300),
-          reaction: clean(raw?.reaction, 400),
+          told: clean(raw?.told, 400),
+          reaction: clean(raw?.reaction, 600),
           lead: clean(raw?.lead, 300)
         };
       }).filter(option => option.text && option.told && option.reaction && option.lead).slice(0, 3);
@@ -563,6 +586,7 @@ export function createNarrator({
     const sceneKeys = Object.keys(OPENING_SCENES);
     session.openingScene = session.openingScene || sceneKeys[Math.floor(random() * sceneKeys.length)];
     session.decisionsThisInterlude = 0;
+    session.momentsThisInterlude = [];
     const owner = getDecisionOwner('politician', context.players, context.attributesByPlayer);
     const ownerName = characterNameFor(owner, context);
     session.pendingDecision = { attribute: 'politician', owner, ownerName, options: FACTION_OPTIONS };
@@ -605,6 +629,7 @@ export function createNarrator({
     session.faction = faction;
     session.openingCombatStarted = true;
     session.decisionsThisInterlude = 0;
+    session.momentsThisInterlude = [];
     recordChoice(session, context, faction === 'enforcers' ? 'side with the Enforcers' : 'side with the Rebels');
 
     const other = faction === 'enforcers' ? 'Rebels' : 'Enforcers';
@@ -707,6 +732,7 @@ export function createNarrator({
 
   async function leadIntoFight(session, context, { eventType, intro, lastChoice = null }) {
     session.decisionsThisInterlude = 0;
+    session.momentsThisInterlude = [];
     const encounterIndex = Math.min(TOTAL_ENCOUNTERS - 1, context.encounterIndex);
     const actInfo = session.faction ? getActFor(session.faction, encounterIndex) : null;
     const location = getCombatLocation(session.faction, encounterIndex, 'street');
@@ -734,6 +760,7 @@ export function createNarrator({
 
   async function encounterEnd(session, context) {
     session.decisionsThisInterlude = 0;
+    session.momentsThisInterlude = [];
     const justFinished = Math.max(0, context.encounterIndex - 1);
     const actInfo = session.faction ? getActFor(session.faction, justFinished) : null;
     const defeatedBoss = BOSS_ENCOUNTERS.includes(justFinished) && actInfo ? BOSSES[actInfo.act.boss] : null;

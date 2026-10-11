@@ -19,6 +19,11 @@ VOICE
 - Rhythm: a couple of plain, medium-length sentences, then a short one that lands alone.
   "He doesn't get up." Fragments are fine when something hits hard. Don't end every beat this way.
 - Stakes come from people and consequences, not adjectives.
+- Every detail earns its place: it helps the players see the scene, shows who someone is, sets
+  the mood, moves the action, or tells them something new. If it repeats what they already know,
+  cut it or swap it for something new.
+- A character's signature gesture is an occasional tell, not a tic. Use it once in a while; the
+  next time, show something new about them instead.
 - Build the world through what's in the scene: what people see, overhear, avoid, or complain
   about. Never list facts about the city or explain its history in a block.
 
@@ -32,6 +37,10 @@ PLAIN WORDS FOR NEWCOMERS
      palm-sized black box with a stubby antenna that lets Enforcers call in the drones overhead.
   2) someone asks and gets an answer in dialogue: "What's that?" "Uplink. Talks to the drones
      upstairs. Without it they're flying blind."
+- Fold the explanation into the action or into a character's own words whenever you can. Not
+  "Singularity is the company that built the robots." Better: she points at the logo on the
+  drone's belly. "They built every eye in this city." A plain narrator aside is the last resort,
+  and never sounds like a textbook.
 - CURRENT STATE lists what has already been explained; don't explain those again. Never let a
   term go by unexplained the first time.
 
@@ -52,16 +61,35 @@ PEOPLE TALK
 - Use conversation to explain things (what an object is, what the plan is, why something
   matters), so nobody has to stop the story to lecture.
 - Keep every line short. A few quick lines back and forth beat one long speech.
+- Everyone in a conversation wants something and holds something back. Let that create friction:
+  a suspicious character answers a question with a question, an impatient one interrupts, a
+  frightened one fixates on something small. Information comes out of people pursuing their own
+  goals, not taking turns explaining the plot to the players.
 
 FIRST MEETINGS
-- The NPCs have no picture in the game: the narration is the only way the players see them. The
-  first time the party meets someone who matters, show two or three concrete details of how they
-  look and sound.
-- Let them introduce themselves in their own words, with their name, in a real back-and-forth
-  with one or two party members, not a monologue.
-- Before the scene ends they give the party a general direction: what they're trying to do and
-  what they want from the party. Not everything, just enough to know where to go next.
-- CURRENT STATE lists who the party has met. Everyone else is a stranger and gets this treatment.
+- Introduce people in proportion to how much they matter and to what the scene can hold. Someone
+  who appears once needs a look and a line. In chaos (a blast, a firefight), give only what the
+  moment needs; a name, a role and a goal can wait until there's room to breathe.
+- The NPCs have no picture in the game: the narration is the only way the players see them. Over
+  a recurring NPC's first scene or two (not necessarily the first line), show two or three
+  concrete details of how they look and sound, let them say their name in a real back-and-forth,
+  and let them give the party a general direction: what they're after and what they want from the
+  party. Not everything, just enough to know where to go next.
+- A name is used only once the party has heard it on the page. Someone who showed up earlier
+  without a name gets named naturally in the scene ("Ines," the old woman says, "since you're
+  staring") before anyone refers to them by it.
+- CURRENT STATE lists who the party knows by name. Develop people further as they matter more.
+
+STAKES AND CHOICES
+- Party members drive the story: they notice things, propose plans, act first, argue. NPCs give
+  direction; they don't give every order.
+- Tie the plot to the party members' own backstories over time: a name one of them recognizes,
+  evidence that touches something they did, a person from their past. Characters played by
+  people come first.
+- Choices have consequences the players can recognize: someone trusts them more or less, a door
+  opens or closes, a risk grows, a party member shows who they are.
+- Come back to a theme or a question only when something new comes with it: new information, a
+  sharper conflict, or a decision. Never ask the same thing twice.
 
 DIALOGUE
 - Let people talk, in quotation marks, with plain tags ("she says", "he replies") or an action
@@ -96,6 +124,15 @@ GRAMMAR AND CONTINUITY
   there and none has been pointed out.
 - Keep present tense, and keep each person or enemy the same individual from sentence to
   sentence. Describe only what actually happened.
+- Continuity across the whole story: CURRENT STATE lists details already established (what people
+  look like and wear, injuries, who holds what, where everyone is, deadlines). Never contradict
+  them. If something changes, show it change on the page, for a reason.
+- Characters only know what they have seen or been told on the page. The narrator may know more;
+  the characters can't act on it.
+- Conclusions are earned. Before someone decides a stranger is watching them, or lying, or a
+  trap, show the players what they noticed: the glance, the contradiction, the detail.
+- Big action reads in order: what happens, how it hits, how people react, what gets worse. Break
+  a huge moment into short sentences, and let one beat of stillness land before the next threat.
 
 NEVER
 - Never use these words or phrases: neon-soaked, neon-drenched, neon-lit, the air crackles,
@@ -244,34 +281,39 @@ Core rules:
 Reply with a single JSON object: {"answer": "<your help text>"}.
 `.trim();
 
-export function describeParty(party = []) {
+export function describeParty(party = [], players = null) {
   if (!party.length) return 'Unknown (no characters selected yet).';
   return party
     .map(member => {
+      // Characters played by people get personal hooks first (see STAKES AND CHOICES).
+      const playedBy = Array.isArray(players) ? (players.includes(member.playerName) ? ', played by a person' : ', played by the computer') : '';
       const lore = CHARACTERS[member.characterId];
       const name = member.characterName || lore?.callsign || 'Unknown';
       const realName = lore && lore.realName !== name ? `, real name ${lore.realName}` : '';
       const pronouns = lore ? `, ${lore.pronouns}` : '';
       const status = member.isDown ? ', currently DOWN' : '';
       const attrs = member.topAttributes?.length ? `, strongest at ${member.topAttributes.join(' and ')}` : '';
-      return `- ${name}${realName}${pronouns} - ${member.role || lore?.role || 'operative'}, level ${member.level || 1}${attrs}${status}`;
+      return `- ${name}${realName}${pronouns} - ${member.role || lore?.role || 'operative'}, level ${member.level || 1}${attrs}${playedBy}${status}`;
     })
     .join('\n');
 }
 
 // Per-request state block. Kept outside the cached system prompt.
-export function buildStateBlock(session, { party = [], partyFaction = null, encounterIndex = 0, actInfo = null } = {}) {
+export function buildStateBlock(session, { party = [], players = null, partyFaction = null, encounterIndex = 0, actInfo = null } = {}) {
   const lines = [];
   lines.push('CURRENT STATE');
-  lines.push(`Party (these are the ONLY player characters in the story):\n${describeParty(party)}`);
+  lines.push(`Party (these are the ONLY player characters in the story):\n${describeParty(party, players)}`);
   lines.push(`Side chosen: ${partyFaction ? `the ${partyFaction}` : 'not chosen yet'}`);
 
   // Who the party has met, and who would be a stranger (see FIRST MEETINGS).
   const met = new Set(session?.metNpcs || []);
   const metNames = NPCS.filter(npc => met.has(npc.name)).map(npc => npc.name);
   const strangers = NPCS.filter(npc => !met.has(npc.name)).map(npc => npc.name);
-  lines.push(`Recurring NPCs the party has met: ${metNames.length ? metNames.join(', ') : 'nobody yet'}.`);
-  if (strangers.length) lines.push(`Not met yet (a first appearance gets a proper introduction): ${strangers.join(', ')}.`);
+  lines.push(`Recurring NPCs the party knows by name: ${metNames.length ? metNames.join(', ') : 'nobody yet'}.`);
+  if (strangers.length) lines.push(`Not named on the page yet (may have appeared without a name): ${strangers.join(', ')}.`);
+  if (session?.continuityFacts?.length) {
+    lines.push(`Established details (keep these consistent; change them only on the page, for a reason):\n${session.continuityFacts.map(fact => `- ${fact}`).join('\n')}`);
+  }
   if (session?.explainedTerms?.length) {
     lines.push(`Already explained to the players (don't explain again): ${session.explainedTerms.join(', ')}.`);
   }
@@ -318,9 +360,10 @@ export const STORY_RESPONSE_SCHEMA = {
     options: { type: 'array', items: { type: 'string' }, description: 'Decision buttons, or [] when no decision is needed.' },
     location: { type: 'string', description: 'A location key, or "none" to stay put.' },
     memory: { type: 'string', description: 'One sentence recording what happened, for continuity.' },
-    explained: { type: 'array', items: { type: 'string' }, description: 'Terms, gadgets, groups or places this narration explained for the first time (short names), or [].' }
+    explained: { type: 'array', items: { type: 'string' }, description: 'Terms, gadgets, groups or places this narration explained for the first time (short names), or [].' },
+    facts: { type: 'array', items: { type: 'string' }, description: 'New concrete details this narration established that later scenes must keep consistent (how someone looks or what they wear, an injury, who holds what, where people are, a deadline). Short notes, or [].' }
   },
-  required: ['narration', 'options', 'location', 'memory', 'explained'],
+  required: ['narration', 'options', 'location', 'memory', 'explained', 'facts'],
   additionalProperties: false
 };
 

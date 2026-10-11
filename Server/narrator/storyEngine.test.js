@@ -9,6 +9,7 @@ import {
   FACTION_OPTIONS
 } from './storyEngine.js';
 import { createMockProvider } from './providers/mock.js';
+import { STORY_SYSTEM_PROMPT } from './prompts.js';
 
 const quietLogger = { log: () => {}, warn: () => {} };
 
@@ -456,7 +457,7 @@ describe('first meetings and plain words', () => {
     const prompt = lastPrompt(provider);
     expect(prompt).toMatch(/meeting them for the first time/);
     expect(prompt).toMatch(/introduce themselves by name/);
-    expect(prompt).toMatch(/Not met yet[^\n]*Commander Rhea Vance/);
+    expect(prompt).toMatch(/Not named on the page yet[^\n]*Commander Rhea Vance/);
     expect(narrator.getSession('r1').metNpcs).toContain('Commander Rhea Vance');
   });
 
@@ -468,7 +469,7 @@ describe('first meetings and plain words', () => {
     const prompt = lastPrompt(provider);
     expect(prompt).toMatch(/Commander Rhea Vance pulls the party aside/);
     expect(prompt).toMatch(/what they want from the party next/);
-    expect(prompt).toMatch(/Recurring NPCs the party has met: Commander Rhea Vance/);
+    expect(prompt).toMatch(/Recurring NPCs the party knows by name: Commander Rhea Vance/);
     // Already met: no second introduction.
     expect(prompt).not.toMatch(/first time the party meets Commander Rhea Vance/);
   });
@@ -506,10 +507,76 @@ describe('first meetings and plain words', () => {
   it('has the offline narrator introduce the leader too, then brief the party after the first fight', async () => {
     const narrator = createNarrator({ provider: createMockProvider(), logger: quietLogger, personalMoments: false, random: () => 0 });
     const joined = await narrator.handleEvent({ room: 'r1', eventType: 'choice_made', data: { faction: 'rebels' }, context: context() });
+    // Either hand-written introduction: how she looks, her name, what she wants.
     expect(joined.response).toMatch(/Rhea Vance/);
-    expect(joined.response).toMatch(/I run this cell/);
+    expect(joined.response).toMatch(/glows amber/);
+    expect(joined.response).toMatch(/prove|Proof/);
     const after = await narrator.handleEvent({ room: 'r1', eventType: 'encounter_end', context: context({ encounterIndex: 1 }) });
     expect(after.response).toMatch(/Rhea Vance/);
     expect(after.response).toMatch(/surveillance grid|The Architect/);
+  });
+});
+
+describe('continuity and progression', () => {
+  const lastPrompt = (provider) => provider.calls[provider.calls.length - 1].messages[0].content;
+
+  it('keeps the details a scene established and hands them to the next scene', async () => {
+    const provider = scriptedProvider([beat({ options: [], facts: ['Pike: wiry, stained vest, cigarette'] }), beat()]);
+    const narrator = createNarrator({ provider, logger: quietLogger, personalMoments: false });
+    await narrator.handleEvent({ room: 'r1', eventType: 'choice_made', data: { faction: 'rebels' }, context: context() });
+    await narrator.handleEvent({ room: 'r1', eventType: 'encounter_end', context: context({ encounterIndex: 1 }) });
+    const prompt = lastPrompt(provider);
+    expect(prompt).toMatch(/Established details[^\n]*\n- Pike: wiry, stained vest, cigarette/);
+    expect(prompt).toMatch(/explained, facts/);
+  });
+
+  it('tells the model which party members are played by people', async () => {
+    const provider = scriptedProvider([beat()]);
+    const narrator = createNarrator({ provider, logger: quietLogger });
+    await narrator.handleEvent({ room: 'r1', eventType: 'game_start', context: context({ players: ['bryson'], bots: ['sean'] }) });
+    const prompt = lastPrompt(provider);
+    expect(prompt).toMatch(/Shipment[^\n]*played by a person/);
+    expect(prompt).toMatch(/Ghost Shell[^\n]*played by the computer/);
+  });
+
+  it('gives each person at most one personal moment between fights', async () => {
+    const provider = scriptedProvider([beat()]);
+    // Moments after every decision too (random 0), so only the once-per-stretch rule stops them.
+    const narrator = createNarrator({ provider, logger: quietLogger, decisionsPerInterlude: 3, random: () => 0 });
+    const solo = (overrides = {}) => context({ players: ['bryson'], bots: ['sean'], ...overrides });
+    await narrator.handleEvent({ room: 'r1', eventType: 'choice_made', data: { faction: 'rebels' }, context: solo() });
+    const first = await narrator.handleEvent({ room: 'r1', eventType: 'encounter_end', context: solo({ encounterIndex: 1 }) });
+    expect(first.dialogue?.playerName).toBe('bryson');
+    narrator.answerDialogue('r1', { playerName: 'bryson', dialogueId: first.dialogue.id, optionId: 'honest' });
+    const next = await narrator.handleEvent({ room: 'r1', eventType: 'choice_made', data: { choice: 'Go left' }, context: solo({ encounterIndex: 1 }) });
+    expect(next.dialogue).toBeNull();
+    expect(next.options).toHaveLength(2);
+  });
+
+  it('asks the moment writer to move on from earlier moments and to play answers out in the scene', async () => {
+    const moment = {
+      kind: 'reply', npc: 'A dock foreman', intro: 'A dock foreman squints at Shipment. "Union or company?"',
+      options: [
+        { approach: 'honest', text: 'Neither.', told: 'x', reaction: 'y', lead: 'The gate is open.' },
+        { approach: 'defiant', text: 'Move.', told: 'x', reaction: 'y', lead: 'Security knows.' },
+        { approach: 'sly', text: 'Union.', told: 'x', reaction: 'y', lead: 'A walkout is planned.' }
+      ]
+    };
+    const provider = scriptedProvider([beat(), beat(), moment]);
+    const narrator = createNarrator({ provider, logger: quietLogger, random: () => 0.1 });
+    narrator.getSession('r1').personalMoments.push({ npc: 'Ines Calder', by: 'Shipment', reply: 'Money, mostly.', tone: 'honest', lead: null });
+    await narrator.handleEvent({ room: 'r1', eventType: 'choice_made', data: { faction: 'rebels' }, context: context({ players: ['bryson'], bots: ['sean'] }) });
+    await narrator.handleEvent({ room: 'r1', eventType: 'encounter_end', context: context({ players: ['bryson'], bots: ['sean'], encounterIndex: 1 }) });
+    const request = provider.calls.find(call => call.messages[0].content.includes('personal moment that happens right after'));
+    expect(request.messages[0].content).toMatch(/earlier personal moments[^\n]*\n- Ines Calder \/ Shipment: "Money, mostly\."/);
+    expect(request.messages[0].content).toMatch(/never a summary like "Shipment admits/);
+    expect(request.messages[0].content).toMatch(/reveal something about them or change the relationship/);
+  });
+
+  it('carries the style rules from the critique', () => {
+    expect(STORY_SYSTEM_PROMPT).toMatch(/STAKES AND CHOICES/);
+    expect(STORY_SYSTEM_PROMPT).toMatch(/Conclusions are earned/);
+    expect(STORY_SYSTEM_PROMPT).toMatch(/signature gesture is an occasional tell/);
+    expect(STORY_SYSTEM_PROMPT).toMatch(/A name is used only once the party has heard it/);
   });
 });

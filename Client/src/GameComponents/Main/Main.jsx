@@ -204,6 +204,8 @@ const STORY_READING_EXTRA_MS = 2500;
 const TURN_ADVANCE_AFTER_TYPING_MS = 1000;
 // Real models can take several seconds for a story beat; fall back only if the server is truly stuck.
 const POST_COMBAT_NARRATION_TIMEOUT_MS = 25000;
+// Manual pacing: how long the game waits for the host to tap past the story before moving on anyway.
+const MANUAL_NARRATION_MAX_WAIT_MS = 30 * 60 * 1000;
 
 // The screens a narration is shown in: paragraphs for the story, sentences in a fight (see
 // shared/text/narrationScreens.js). Dialogue is never split inside a quotation.
@@ -264,6 +266,8 @@ function Main() {
         connectedPlayers,
         serverStoryState,
         setServerStoryState,
+        narrationManual = false,
+        isAdmin,
         combatState,
         bots = []
     } = useGameContext();
@@ -1005,6 +1009,12 @@ function Main() {
             await new Promise(resolve => setTimeout(resolve, waitMs));
         }
 
+        // Manual pacing: the story is done only once the host has tapped past its last part.
+        const manualDeadline = Date.now() + MANUAL_NARRATION_MAX_WAIT_MS;
+        while (manualNarrationRef.current && (narrationTypingRef.current || pendingNarrationRef.current !== null) && Date.now() < manualDeadline) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+        }
+
         uniqueRequestIds.forEach((requestId) => {
             aiTypingCompletionByRequestIdRef.current.delete(requestId);
         });
@@ -1209,6 +1219,25 @@ function Main() {
     const pendingIsStoryRef = useRef(false);
     const narrationIsStoryRef = useRef(false);
     const narrationHoldTimerRef = useRef(null);
+    // Manual pacing (the host's choice in the lobby): story screens wait for the host's tap, which
+    // the server relays to everyone as `narration_advance`.
+    const manualNarrationRef = useRef(false);
+    useEffect(() => { manualNarrationRef.current = !!narrationManual; }, [narrationManual]);
+    const [awaitingAdvance, setAwaitingAdvance] = useState(false);
+    const [advanceSignal, setAdvanceSignal] = useState(0);
+    useEffect(() => {
+        const handleAdvance = () => setAdvanceSignal(count => count + 1);
+        socket.on('narration_advance', handleAdvance);
+        return () => socket.off('narration_advance', handleAdvance);
+    }, [socket]);
+    const showTapToContinue = narrationManual && awaitingAdvance && narrationIsStoryRef.current;
+    const tapToContinueLabel = isAdmin ? 'Tap to continue' : 'Waiting for the host to continue';
+    // A tap on the story (not on a choice) moves it along. Only the host's counts while they're here.
+    const handleNarrationTap = (event) => {
+        if (!narrationManual || !narrationIsStoryRef.current) return;
+        if (event.target.closest?.('button')) return;
+        socket.emit('advance_narration', { room });
+    };
 
     const showNextNarration = () => {
         clearTimeout(narrationHoldTimerRef.current);
@@ -1272,6 +1301,15 @@ function Main() {
             return;
         }
 
+        // Manual pacing: a story screen stays up until the host taps (see the next effect). The
+        // last one's choices show right away; what comes after waits for the tap.
+        if (narrationManual && narrationIsStoryRef.current) {
+            if (currentSentenceIndex >= aiSentences.length - 1 && pendingNarrationRef.current === null) setAiNarrationComplete(true);
+            setAwaitingAdvance(true);
+            return;
+        }
+        setAwaitingAdvance(false);
+
         if (currentSentenceIndex >= aiSentences.length - 1) {
             if (narrationTypingRef.current) {
                 narrationTypingRef.current = false;
@@ -1294,7 +1332,34 @@ function Main() {
         }, Math.max(pauseMs, minimumLeftMs));
 
         return () => clearTimeout(timer);
-    }, [aiSentences, currentSentenceIndex, typingIndex]);
+    }, [aiSentences, currentSentenceIndex, typingIndex, narrationManual]);
+
+    // The host tapped the story (relayed to everyone by the server): finish typing this screen,
+    // or move on to the next one, or past the last one.
+    useEffect(() => {
+        if (!advanceSignal) return;
+        const currentSentence = aiSentences[currentSentenceIndex] || '';
+        if (!currentSentence || !narrationIsStoryRef.current) return;
+        if (typingIndex < currentSentence.length) {
+            setTypingIndex(currentSentence.length);
+            return;
+        }
+        setAwaitingAdvance(false);
+        if (currentSentenceIndex < aiSentences.length - 1) {
+            sentenceStartedAtRef.current = Date.now();
+            setCurrentSentenceIndex((prevIndex) => prevIndex + 1);
+            setTypingIndex(0);
+            return;
+        }
+        if (narrationTypingRef.current) {
+            narrationTypingRef.current = false;
+            // The tap was the reading time: what's waiting shows at once.
+            narrationDoneAtRef.current = 0;
+            sentenceStartedAtRef.current = 0;
+        }
+        if (pendingNarrationRef.current === null) setAiNarrationComplete(true);
+        showNextNarration();
+    }, [advanceSignal]);
 
     useEffect(() => {
         if (!isStoryStateHydrated) return;
@@ -2684,7 +2749,7 @@ function Main() {
                 </div>
             </div>
 
-            <div className="AI-script">
+            <div className={`AI-script${narrationManual ? ' manual-narration' : ''}`} onClick={handleNarrationTap}>
                 <div className="ai-header">
                     <span className={`ai-status ${aiBusy ? '' : ''}`}>
                         {aiBusy ? '' : 'Ready'}
@@ -2693,6 +2758,7 @@ function Main() {
                 <span className="ai-text">
                     {displayText}
                 </span>
+                {showTapToContinue && <div className="narration-continue" role="status">{tapToContinueLabel}</div>}
                 <div className='Response'>
                     {aiBusy && (
                         <div className="ai-thinking-overlay">
@@ -2753,13 +2819,14 @@ function Main() {
             </div>
             <div className={`inventory ${shouldShowMobileAiOverlay ? 'mobile-ai-active' : ''} ${gamePhase === 'combat' ? '' : 'story-phase'}`}>
                 <div className="mobile-ai-overlay" aria-hidden={!shouldShowMobileAiOverlay}>
-                    <div className="mobile-ai-overlay-content">
+                    <div className="mobile-ai-overlay-content" onClick={handleNarrationTap}>
                         {aiBusy && (
                             <div className="mobile-ai-overlay-status">The DM is crafting the story...</div>
                         )}
                         <div className="mobile-ai-overlay-text">
                             {displayText}
                         </div>
+                        {showTapToContinue && <div className="narration-continue" role="status">{tapToContinueLabel}</div>}
                         {hasDynamicAiChoices && (
                             <div className="mobile-ai-overlay-choices">
                                 <div className="mobile-ai-choice-owner">

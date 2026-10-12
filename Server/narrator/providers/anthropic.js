@@ -5,6 +5,10 @@ import Anthropic from '@anthropic-ai/sdk';
 
 const EFFORT_BY_KIND = { story: 'medium', combat: 'low', rules: 'low', summary: 'low' };
 
+// Haiku models don't take an effort setting: sending one is a 400 ("This model does not support
+// the effort parameter"), which made every recap and rules answer fall back in production.
+export const supportsEffort = (model) => !/haiku/i.test(String(model || ''));
+
 // The SDK itself retries busy/overloaded/rate-limited replies (429, 5xx, 529) with backoff and
 // honors retry-after. Two retries matches the Gemini provider.
 export const ANTHROPIC_MAX_RETRIES = 2;
@@ -39,7 +43,7 @@ export function createAnthropicProvider({
         system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
         messages,
         output_config: {
-          effort: EFFORT_BY_KIND[kind] || 'low',
+          ...(supportsEffort(model) ? { effort: EFFORT_BY_KIND[kind] || 'low' } : {}),
           ...(schema ? { format: { type: 'json_schema', schema } } : {})
         }
       });

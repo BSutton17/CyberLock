@@ -42,7 +42,7 @@ const character = (id, name, speed) => ({
   weapon: { name: 'Energy Sword', damage: 9, range: 1 }
 });
 
-function Harness({ socket, playerName = 'bryson', serverStoryState: initialStoryState = null, initialCombat = null }) {
+function Harness({ socket, playerName = 'bryson', serverStoryState: initialStoryState = null, initialCombat = null, narrationManual = false }) {
   const [serverStoryState, setServerStoryState] = useState(initialStoryState);
   const [playerCharacters, setPlayerCharacters] = useState({
     bryson: character('aggressive_dps_2', 'Leo', 40),
@@ -74,6 +74,7 @@ function Harness({ socket, playerName = 'bryson', serverStoryState: initialStory
     enemies, setEnemies,
     turnOrder, setTurnOrder,
     isAdmin: true,
+    narrationManual,
     setScreen: () => {},
     getCharacterImage: () => '/favicon.png',
     getEnemyImage: () => '/favicon.png',
@@ -415,6 +416,29 @@ describe('Main (combat)', () => {
     // Typed out letter by letter; every letter must arrive exactly once.
     await waitFor(() => expect(document.querySelector('.ai-text').textContent).toBe('Leo ducks under the baton.'), { timeout: 3000 });
   });
+
+  it('holds each story screen until the host taps, with manual narration', async () => {
+    const socket = createFakeSocket();
+    render(<Harness socket={socket} playerName="sean" narrationManual />);
+    const shown = () => document.querySelector('.ai-text').textContent;
+    const first = 'The checkpoint line moves slower than a Monday, and the drones overhead hum like they have somewhere better to be. '.repeat(2).trim();
+    // Too long to share one screen with the first part.
+    const next = '"Next," the guard says, waving the line forward without looking up from his screen.';
+    act(() => {
+      socket.serverSends('ai_message', { requestId: 'x', eventType: 'encounter_end', response: `${first}\n\n${next}`, options: null, startCombat: false });
+    });
+    await waitFor(() => expect(shown()).toBe(first), { timeout: 20000 });
+    expect((await screen.findAllByText('Tap to continue')).length).toBeGreaterThan(0);
+    // Well past the automatic pace, it's still there.
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    expect(shown()).toBe(first);
+
+    // The host's tap goes to the server, which tells everyone to move on.
+    fireEvent.click(document.querySelector('.AI-script'));
+    expect(socket.emitted.some(({ event }) => event === 'advance_narration')).toBe(true);
+    act(() => socket.serverSends('narration_advance', { by: 'bryson' }));
+    await waitFor(() => expect(shown()).toBe(next), { timeout: 5000 });
+  }, 45000);
 
   it("lays story dialogue out like a book: each speaker on their own line, never split mid-line", async () => {
     const socket = createFakeSocket();

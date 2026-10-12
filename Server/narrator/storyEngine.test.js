@@ -580,3 +580,18 @@ describe('continuity and progression', () => {
     expect(STORY_SYSTEM_PROMPT).toMatch(/A name is used only once the party has heard it/);
   });
 });
+
+describe('keeping the story simple', () => {
+  it('tells the model to keep one clear goal, plain words and simple options', async () => {
+    const provider = scriptedProvider([beat()]);
+    const narrator = createNarrator({ provider, logger: quietLogger, personalMoments: false });
+    await narrator.handleEvent({ room: 'r1', eventType: 'choice_made', data: { faction: 'rebels' }, context: context() });
+    await narrator.handleEvent({ room: 'r1', eventType: 'encounter_end', context: context({ encounterIndex: 1 }) });
+    const request = provider.calls[provider.calls.length - 1];
+    expect(request.system).toMatch(/^KEEP IT SIMPLE$/m);
+    expect(request.system).toMatch(/No side quests out of nowhere/);
+    expect(request.system).toMatch(/No technobabble/);
+    expect(request.messages[0].content).toMatch(/grow out of the current goal and what just happened/);
+    expect(request.messages[0].content).toMatch(/plain everyday action under 8 words/);
+  });
+});

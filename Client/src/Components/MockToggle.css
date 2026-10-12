@@ -39,6 +39,11 @@
     opacity: 0.9;
 }
 
+/* The narration switch sits just above the mock switch. */
+.mock-toggle.pacing-toggle {
+    bottom: 48px;
+}
+
 .mock-toggle.mock-toggle-inline {
     position: static;
     align-self: center;

@@ -16,6 +16,7 @@ import MockToggle from "../Components/MockToggle";
 import { FaRotate } from "react-icons/fa6";
 import { createMusic } from "../Utils/music";
 import PartyStatus from "../Components/PartyStatus";
+import NarrationPacingToggle from "../Components/NarrationPacingToggle";
 
 const getIsMobilePortrait = () => {
   if (typeof window === 'undefined') {
@@ -241,6 +242,7 @@ function HomeScreen() {
       {isJoining && <PartyStatus />}
       {screen !== 'main' && <SettingsMenu />}
       <MockToggle inRoom={isJoining && screen !== 'main'} />
+      <NarrationPacingToggle inRoom={isJoining && screen !== 'main'} />
       {connectionStatus === 'reconnecting' && (
         <div className="connection-banner" role="status">Connection lost. Reconnecting...</div>
       )}

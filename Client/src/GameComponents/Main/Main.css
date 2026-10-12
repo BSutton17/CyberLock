@@ -1895,3 +1895,28 @@ p {
   text-align: center;
   white-space: pre-line;
 }
+
+/* Manual pacing: the host taps the story to move it along. */
+.AI-script.manual-narration {
+    cursor: pointer;
+}
+
+.narration-continue {
+    align-self: flex-end;
+    margin-top: 0.5rem;
+    font-size: 0.8em;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #c4b5fd;
+    animation: narration-continue-pulse 1.6s ease-in-out infinite;
+}
+
+.narration-continue::after {
+    content: ' \25B8';
+}
+
+@keyframes narration-continue-pulse {
+    0%, 100% { opacity: 0.45; }
+    50% { opacity: 1; }
+}

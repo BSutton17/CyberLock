@@ -6,6 +6,7 @@ import io from 'socket.io-client';
 import { CHARACTER_IMAGE_MAP, ENEMY_IMAGE_MAP, getCharacterImage, getEnemyImage } from './imageMaps';
 import { useAuth, getStoredToken } from './AuthContext';
 import { API_URL } from '../config';
+import { keepServerAwake } from '../Utils/keepAwake';
 
 const GameContext = createContext();
 const DEBUG_LOG_LEVEL = 'quiet';
@@ -38,6 +39,10 @@ export const GameProvider = ({ children }) => {
     const [storySummary, setStorySummary] = useState(null);
     const [isAdmin, setAdmin] = useState(false);
     const [room, setRoom] = useState("");
+    // While in a game, keep the server from going to sleep under us (see Utils/keepAwake.js).
+    useEffect(() => (room ? keepServerAwake(API_URL) : undefined), [room]);
+    // The host's choice: the story advances by itself, or only when the host taps it.
+    const [narrationManual, setNarrationManual] = useState(false);
     const [displayGame, setDisplayGame] = useState(false);
     const [screen, setScreen] = useState("waiting"); 
     const [playerName, setPlayerName] = useState("");
@@ -157,6 +162,7 @@ export const GameProvider = ({ children }) => {
         players, setPlayers,
         bots, setBots,
         narratorMock, setNarratorMock,
+        narrationManual, setNarrationManual,
         storySummary, setStorySummary,
         isAdmin, setAdmin,
         room, setRoom,

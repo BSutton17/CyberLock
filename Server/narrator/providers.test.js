@@ -152,11 +152,18 @@ describe('anthropic provider (Claude)', () => {
     expect(request.max_tokens).toBeGreaterThan(900);
   });
 
-  it('uses the combat model at low effort for combat lines', async () => {
+  it('sends recaps and rules help to the quicker model, without an effort setting Haiku would reject', async () => {
     const { client, create } = fakeClient({ stop_reason: 'end_turn', content: [{ type: 'text', text: '{}' }] });
     const provider = createAnthropicProvider({ client, storyModel: 'claude-sonnet-5-5', combatModel: 'claude-haiku-4-5' });
-    await provider.generate({ kind: 'combat', system: 's', messages: [] });
+    await provider.generate({ kind: 'summary', system: 's', messages: [], schema: { type: 'object' } });
     expect(create.mock.calls[0][0].model).toBe('claude-haiku-4-5');
+    expect(create.mock.calls[0][0].output_config).toEqual({ format: { type: 'json_schema', schema: { type: 'object' } } });
+  });
+
+  it('keeps low effort for the quicker model when it supports it', async () => {
+    const { client, create } = fakeClient({ stop_reason: 'end_turn', content: [{ type: 'text', text: '{}' }] });
+    const provider = createAnthropicProvider({ client, storyModel: 'claude-sonnet-5-5', combatModel: 'claude-sonnet-5-5' });
+    await provider.generate({ kind: 'rules', system: 's', messages: [] });
     expect(create.mock.calls[0][0].output_config.effort).toBe('low');
   });
 

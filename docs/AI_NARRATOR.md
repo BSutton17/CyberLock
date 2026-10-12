@@ -116,6 +116,11 @@ repeat itself. Add situations or lines there to give it more range.
 The style guide (`STYLE_GUIDE` in `Server/narrator/prompts.js`) holds the rules every story beat
 follows. The ones that shape it most:
 
+- **Keep it simple.** One clear goal at a time (the act's goal); every scene follows from the
+  last or moves toward it, interruptions show where they came from and get resolved quickly, no
+  technobabble, plans of at most two steps, and decision options in plain everyday words. Decision
+  scenes grow out of the goal; the skill whose turn it is decides how they're handled, never
+  invents a new problem.
 - **Show, don't tell.** Nobody's feelings, personality or motives are stated; they come out in
   what people do, say, avoid and let slip.
 - **Plain words for newcomers.** Players are assumed to know nothing about the world. Every term,
@@ -217,3 +222,13 @@ room. In mock mode, or if the model fails, each paragraph is built from the game
 The narrator tests in `Server/narrator/storyEngine.test.js` use a scripted fake model and assert on
 the prompt contents. They are the quickest way to check a prompt change: edit, then run
 `npm test --prefix Server`.
+
+## Pacing: automatic or manual
+
+On the connect screen the host picks how the story advances. **Automatic** moves on by itself
+(each screen stays up long enough to read). **Manual** holds each story screen until the host
+taps the narration; the server relays the tap (`advance_narration` / `narration_advance`) so
+everyone moves together, and if the host has dropped out anyone can tap. A tap while text is
+still typing shows the rest of it. Choices appear as soon as the last screen is typed; a fight
+starts only once the host taps past the narration leading into it. Fights themselves always
+narrate automatically, since the server times turns around them.

@@ -921,6 +921,11 @@
         line-height: 1.25 !important;
     }
 
+    body .narration-continue {
+        font-size: 28px !important;
+        margin-top: 8px;
+    }
+
     body .mobile-ai-choice-owner,
     body .mobile-ai-overlay-status,
     body .dialogue-choices .dialogue-countdown {

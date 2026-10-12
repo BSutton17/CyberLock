@@ -419,7 +419,7 @@ export function createNarrator({
       decisionOptions.length ? `Right after this moment the group decides between: ${decisionOptions.map(option => `"${option}"`).join(' and ')}. The moment must be about something else entirely: a different question, a different subject, nothing that makes that choice early.` : '',
       `Write a short personal moment that happens right after that scene, for ${who}${member?.role ? ` (${member.role})` : ''}. Either someone in the scene turns to ${who} and asks them something pointed (kind "reply"), or ${who} gets a chance to ask someone something (kind "ask"). Pick someone who fits the scene: a named NPC from the cast or a vivid unnamed one ("a checkpoint guard"). Never another party member.`,
       'intro: one or two sentences in the narration voice. For "reply" it ends with the question in quotes; for "ask" it ends by giving them the chance to ask.',
-      `options: exactly three answers ${who} could give, each a genuinely different approach (approach "honest", "defiant" and "sly"): not three wordings of one idea. Each under 12 words, in ${who}'s voice (for "ask", a short phrase like "Ask who paid for the van."). Never more than three.`,
+      `options: exactly three answers ${who} could give, each a genuinely different approach (approach "honest", "defiant" and "sly"): not three wordings of one idea. Each under 12 words, in plain everyday words, in ${who}'s voice (for "ask", a short phrase like "Ask who paid for the van."). Never more than three.`,
       `For every option: told is the answer happening in the scene, ${who} saying it in quotes with a small action (one or two sentences), never a summary like "${who} admits..."; reaction is how the other person reacts (two or three sentences) and it must reveal something about them or change the relationship, not just acknowledge the answer; lead is the story thread the answer starts, one sentence stated as something now true (a patrol on their trail, a shortcut, a favor owed, a name to chase, an enemy made). Every option\'s lead must point somewhere different.`,
       'No numbers, no game mechanics. Return JSON only.'
     ].filter(Boolean).join('\n\n');
@@ -694,8 +694,9 @@ export function createNarrator({
       dialogue
         ? `Then set up the next decision: describe the situation, which calls for ${decision.attribute[0].toUpperCase()}${decision.attribute.slice(1)} skills (${DECISION_ATTRIBUTES[decision.attribute] || 'their expertise'}), so it will be ${ownerName}'s call. Do NOT say whose call it is or ask for the choice yet: a short moment with ${dialogue.npc} and ${dialogue.characterName} comes first and is added after your narration.`
         : `Then present the next decision. It is ${ownerName}'s call, because the situation calls for ${decision.attribute[0].toUpperCase()}${decision.attribute.slice(1)} skills: ${DECISION_ATTRIBUTES[decision.attribute] || 'their expertise'}.`,
+      'The situation must grow out of the current goal and what just happened, not out of nowhere: the skill is how they handle it, not a reason to invent a new problem. Keep it simple: one clear problem, explained in plain words.',
       'Before the choice, let the people in the scene talk it through: a few short lines from party members and NPCs that show what is at stake. Show, don\'t tell.',
-      'Write exactly two options that play to that skill, each under 9 words, leading in different directions.',
+      'Write exactly two options that play to that skill, each a plain everyday action under 8 words (no jargon, one action each), leading in different directions.',
       'Set location to the location key where this scene happens (not "boss" or "shop"), or "none" to stay put.'
     ].join('\n');
 

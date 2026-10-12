@@ -509,6 +509,7 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
       io.to(code).emit('admin_changed', { admin: roomState.admin });
       emitBots(code, socket);
       socket.emit('narrator_mode', { mock: !!roomState.narratorMock });
+      socket.emit('narration_pacing', { manual: !!roomState.narrationManual });
       emitPresence(code);
       // A second person joining ends a single-player pause.
       if (roomState.paused && humanPlayers(roomState).length !== 1) setPaused(code, false);
@@ -729,6 +730,32 @@ export function registerGameSockets({ io, state, narrator, timing, logger = cons
       io.to(room).emit('narrator_mode', { mock: roomState.narratorMock });
       logger.log?.(`[AI] Room ${room} narrator: ${roomState.narratorMock ? 'mock' : narrator?.providerName || 'default'}`);
       reply({ ok: true, mock: roomState.narratorMock });
+    });
+
+    // How the story advances: by itself (automatic) or only when the host taps it (manual).
+    socket.on('set_narration_pacing', ({ room: payloadRoom, manual } = {}, ack) => {
+      const room = currentRoom(payloadRoom);
+      const reply = (payload) => { if (typeof ack === 'function') ack(payload); };
+      if (!room) return reply({ ok: false, message: 'You are not in a game.' });
+      const roomState = state.rooms[room];
+      if (roomState.admin !== me()) return reply({ ok: false, message: 'Only the host can change how the story advances.' });
+      roomState.narrationManual = !!manual;
+      io.to(room).emit('narration_pacing', { manual: roomState.narrationManual });
+      reply({ ok: true, manual: roomState.narrationManual });
+    });
+
+    // Manual pacing: the host taps to show the next part of the story, on everyone's screen. If
+    // the host has dropped out, anyone can, so the story never gets stuck.
+    socket.on('advance_narration', ({ room: payloadRoom } = {}, ack) => {
+      const room = currentRoom(payloadRoom);
+      const reply = (payload) => { if (typeof ack === 'function') ack(payload); };
+      if (!room) return reply({ ok: false, message: 'You are not in a game.' });
+      const roomState = state.rooms[room];
+      if (!roomState.narrationManual) return reply({ ok: false, message: 'The story advances by itself.' });
+      const hostHere = combat.connectedPlayers(room).includes(roomState.admin);
+      if (roomState.admin !== me() && hostHere) return reply({ ok: false, message: 'The host moves the story along.' });
+      io.to(room).emit('narration_advance', { by: me() });
+      reply({ ok: true });
     });
 
     // The room's admin can fill empty seats with bots while characters are being picked.

@@ -270,13 +270,13 @@ export const VALID_LOCATIONS = Object.keys(LOCATIONS);
 export const DECISION_ATTRIBUTES = {
   politician: 'persuasion, negotiation, alliances, public opinion',
   intimidation: 'threats, pressure, force of presence',
-  scholar: 'research, history, understanding complex systems',
+  scholar: 'knowing history, reading old records, figuring out how things work',
   spy: 'stealth, surveillance, secrecy',
   detective: 'investigation, clues, patterns',
   medic: 'treating injuries, diagnosing, stabilizing people',
   banker: 'money, contracts, prices, economic leverage',
   crook: 'theft, scams, forgery, the criminal underworld',
-  electrician: 'power systems, circuitry, sabotage and repair',
+  electrician: 'power, wiring, shutting things off or getting them running',
   navigator: 'knowing the city, choosing routes and destinations'
 };
 

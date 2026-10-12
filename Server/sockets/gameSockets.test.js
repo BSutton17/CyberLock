@@ -1098,3 +1098,37 @@ describe('pausing a single-player game', () => {
     await silence;
   });
 });
+
+describe('story pacing', () => {
+  it('lets only the host switch to manual, and tells everyone', async () => {
+    const { room, sockets: [a, b] } = await createRoomWith([['u1', 'A'], ['u2', 'B']]);
+    expect(await ack(b, 'set_narration_pacing', { room, manual: true })).toMatchObject({ ok: false });
+    const told = waitFor(b, 'narration_pacing');
+    expect(await ack(a, 'set_narration_pacing', { room, manual: true })).toEqual({ ok: true, manual: true });
+    expect(await told).toEqual({ manual: true });
+
+    // Someone joining later learns the setting.
+    const c = await connect('u3', 'C');
+    const pacing = waitFor(c, 'narration_pacing');
+    await ack(c, 'join_room', room, 'C');
+    expect(await pacing).toEqual({ manual: true });
+  });
+
+  it("relays the host's tap to everyone, and only in manual", async () => {
+    const { room, sockets: [a, b] } = await createRoomWith([['u1', 'A'], ['u2', 'B']]);
+    expect(await ack(a, 'advance_narration', { room })).toMatchObject({ ok: false });
+    await ack(a, 'set_narration_pacing', { room, manual: true });
+    expect(await ack(b, 'advance_narration', { room })).toMatchObject({ ok: false });
+    const advanced = waitFor(b, 'narration_advance');
+    expect(await ack(a, 'advance_narration', { room })).toEqual({ ok: true });
+    expect(await advanced).toEqual({ by: 'A' });
+  });
+
+  it('lets anyone move the story along while the host is gone', async () => {
+    const { room, sockets: [a, b] } = await createRoomWith([['u1', 'A'], ['u2', 'B']]);
+    await ack(a, 'set_narration_pacing', { room, manual: true });
+    a.disconnect();
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(await ack(b, 'advance_narration', { room })).toEqual({ ok: true });
+  });
+});

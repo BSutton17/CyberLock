@@ -43,10 +43,11 @@ describe('personal moments', () => {
     expect(dialogue.kind).toBe('ask');
     expect(dialogue.intro).toMatch(/Livewire has a moment to ask her something/);
     const honest = dialogue.options.find(option => option.id === 'honest');
-    const told = followUpNarration(dialogue, honest, { ownerName: 'Shipment', random: () => 0 });
+    const told = followUpNarration(dialogue, honest, { ownerName: 'Shipment', attribute: 'intimidation', random: () => 0 });
     expect(told).toMatch(/^Livewire asks Ines, gently, what she saw that night\./);
     expect(told).toMatch(/Division van/);
-    expect(told).toMatch(/Shipment's call/);
+    // Back to the group, with why it's Shipment's call.
+    expect(told).toMatch(/Shipment: when it comes to leaning on people, nobody here is better/);
   });
 
   it('fills in the right people for the side the party joined', () => {

@@ -282,6 +282,21 @@ export const DECISION_ATTRIBUTES = {
 
 export const VALID_ATTRIBUTES = Object.keys(DECISION_ATTRIBUTES);
 
+// What each decision attribute is good for, phrased to fit "nobody here is better at ...". Used to
+// say why a decision is someone's call.
+export const SKILL_PHRASES = {
+  politician: 'talking people around',
+  intimidation: 'leaning on people',
+  scholar: 'reading what nobody else can',
+  spy: 'not being seen',
+  detective: 'noticing what doesn\'t fit',
+  medic: 'keeping people alive',
+  banker: 'following the money',
+  crook: 'bending the rules quietly',
+  electrician: 'anything with a wire in it',
+  navigator: 'knowing the streets'
+};
+
 // Opening incidents that work before the party has picked a side.
 export const OPENING_SCENES = {
   market_explosion: 'The Twilight Market, neutral ground where corporate and rebel sympathizers trade side by side. A blast tears through it. A Division drone calls it a terrorist attack, but the scorch marks point outside the market and the Enforcers arrive far too fast. A wounded vendor, Ines Calder, grabs the nearest party member: "They did this. Tell someone what you saw." Enforcers and masked rebels are already trading fire across the wreckage.',

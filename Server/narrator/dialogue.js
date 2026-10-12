@@ -11,6 +11,8 @@
 // its own (see writeDialogue in storyEngine.js). Every moment offers three answers: a straight
 // one, a pushy one and a sly one.
 
+import { SKILL_PHRASES } from './lore.js';
+
 // How an answer changes the NPC's opinion of the party.
 export const TONE_EFFECT = { honest: 1, sly: 0, defiant: -1, silent: 0 };
 
@@ -187,10 +189,11 @@ const SILENT = {
 };
 
 // After the moment, the story turns back to the group's decision.
+// Always with the reason it's their call ({skill}: what they're good at).
 const BACK_TO_THE_GROUP = [
-    'Then it\'s back to the problem in front of them. It\'s {owner}\'s call.',
-    'The others turn back to the matter at hand, and to {owner}, whose call it is.',
-    'There\'s still a decision to make, and it\'s {owner}\'s to make.'
+    'Then it\'s back to the problem in front of them. The others look at {owner}: when it comes to {skill}, nobody here is better.',
+    'The others turn back to the matter at hand, and to {owner}, who knows more about {skill} than any of them.',
+    'There\'s still a decision to make, and it needs someone good at {skill}. That\'s {owner}.'
 ];
 
 const fill = (text, values) => String(text).replace(/\{(\w+)\}/g, (_, key) => values[key] ?? '');
@@ -271,8 +274,9 @@ export function publicDialogue(dialogue) {
 
 /** The narration after a choice: what was said, how the NPC took it, and back to the group. */
 // Separate paragraphs, like a book: the answer, the other person's reaction, back to the group.
-export function followUpNarration(dialogue, option, { ownerName = null, random = Math.random } = {}) {
-    const back = ownerName ? fill(BACK_TO_THE_GROUP[Math.floor(random() * BACK_TO_THE_GROUP.length) % BACK_TO_THE_GROUP.length], { owner: ownerName }) : '';
+export function followUpNarration(dialogue, option, { ownerName = null, attribute = null, random = Math.random } = {}) {
+    const skill = SKILL_PHRASES[attribute] || 'this kind of thing';
+    const back = ownerName ? fill(BACK_TO_THE_GROUP[Math.floor(random() * BACK_TO_THE_GROUP.length) % BACK_TO_THE_GROUP.length], { owner: ownerName, skill }) : '';
     return [option.told, option.reaction, back].map(part => String(part || '').trim()).filter(Boolean).join('\n\n');
 }
 

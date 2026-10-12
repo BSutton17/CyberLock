@@ -984,6 +984,14 @@ function Main() {
         aiTypingCompletionByRequestIdRef.current.set(requestId, Date.now() + estimatedTypingMs);
     };
 
+    // Manual pacing: the story is done only once the host has tapped past its last part.
+    const waitForManualNarration = async () => {
+        const deadline = Date.now() + MANUAL_NARRATION_MAX_WAIT_MS;
+        while (manualNarrationRef.current && (narrationTypingRef.current || pendingNarrationRef.current !== null) && Date.now() < deadline) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+        }
+    };
+
     const waitForNarrationTypingCompletion = async (requestIds = [], extraDelayMs = TURN_ADVANCE_AFTER_TYPING_MS) => {
         const uniqueRequestIds = [...new Set((requestIds || []).filter(Boolean))];
 
@@ -991,6 +999,7 @@ function Main() {
             if (extraDelayMs > 0) {
                 await new Promise(resolve => setTimeout(resolve, extraDelayMs));
             }
+            await waitForManualNarration();
             return;
         }
 
@@ -1009,11 +1018,7 @@ function Main() {
             await new Promise(resolve => setTimeout(resolve, waitMs));
         }
 
-        // Manual pacing: the story is done only once the host has tapped past its last part.
-        const manualDeadline = Date.now() + MANUAL_NARRATION_MAX_WAIT_MS;
-        while (manualNarrationRef.current && (narrationTypingRef.current || pendingNarrationRef.current !== null) && Date.now() < manualDeadline) {
-            await new Promise(resolve => setTimeout(resolve, 200));
-        }
+        await waitForManualNarration();
 
         uniqueRequestIds.forEach((requestId) => {
             aiTypingCompletionByRequestIdRef.current.delete(requestId);
@@ -1278,6 +1283,20 @@ function Main() {
 
         pendingNarrationRef.current = message;
         pendingIsStoryRef.current = !aiTextIsCombat;
+        // Manual pacing: once the story on screen has been typed to its end, the next narration
+        // only comes because someone acted (picked a choice, answered someone), so it shows right
+        // away instead of waiting behind the finished screen for another tap. A fight's lines
+        // replace the story at once too.
+        if (manualNarrationRef.current && narrationTypingRef.current && narrationIsStoryRef.current) {
+            const lastScreen = aiSentences[aiSentences.length - 1] || '';
+            const finished = currentSentenceIndex >= aiSentences.length - 1 && typingIndex >= lastScreen.length;
+            if (finished || aiTextIsCombat) {
+                narrationTypingRef.current = false;
+                narrationDoneAtRef.current = 0;
+                sentenceStartedAtRef.current = 0;
+                setAwaitingAdvance(false);
+            }
+        }
         showNextNarration();
     }, [aiText]);
 

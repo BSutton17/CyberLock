@@ -11,7 +11,7 @@ import {
   SUMMARY_RESPONSE_SCHEMA,
   DIALOGUE_RESPONSE_SCHEMA
 } from './prompts.js';
-import { CHARACTERS, BOSSES, NPCS, OPENING_SCENES, VALID_LOCATIONS, LOCATIONS, DECISION_ATTRIBUTES } from './lore.js';
+import { CHARACTERS, BOSSES, NPCS, OPENING_SCENES, VALID_LOCATIONS, LOCATIONS, DECISION_ATTRIBUTES, SKILL_PHRASES } from './lore.js';
 import { getActFor, getPath, getCombatLocation, TOTAL_ENCOUNTERS, BOSS_ENCOUNTERS } from './campaign.js';
 import { chooseDecisionAttribute, getDecisionOwner, normalizeAttribute } from './decisions.js';
 import { FALLBACK_NARRATION, optionsForAttribute } from './fallbacks.js';
@@ -511,7 +511,7 @@ export function createNarrator({
     }
 
     const { options, attribute, ownerName } = dialogue.followUp || {};
-    const narration = followUpNarration(dialogue, option, { ownerName, random });
+    const narration = followUpNarration(dialogue, option, { ownerName, attribute, random });
     session.lastNarration = narration;
     return {
       id: dialogue.id,
@@ -693,7 +693,7 @@ export function createNarrator({
       foreshadowing(session, context),
       dialogue
         ? `Then set up the next decision: describe the situation, which calls for ${decision.attribute[0].toUpperCase()}${decision.attribute.slice(1)} skills (${DECISION_ATTRIBUTES[decision.attribute] || 'their expertise'}), so it will be ${ownerName}'s call. Do NOT say whose call it is or ask for the choice yet: a short moment with ${dialogue.npc} and ${dialogue.characterName} comes first and is added after your narration.`
-        : `Then present the next decision. It is ${ownerName}'s call, because the situation calls for ${decision.attribute[0].toUpperCase()}${decision.attribute.slice(1)} skills: ${DECISION_ATTRIBUTES[decision.attribute] || 'their expertise'}.`,
+        : `Then present the next decision. It is ${ownerName}'s call, because the situation calls for ${decision.attribute[0].toUpperCase()}${decision.attribute.slice(1)} skills: ${DECISION_ATTRIBUTES[decision.attribute] || 'their expertise'}. Show WHY it's ${ownerName}'s call, in the scene: someone says what about ${ownerName} fits (their way with ${SKILL_PHRASES[decision.attribute] || 'this'}, or something from their past), in a natural line. Never just "it's ${ownerName}'s call" with no reason. For example: "Either way," someone says, "I think this one's yours, ${ownerName}. You seem the most at home in situations like this." Then the choice is ${ownerName}'s.`,
       'The situation must grow out of the current goal and what just happened, not out of nowhere: the skill is how they handle it, not a reason to invent a new problem. Keep it simple: one clear problem, explained in plain words.',
       'Before the choice, let the people in the scene talk it through: a few short lines from party members and NPCs that show what is at stake. Show, don\'t tell.',
       'Write exactly two options that play to that skill, each a plain everyday action under 8 words (no jargon, one action each), leading in different directions.',

@@ -595,3 +595,29 @@ describe('keeping the story simple', () => {
     expect(request.messages[0].content).toMatch(/plain everyday action under 8 words/);
   });
 });
+
+describe('whose call it is, and why', () => {
+  it('asks the model to show why a decision is that character\'s call', async () => {
+    const provider = scriptedProvider([beat()]);
+    const narrator = createNarrator({ provider, logger: quietLogger, personalMoments: false });
+    await narrator.handleEvent({ room: 'r1', eventType: 'choice_made', data: { faction: 'rebels' }, context: context() });
+    await narrator.handleEvent({ room: 'r1', eventType: 'encounter_end', context: context({ encounterIndex: 1 }) });
+    const request = provider.calls[provider.calls.length - 1];
+    expect(request.messages[0].content).toMatch(/Show WHY it's \w[\w ]*'s call, in the scene/);
+    expect(request.messages[0].content).toMatch(/Never just "it's/);
+    expect(request.system).toMatch(/Show why it's their\s+call/);
+  });
+
+  it('gives the reason when a personal moment hands the decision back to the group', async () => {
+    const narrator = createNarrator({ provider: createMockProvider(), logger: quietLogger, random: () => 0 });
+    const session = narrator.getSession('r1');
+    session.pendingDialogue = {
+      id: 'd1', exchange: 0, kind: 'reply', npc: 'A guard', playerName: 'bryson', characterName: 'Shipment',
+      options: [{ id: 'honest', tone: 'honest', text: 'Passing through.', told: 'Shipment: "Passing through."', reaction: 'The guard shrugs.', lead: null }],
+      followUp: { options: ['Go left', 'Go right'], attribute: 'crook', ownerName: 'True North' }
+    };
+    const result = narrator.answerDialogue('r1', { playerName: 'bryson', dialogueId: 'd1', optionId: 'honest' });
+    expect(result.response).toMatch(/True North/);
+    expect(result.response).toMatch(/bending the rules quietly/);
+  });
+});

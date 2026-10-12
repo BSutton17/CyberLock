@@ -249,7 +249,10 @@ answers should visibly lead the story to different places.
 DECISIONS
 Story decisions are made by one party member on behalf of the group, chosen by the game because a
 specific skill (attribute) fits. Write choices that this character's attribute makes meaningful,
-and name the character in the narration so the players know whose call it is. Each option is a
+and name the character in the narration so the players know whose call it is. Show why it's their
+call: someone in the scene says what about them fits (their skill, their past), naturally. Not
+"it's True North's call, she knows how this goes" but "I think this one's yours, True North. You
+seem the most at home in situations like this." Each option is a
 short action phrase in plain, everyday words (under 8 words, one action, no jargon): "Sneak in
 through the sewers", "Talk the guard into letting us pass". The two options must lead in
 genuinely different directions. The situation comes from the current goal and what just happened;

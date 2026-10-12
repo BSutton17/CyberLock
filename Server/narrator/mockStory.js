@@ -3,7 +3,7 @@
 // now: who is in the party, which side they joined, the act and its villain, where they are, and
 // what they just decided. It can't improvise like a model, but it keeps the campaign playable and
 // different each time.
-import { CHARACTERS, OPENING_SCENES, DECISION_ATTRIBUTES } from './lore.js';
+import { CHARACTERS, OPENING_SCENES, DECISION_ATTRIBUTES, SKILL_PHRASES } from './lore.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -252,26 +252,13 @@ const SITUATIONS = {
     ]
 };
 
+// Whose call it is, and why them: every line gives the reason.
 const OWNER_FRAMES = [
     'Everyone looks at {owner}. Nobody here is better at {skill}, and that makes it {owner}\'s call.',
-    '{owner} has the most experience with this kind of thing, which means the decision lands on {owner}.',
-    'It\'s {owner}\'s call. Talk it through, but {owner} decides.',
+    '{owner} knows more about {skill} than anyone else here, so the decision lands on {owner}.',
+    'Talk it through, but this one is {owner}\'s: nobody here is better at {skill}.',
     'This needs someone good at {skill}. The others turn to {owner} and wait.'
 ];
-
-// What each decision attribute is good for, phrased to fit "good at ...".
-const SKILL_PHRASES = {
-    politician: 'talking people around',
-    intimidation: 'leaning on people',
-    scholar: 'reading what nobody else can',
-    spy: 'not being seen',
-    detective: 'noticing what doesn\'t fit',
-    medic: 'keeping people alive',
-    banker: 'following the money',
-    crook: 'bending the rules quietly',
-    electrician: 'anything with a wire in it',
-    navigator: 'knowing the streets'
-};
 
 // A last word on how a decision landed, in the voice of the skill behind it.
 const AFTERTASTE = {

@@ -440,6 +440,65 @@ describe('Main (combat)', () => {
     await waitFor(() => expect(shown()).toBe(next), { timeout: 5000 });
   }, 45000);
 
+  it('shows the story again after a fight, with manual narration', async () => {
+    const socket = createFakeSocket();
+    render(<Harness socket={socket} serverStoryState={storyInProgress} initialCombat={fightSnapshot()} narrationManual />);
+    const shown = () => document.querySelector('.ai-text').textContent;
+    act(() => socket.serverSends('combat_narration', { text: 'Leo drops the last guard.' }));
+    await waitFor(() => expect(shown()).toBe('Leo drops the last guard.'), { timeout: 5000 });
+    act(() => socket.serverSends('combat_ended', { result: 'enemies_defeated', encounterIndex: 0, postCombat: 'none', isFinalEncounter: false, partyPositions: {} }));
+    await waitFor(() => expect(aiRequests(socket, 'encounter_end')).toHaveLength(1), { timeout: 6000 });
+    const { requestId } = aiRequests(socket, 'encounter_end')[0];
+    const after = 'The street goes quiet. Somewhere a siren starts and then thinks better of it.';
+    act(() => socket.serverSends('ai_message', { requestId, eventType: 'encounter_end', response: after, options: ['Go left', 'Go right'], attribute: 'spy', startCombat: false }));
+    await waitFor(() => expect(shown()).toBe(after), { timeout: 15000 });
+  }, 40000);
+
+  it('starts a fight only once the host has tapped through the story leading into it, with manual narration', async () => {
+    const socket = createFakeSocket();
+    render(<Harness socket={socket} serverStoryState={storyInProgress} narrationManual />);
+    const shown = () => document.querySelector('.ai-text').textContent;
+    // Two screens: too long to share one.
+    const first = 'Rain hammers the depot roof while the party crouches behind a stack of crates, counting guards. Two at the gate, one on the catwalk, and a drone drifting lazy circles over the loading bay like it has nowhere better to be.';
+    const next = '"On my signal," Leo whispers, and the first guard turns the corner. The fight is on.';
+    act(() => {
+      socket.serverSends('ai_message', { requestId: 'lead', eventType: 'choice_made', response: `${first}\n\n${next}`, options: null, startCombat: true });
+    });
+    await waitFor(() => expect(shown()).toBe(first), { timeout: 20000 });
+    // Well past the automatic pace: no fight, and the story stays put until the host taps.
+    await new Promise(resolve => setTimeout(resolve, 6000));
+    expect(shown()).toBe(first);
+    expect(emitsOf(socket, 'start_combat')).toHaveLength(0);
+
+    act(() => socket.serverSends('narration_advance', { by: 'bryson' }));
+    await waitFor(() => expect(shown()).toBe(next), { timeout: 10000 });
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    expect(emitsOf(socket, 'start_combat')).toHaveLength(0);
+
+    // Past the last part: now the fight starts.
+    act(() => socket.serverSends('narration_advance', { by: 'bryson' }));
+    await waitFor(() => expect(emitsOf(socket, 'start_combat')).toHaveLength(1), { timeout: 5000 });
+  }, 60000);
+
+  it('moves straight on to the next part of the story once a choice is made, with manual narration', async () => {
+    const socket = createFakeSocket();
+    render(<Harness socket={socket} serverStoryState={storyInProgress} narrationManual />);
+    const shown = () => document.querySelector('.ai-text').textContent;
+    const scene = 'A guard blocks the gate.';
+    act(() => {
+      socket.serverSends('ai_message', { requestId: 'x', eventType: 'encounter_end', response: scene, options: ['Cut the power', 'Talk our way in'], attribute: 'spy', startCombat: false });
+    });
+    await waitFor(() => expect(shown()).toBe(scene), { timeout: 10000 });
+    expect((await screen.findAllByText('Cut the power')).length).toBeGreaterThan(0);
+
+    // Someone picks a choice; what it leads to shows without another tap.
+    const after = 'The lights die, and the guard swears in the dark.';
+    act(() => {
+      socket.serverSends('ai_message', { requestId: 'y', eventType: 'choice_made', response: after, options: ['Run', 'Hide'], attribute: 'navigator', startCombat: false });
+    });
+    await waitFor(() => expect(shown()).toBe(after), { timeout: 10000 });
+  }, 40000);
+
   it("lays story dialogue out like a book: each speaker on their own line, never split mid-line", async () => {
     const socket = createFakeSocket();
     render(<Harness socket={socket} playerName="sean" />);
